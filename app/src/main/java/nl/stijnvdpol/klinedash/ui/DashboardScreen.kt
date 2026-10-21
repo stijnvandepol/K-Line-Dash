@@ -1,6 +1,8 @@
 package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,192 +11,184 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
-import nl.stijnvdpol.klinedash.core.elm.ConnectionState
-import nl.stijnvdpol.klinedash.core.obd.PollMode
 import nl.stijnvdpol.klinedash.core.obd.PollStats
 import nl.stijnvdpol.klinedash.core.obd.Reading
-import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
-import nl.stijnvdpol.klinedash.service.detail
-import nl.stijnvdpol.klinedash.service.formatNumber
-import nl.stijnvdpol.klinedash.service.headline
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
-import nl.stijnvdpol.klinedash.ui.theme.accentColor
 
 private const val DEMAND_OWNER = "dashboard"
-private const val TILES_PER_ROW = 2
-private val StatusLineHeight = 40.dp
-private val StatusGap = 24.dp
-private val UnitGap = 8.dp
+private const val SMALL_FIELD_COUNT = 6
+private const val RPM_FIELD_WEIGHT = 2f
+private const val SPEED_FIELD_WEIGHT = 1.4f
+private const val COOLANT_FIELD_WEIGHT = 1f
+private val SmallFieldRowHeight = 104.dp
 
 /**
- * Dashboard: RPM gauge and speed on the left, six tiles on the right (same top and bottom edges),
- * the connection status under the gauge. Asks the poller for exactly what it shows, while visible.
+ * The big fields may grow past their design size to fill the field; the small ones only shrink.
+ * RPM grows a little more than speed and water so it stays the one dominant number.
+ */
+private const val RPM_MAX_GROWTH = 1.75f
+private const val PRIMARY_MAX_GROWTH = 1.6f
+private val LabelToValueGap = 8.dp
+
+/**
+ * Dashboard: the RPM bar on top, three primary fields (RPM, speed, coolant) and a row of six small
+ * ones, all separated by rules. Asks the poller for exactly what it shows, while visible.
  */
 @Composable
 fun DashboardScreen() {
     val vm = graphViewModel { LiveDataViewModel() }
     val poller by vm.poller.collectAsStateWithLifecycle()
     val supportedPids by vm.supportedPids.collectAsStateWithLifecycle()
-    val tileIds = remember(supportedPids) { dashboardTileIds(supportedPids) }
-    DemandWhileVisible(poller, DEMAND_OWNER, remember(tileIds) { dashboardDemandIds(tileIds) })
+    val fieldIds = remember(supportedPids) { dashboardFieldIds(supportedPids) }
+    DemandWhileVisible(poller, DEMAND_OWNER, remember(fieldIds) { dashboardDemandIds(fieldIds) })
 
     // States, not values: only the small composables below read them, so this one never recomposes
     // for a new reading.
     val readings = vm.readings.collectAsStateWithLifecycle()
     val stats = vm.stats.collectAsStateWithLifecycle()
-    val connection = vm.connectionState.collectAsStateWithLifecycle()
     val nowMs = rememberNowMs()
+    val engineRunning = rememberEngineRunning(readings)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(Spacing.screenMargin),
-        verticalArrangement = Arrangement.spacedBy(Spacing.gutter),
-    ) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.gutter),
-        ) {
-            GaugePanel(readings, stats, nowMs, Modifier.weight(1f).fillMaxHeight())
-            TileGrid(tileIds, readings, nowMs, Modifier.weight(1f).fillMaxHeight())
-        }
-        StatusLine(connection, stats, Modifier.fillMaxWidth().height(StatusLineHeight))
+    Column(Modifier.fillMaxSize()) {
+        RpmBarRow(readings, stats, nowMs)
+        HorizontalRule()
+        PrimaryRow(readings, nowMs, engineRunning, Modifier.weight(1f).fillMaxWidth())
+        HorizontalRule()
+        SmallFieldRow(fieldIds, readings, nowMs, engineRunning, Modifier.height(SmallFieldRowHeight).fillMaxWidth())
     }
 }
 
 @Composable
-private fun GaugePanel(
-    readings: State<Map<String, Reading>>,
-    stats: State<PollStats>,
-    nowMs: State<Long>,
-    modifier: Modifier,
-) {
+private fun RpmBarRow(readings: State<Map<String, Reading>>, stats: State<PollStats>, nowMs: State<Long>) {
     val rpmSignal = remember { checkNotNull(Signals.byId(RPM_ID)) }
-    val speedSignal = remember { checkNotNull(Signals.byId(SPEED_ID)) }
     val rpm = rememberReading(readings, RPM_ID)
-    val rpmStale = rememberIsStale(rpm, nowMs, rpmSignal)
-    val speed = rememberReading(readings, SPEED_ID)
-    val speedStale = rememberIsStale(speed, nowMs, speedSignal)
-    val needleDurationMs = remember(stats) { derivedStateOf { needleDurationMs(stats.value.signalHz[RPM_ID]) } }
-
-    Panel(modifier, padding = Spacing.heroPadding) {
-        Column(Modifier.fillMaxSize()) {
-            RpmGauge(rpmSignal, rpm, rpmStale, needleDurationMs, Modifier.weight(1f).fillMaxWidth())
-            SpeedRow(speedSignal, speed, speedStale, Modifier.fillMaxWidth())
-        }
-    }
+    val stale = rememberIsStale(rpm, nowMs, rpmSignal)
+    val sweepMs = remember(stats) { derivedStateOf { sweepDurationMs(stats.value.signalHz[RPM_ID]) } }
+    RpmBar(rpm, stale, sweepMs, Modifier.fillMaxWidth())
 }
 
 @Composable
-private fun SpeedRow(signal: Signal, reading: State<Reading?>, stale: State<Boolean>, modifier: Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
-        ValueText(signal, reading, stale, KLineType.largeValue, TextAlign.End, Modifier.alignByBaseline())
-        Spacer(Modifier.width(UnitGap))
-        Text(
-            signal.unit,
-            style = KLineType.label,
-            color = KLineTheme.colors.inkMuted,
-            modifier = Modifier.alignByBaseline(),
-        )
-    }
-}
-
-@Composable
-private fun TileGrid(
-    tileIds: List<String>,
+private fun PrimaryRow(
     readings: State<Map<String, Reading>>,
     nowMs: State<Long>,
+    engineRunning: State<Boolean>,
     modifier: Modifier,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.gutter)) {
-        tileIds.chunked(TILES_PER_ROW).forEach { rowIds ->
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.gutter),
-            ) {
-                rowIds.forEach { id ->
-                    key(id) { SignalTile(id, readings, nowMs, Modifier.weight(1f).fillMaxHeight()) }
-                }
-                repeat(TILES_PER_ROW - rowIds.size) { Spacer(Modifier.weight(1f)) }
+    Row(modifier) {
+        DataField(RPM_ID, KLineType.heroValue, RPM_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(RPM_FIELD_WEIGHT).fillMaxHeight())
+        VerticalRule()
+        DataField(SPEED_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(SPEED_FIELD_WEIGHT).fillMaxHeight())
+        VerticalRule()
+        DataField(COOLANT_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(COOLANT_FIELD_WEIGHT).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun SmallFieldRow(
+    fieldIds: List<String>,
+    readings: State<Map<String, Reading>>,
+    nowMs: State<Long>,
+    engineRunning: State<Boolean>,
+    modifier: Modifier,
+) {
+    Row(modifier) {
+        for (index in 0 until SMALL_FIELD_COUNT) {
+            if (index > 0) VerticalRule()
+            val id = fieldIds.getOrNull(index)
+            if (id == null) {
+                Spacer(Modifier.weight(1f))
+            } else {
+                DataField(id, KLineType.fieldValue, 1f, readings, nowMs, engineRunning, Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
 }
 
-/** Label top-left, value and unit on one baseline at the bottom: the same lines in every row. */
+/** The labels of the short race-display vocabulary; signals without one use their short name. */
+private val FieldLabelRes = mapOf(
+    RPM_ID to R.string.field_rpm,
+    SPEED_ID to R.string.field_speed,
+    COOLANT_ID to R.string.field_coolant,
+    INTAKE_ID to R.string.field_intake,
+    THROTTLE_ID to R.string.field_throttle,
+    LOAD_ID to R.string.field_load,
+    TIMING_ID to R.string.field_timing,
+    BATTERY_ID to R.string.field_battery,
+    MAF_ID to R.string.field_maf,
+)
+
+/** Label or unit of a field: muted capitals, boxed to their cap height so they sit 12 dp from the rule. */
 @Composable
-private fun SignalTile(id: String, readings: State<Map<String, Reading>>, nowMs: State<Long>, modifier: Modifier) {
+private fun FieldCaption(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = KLineType.fieldLabel,
+        color = KLineTheme.colors.inkMuted,
+        maxLines = 1,
+        modifier = modifier.capHeightBox(KLineType.fieldLabel.fontSize),
+    )
+}
+
+/**
+ * One field: label top-left, unit top-right, the value right-aligned at the bottom in a slot of
+ * fixed width. The value shrinks with the field (never wraps), so the layout also holds on a
+ * head unit narrower than 1280 dp; [maxGrowth] above 1 lets it grow to fill a big field.
+ */
+@Composable
+private fun DataField(
+    id: String,
+    valueStyle: TextStyle,
+    maxGrowth: Float,
+    readings: State<Map<String, Reading>>,
+    nowMs: State<Long>,
+    engineRunning: State<Boolean>,
+    modifier: Modifier,
+) {
     val signal = remember(id) { checkNotNull(Signals.byId(id)) }
     val reading = rememberReading(readings, id)
     val stale = rememberIsStale(reading, nowMs, signal)
-    val colors = KLineTheme.colors
-    Panel(modifier) {
+    val tone = rememberValueTone(signal, reading, engineRunning)
+    val label = FieldLabelRes[id]?.let { stringResource(it) } ?: signal.shortName
+    val noReading = stringResource(R.string.field_no_reading)
+    val words = rememberOnOffWords()
+    BoxWithConstraints(
+        modifier
+            .semantics(mergeDescendants = true) {
+                contentDescription = reading.value?.let { "${signal.name}: ${formatReading(signal, it.value, words)} ${signal.unit}" }
+                    ?: "${signal.name}: $noReading"
+            }
+            .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
+    ) {
+        val labelHeight = with(LocalDensity.current) { KLineType.fieldLabel.fontSize.toDp() } * CAP_HEIGHT_EM
+        val style = rememberFittedStyle(valueStyle, slotSample(signal), maxWidth, maxHeight - labelHeight - LabelToValueGap, maxGrowth)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Text(signal.shortName, style = KLineType.label, color = colors.inkMuted, maxLines = 1)
-            Row(verticalAlignment = Alignment.Bottom) {
-                ValueText(signal, reading, stale, KLineType.tileValue, TextAlign.Start, Modifier.alignByBaseline())
-                Spacer(Modifier.width(UnitGap))
-                Text(
-                    signal.unit,
-                    style = KLineType.label,
-                    color = colors.inkMuted,
-                    maxLines = 1,
-                    modifier = Modifier.alignByBaseline(),
-                )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                FieldCaption(label.uppercase())
+                Spacer(Modifier.weight(1f))
+                if (!labelIsUnit(id)) FieldCaption(signal.unit, Modifier.padding(start = Spacing.grid))
+            }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
+                ValueText(signal, reading, stale, tone, style)
             }
         }
-    }
-}
-
-/** Dot, state and the measured request rate; information, not a control. */
-@Composable
-private fun StatusLine(
-    connection: State<ConnectionState>,
-    stats: State<PollStats>,
-    modifier: Modifier,
-) {
-    val resources = LocalContext.current.resources
-    val colors = KLineTheme.colors
-    val state = connection.value
-    val pollStats = stats.value
-    val secondary = when {
-        state is ConnectionState.Connected -> when (pollStats.mode) {
-            PollMode.ENGINE_OFF -> stringResource(R.string.status_engine_off)
-            PollMode.WAITING -> stringResource(R.string.status_detecting)
-            PollMode.ACTIVE -> stringResource(R.string.status_rate, formatNumber(pollStats.requestsPerSecond, 1))
-        }
-        state is ConnectionState.Idle -> stringResource(R.string.status_hint_idle)
-        state is ConnectionState.Failed -> stringResource(R.string.status_hint_failed)
-        else -> state.detail(resources)
-    }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(state.accentColor(colors))
-        Spacer(Modifier.width(UnitGap * 2))
-        Text(state.headline(resources), style = KLineType.body, color = colors.ink, maxLines = 1)
-        Spacer(Modifier.width(StatusGap))
-        Text(secondary, style = KLineType.body, color = colors.inkMuted, maxLines = 1)
     }
 }

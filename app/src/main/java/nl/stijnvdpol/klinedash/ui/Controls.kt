@@ -1,117 +1,176 @@
 package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
+private val ButtonHorizontalPadding = 8.dp
+private val ToggleWidth = 64.dp
+private val ToggleHeight = 32.dp
+private val ToggleThumbInset = 5.dp
 
+/** Section title on the Connection and Debug pages, aligned with the text of the rows below it. */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = KLineType.title, color = KLineTheme.colors.ink, maxLines = 1, modifier = modifier)
+    Text(
+        text,
+        style = KLineType.title,
+        color = KLineTheme.colors.ink,
+        maxLines = 1,
+        modifier = modifier.padding(
+            horizontal = Spacing.fieldPaddingHorizontal,
+            vertical = Spacing.fieldPaddingVertical,
+        ),
+    )
+}
+
+private enum class ButtonKind { FILLED, OUTLINED, TEXT }
+
+/** The one action a screen wants: white fill, black text. */
+@Composable
+fun PrimaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
+    RaceButton(label, onClick, modifier, enabled, ButtonKind.FILLED)
+
+/** A second action next to the primary one: 1 dp white outline. */
+@Composable
+fun SecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
+    RaceButton(label, onClick, modifier, enabled, ButtonKind.OUTLINED)
+
+/** Text only, for quiet actions and for cells in a grid of buttons. */
+@Composable
+fun TextActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
+    RaceButton(label, onClick, modifier, enabled, ButtonKind.TEXT)
+
+@Composable
+private fun RaceButton(label: String, onClick: () -> Unit, modifier: Modifier, enabled: Boolean, kind: ButtonKind) {
+    val colors = KLineTheme.colors
+    val textColor = when {
+        !enabled -> colors.inkFaint
+        kind == ButtonKind.FILLED -> colors.background
+        else -> colors.ink
+    }
+    val fill = when {
+        kind != ButtonKind.FILLED -> Color.Transparent
+        enabled -> colors.ink
+        else -> colors.surface
+    }
+    val outline = if (kind == ButtonKind.OUTLINED) {
+        Modifier.border(Spacing.ruleThickness, if (enabled) colors.ink else colors.rule)
+    } else {
+        Modifier
+    }
+    Box(
+        modifier = modifier
+            .heightIn(min = Spacing.touchMin)
+            .background(fill)
+            .then(outline)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = ButtonHorizontalPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label.uppercase(), style = KLineType.fieldLabel, color = textColor, textAlign = TextAlign.Center, maxLines = 2)
+    }
 }
 
 /**
- * Label on the left, radio button at the right edge. [horizontalInset] is the space between the
- * edge of the row (the raised pill) and its text; give titles and hints the same inset to line up. Radios and switches end on the same line, so
- * every control of a settings panel sits in one column. The chosen row is a raised panel.
+ * A choice in a list: the selected row has a 4 dp white bar on its left edge, no radio button.
+ * Text starts at the field padding in both states, so selecting a row moves nothing. Every row
+ * ends in a rule.
  */
 @Composable
-fun RadioRow(
-    label: String,
+fun SelectableRow(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    horizontalInset: Dp = Spacing.panelPadding,
+    content: @Composable RowScope.() -> Unit,
 ) {
     val colors = KLineTheme.colors
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Spacing.controlRadius))
-            .background(if (selected) colors.panelRaised else Color.Transparent)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .heightIn(min = Spacing.touchMin)
-            .padding(horizontal = horizontalInset),
+            .drawBehind {
+                val rule = Spacing.ruleThickness.toPx()
+                drawRect(colors.rule, Offset(0f, size.height - rule), Size(size.width, rule))
+                if (selected) drawRect(colors.ink, size = Size(Spacing.markerThickness.toPx(), size.height))
+            }
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, style = KLineType.body, color = colors.ink, modifier = Modifier.weight(1f))
-        RadioButton(
-            selected = selected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(selectedColor = colors.ink, unselectedColor = colors.inkMuted),
-        )
-    }
+        content = content,
+    )
 }
 
-/** [supportingText] sits under the label, muted; the switch is at the right edge like a [RadioRow]'s radio. */
+/**
+ * Label on the left, the square toggle at the right edge, 72 dp high. No rule of its own: in a list
+ * the caller adds one, in a toolbar cell the neighbouring rules already frame it.
+ */
 @Composable
-fun SwitchRow(
-    label: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    supportingText: String? = null,
-    horizontalInset: Dp = Spacing.panelPadding,
-) {
-    val colors = KLineTheme.colors
+fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Spacing.controlRadius))
             .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
             .heightIn(min = Spacing.touchMin)
-            .padding(horizontal = horizontalInset),
+            .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = KLineType.body, color = colors.ink)
-            if (supportingText != null) Text(supportingText, style = KLineType.label, color = colors.inkMuted)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = colors.background,
-                checkedTrackColor = colors.ink,
-                checkedBorderColor = colors.ink,
-                uncheckedThumbColor = colors.inkMuted,
-                uncheckedTrackColor = colors.panelRaised,
-                uncheckedBorderColor = colors.line,
-            ),
+        Text(label, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
+        Toggle(checked)
+    }
+}
+
+/** Outlined slot with a square thumb: left is off (grey), right is on (white). */
+@Composable
+private fun Toggle(checked: Boolean) {
+    val colors = KLineTheme.colors
+    Row(
+        modifier = Modifier
+            .size(ToggleWidth, ToggleHeight)
+            .border(Spacing.ruleThickness, if (checked) colors.ink else colors.inkMuted)
+            .padding(ToggleThumbInset),
+        horizontalArrangement = if (checked) Arrangement.End else Arrangement.Start,
+    ) {
+        Box(
+            Modifier
+                .size(ToggleHeight - ToggleThumbInset * 2)
+                .background(if (checked) colors.ink else colors.inkMuted),
         )
     }
 }
 
-/** Input field on a raised surface, 72 dp tall like every other target. */
+/** Square input field on `surface`, 72 dp tall like every other target. */
 @Composable
 fun FormTextField(
     value: String,
@@ -130,16 +189,16 @@ fun FormTextField(
         textStyle = textStyle,
         placeholder = placeholder?.let { { Text(it, style = textStyle, color = colors.inkMuted) } },
         singleLine = true,
-        shape = RoundedCornerShape(Spacing.controlRadius),
+        shape = RectangleShape,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = colors.ink,
             unfocusedTextColor = colors.ink,
-            focusedContainerColor = colors.panelRaised,
-            unfocusedContainerColor = colors.panelRaised,
+            focusedContainerColor = colors.surface,
+            unfocusedContainerColor = colors.surface,
             focusedBorderColor = colors.ink,
-            unfocusedBorderColor = colors.line,
+            unfocusedBorderColor = colors.rule,
             cursorColor = colors.ink,
         ),
     )

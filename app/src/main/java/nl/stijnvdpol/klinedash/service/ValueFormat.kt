@@ -8,11 +8,11 @@ import kotlin.math.roundToLong
 
 /** Fixed, so values read the same whatever the head unit's (often Chinese) system locale is. */
 private val UiLocale: Locale = Locale.US
-private const val INTEGER_PATTERN = "#,##0"
+private const val INTEGER_PATTERN = "0"
 
 /**
- * The one place that turns a number into text for the UI: decimal point, comma as thousands
- * separator, never "-0".
+ * The one place that turns a number into text for the UI: decimal point, no thousands separator
+ * (a race display reads "8175"; a grouped "8 175" looks like two numbers at a glance), never "-0".
  */
 fun formatNumber(value: Double, decimals: Int): String {
     val pattern = if (decimals > 0) "$INTEGER_PATTERN.${"0".repeat(decimals)}" else INTEGER_PATTERN

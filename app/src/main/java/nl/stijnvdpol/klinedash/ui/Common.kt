@@ -2,29 +2,26 @@ package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -36,12 +33,14 @@ import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.appGraph
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
-import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
+import kotlin.math.roundToInt
 
 private const val CLOCK_TICK_MS = 1_000L
-private val ButtonHorizontalPadding = 24.dp
-private val StatusDotSize = 16.dp
+private val StatusDotSize = 12.dp
+
+/** Cap height of Roboto as a fraction of the font size; digits and capitals are this tall. */
+internal const val CAP_HEIGHT_EM = 0.711f
 
 /** Creates an Activity-scoped ViewModel that gets the manual DI [AppGraph] (no Hilt). */
 @Composable
@@ -50,79 +49,35 @@ inline fun <reified VM : ViewModel> graphViewModel(crossinline create: (AppGraph
     return viewModel(factory = viewModelFactory { initializer { create(graph) } })
 }
 
-/** Flat tonal area: the design has no shadows, borders or gradients, spacing does the grouping. */
+/** The 1 dp line that separates fields, rows and columns: the only structure the design has. */
 @Composable
-fun Panel(
-    modifier: Modifier = Modifier,
-    padding: Dp = Spacing.panelPadding,
-    content: @Composable BoxScope.() -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .background(KLineTheme.colors.panel, RoundedCornerShape(Spacing.panelRadius))
-            .padding(padding),
-        content = content,
-    )
+fun HorizontalRule(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().height(Spacing.ruleThickness).background(KLineTheme.colors.rule))
 }
 
+@Composable
+fun VerticalRule(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxHeight().width(Spacing.ruleThickness).background(KLineTheme.colors.rule))
+}
+
+/** The one round element: an indicator lamp, like the status LEDs of a race display. */
 @Composable
 fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = StatusDotSize) {
     Box(modifier.size(size).background(color, CircleShape))
 }
 
-/** The one action a screen wants: ink on dark, so it stands out without an accent colour. */
-@Composable
-fun PrimaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    val colors = KLineTheme.colors
-    ActionButton(
-        label, onClick, modifier, enabled,
-        ButtonDefaults.buttonColors(
-            containerColor = colors.ink,
-            contentColor = colors.background,
-            disabledContainerColor = colors.panelRaised,
-            disabledContentColor = colors.inkMuted,
-        ),
-    )
-}
-
-@Composable
-fun SecondaryButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    horizontalPadding: Dp = ButtonHorizontalPadding,
-) {
-    val colors = KLineTheme.colors
-    ActionButton(
-        label, onClick, modifier, enabled,
-        ButtonDefaults.buttonColors(
-            containerColor = colors.panelRaised,
-            contentColor = colors.ink,
-            disabledContainerColor = colors.panelRaised,
-            disabledContentColor = colors.inkMuted,
-        ),
-        horizontalPadding,
-    )
-}
-
-@Composable
-private fun ActionButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier,
-    enabled: Boolean,
-    colors: ButtonColors,
-    horizontalPadding: Dp = ButtonHorizontalPadding,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.heightIn(min = Spacing.touchMin),
-        enabled = enabled,
-        shape = RoundedCornerShape(Spacing.controlRadius),
-        colors = colors,
-        contentPadding = PaddingValues(horizontal = horizontalPadding),
-    ) { Text(label, style = KLineType.body.copy(fontWeight = FontWeight.Medium), maxLines = 2) }
+/**
+ * Shrinks a single line of capitals or digits to the height of its capitals: the box starts at the
+ * cap line and ends at the baseline. Padding then measures from the glyph edges, so labels and
+ * values sit exactly [Spacing.fieldPaddingVertical] from the rules, whatever the font line gap is.
+ */
+fun Modifier.capHeightBox(fontSize: TextUnit): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val capHeight = (fontSize.toPx() * CAP_HEIGHT_EM).roundToInt()
+    val baseline = placeable[FirstBaseline]
+    layout(placeable.width, capHeight, mapOf(FirstBaseline to capHeight)) {
+        placeable.place(0, capHeight - baseline)
+    }
 }
 
 /**

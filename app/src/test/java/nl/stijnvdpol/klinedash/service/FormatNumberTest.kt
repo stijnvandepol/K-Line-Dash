@@ -12,9 +12,10 @@ class FormatNumberTest {
     }
 
     @Test
-    fun `groups thousands with a comma`() {
-        assertEquals("3,450", formatNumber(3450.0, 0))
-        assertEquals("65,535", formatNumber(65535.0, 0))
+    fun `never groups thousands`() {
+        assertEquals("3450", formatNumber(3450.0, 0))
+        assertEquals("65535", formatNumber(65535.0, 0))
+        assertEquals("1234.5", formatNumber(1234.5, 1))
         assertEquals("830", formatNumber(830.0, 0))
     }
 

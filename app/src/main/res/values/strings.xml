@@ -4,7 +4,7 @@
     <string name="app_name">K-Line Dash</string>
 
     <!-- Navigation -->
-    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_dashboard">Dash</string>
     <string name="nav_sensors">Sensors</string>
     <string name="nav_connection">Connection</string>
     <string name="nav_debug">Debug</string>
@@ -34,12 +34,20 @@
     <string name="notif_stop">Stop</string>
     <string name="error_no_adapter">No adapter chosen</string>
 
-    <!-- Dashboard -->
-    <string name="status_engine_off">Engine off, power saving</string>
-    <string name="status_detecting">Finding sensors…</string>
-    <string name="status_rate">%1$s per sec.</string>
-    <string name="status_hint_idle">Connect under Connection.</string>
-    <string name="status_hint_failed">Check the adapter under Connection.</string>
+    <!-- Dashboard: short race-display labels, shown in capitals -->
+    <string name="status_engine_off">Engine off, saving power</string>
+    <string name="status_rate">%1$s/s</string>
+    <string name="field_rpm">RPM</string>
+    <string name="field_speed">km/h</string>
+    <string name="field_coolant">Water</string>
+    <string name="field_intake">Intake</string>
+    <string name="field_throttle">Throttle</string>
+    <string name="field_load">Load</string>
+    <string name="field_timing">Ign</string>
+    <string name="field_battery">Batt</string>
+    <string name="field_maf">MAF</string>
+    <string name="field_no_reading">no reading</string>
+    <string name="rpm_bar_description">Engine speed bar, %1$d rpm</string>
 
     <!-- Sensors -->
     <string name="sensors_not_connected">Not connected yet. Connect under Connection.</string>
@@ -48,7 +56,7 @@
     <string name="sensors_column_name">Sensor</string>
     <string name="sensors_column_value">Value</string>
     <string name="sensors_column_rate">Updates</string>
-    <string name="sensors_rate">%1$s per sec.</string>
+    <string name="sensors_rate">%1$s/s</string>
 
     <!-- Connection screen -->
     <string name="section_adapter_kind">Adapter type</string>
@@ -60,15 +68,13 @@
     <string name="transport_bt_classic">Bluetooth Classic</string>
     <string name="transport_ble">Bluetooth LE</string>
     <string name="transport_wifi">Wi-Fi</string>
-    <string name="auto_connect">Connect automatically at start</string>
+    <string name="auto_connect">Connect at start</string>
     <string name="btn_connect">Connect</string>
     <string name="btn_disconnect">Disconnect</string>
-    <string name="btn_forget_protocol">Forget saved protocol</string>
+    <string name="btn_forget_protocol">Forget protocol</string>
     <string name="notice_protocol_forgotten">Protocol forgotten. The next connection searches again.</string>
     <string name="sim_hint">No real adapter needed. Use the switch below to turn the engine on or off.</string>
     <string name="sim_engine_title">Simulator engine</string>
-    <string name="sim_engine_on">On</string>
-    <string name="sim_engine_off">Off</string>
     <string name="bt_hint">Pair the adapter in the Android Bluetooth settings first (the PIN is usually 1234 or 0000).</string>
     <string name="ble_hint">Switch the adapter on and tap Scan. A Konnwei KW905 needs its button pressed so the LED is on.</string>
     <string name="btn_open_bt_settings">Bluetooth settings</string>
@@ -82,19 +88,17 @@
     <string name="wifi_host">IP address or host name</string>
     <string name="wifi_port">Port</string>
     <string name="device_obd_badge">OBD adapter</string>
-    <string name="device_selected">Selected</string>
 
     <!-- Debug screen -->
     <string name="debug_section_adapter">Adapter</string>
-    <string name="debug_section_log">Log</string>
     <string name="debug_section_command">Command</string>
-    <string name="debug_auto_scroll">Scroll with new messages</string>
+    <string name="debug_auto_scroll">Auto-scroll</string>
     <string name="debug_pause">Pause log</string>
     <string name="debug_resume">Resume log</string>
     <string name="debug_clear">Clear log</string>
     <string name="debug_export">Export log</string>
     <string name="debug_log_empty">No messages yet. Connect under Connection to see the communication.</string>
-    <string name="debug_command_hint">Command, e.g. 010C</string>
+    <string name="debug_command_hint">e.g. 010C</string>
     <string name="debug_send">Send</string>
     <string name="debug_reply_error">Error</string>
     <string name="debug_not_connected">Not connected. Connect under Connection.</string>
@@ -104,11 +108,11 @@
     <string name="debug_export_no_picker">No file picker available. Log saved to %1$s</string>
     <string name="label_elm_version">ELM version</string>
     <string name="label_protocol">Protocol</string>
-    <string name="label_voltage">Battery voltage</string>
     <string name="label_saved_protocol">Saved protocol used</string>
     <string name="label_unsupported">Unsupported commands</string>
+    <string name="value_on">On</string>
+    <string name="value_off">Off</string>
     <string name="value_yes">Yes</string>
     <string name="value_no">No</string>
     <string name="value_none">None</string>
-    <string name="value_unknown">Unknown</string>
 </resources>

@@ -12,42 +12,38 @@ import androidx.compose.ui.unit.dp
 @Immutable
 data class KLineColors(
     val background: Color,
-    val panel: Color,
-    val panelRaised: Color,
+    val surface: Color,
+    val rule: Color,
     val ink: Color,
     val inkMuted: Color,
-    val line: Color,
+    val inkFaint: Color,
     val ok: Color,
     val caution: Color,
     val danger: Color,
 )
 
-/** Default theme "Donker". Keep the background in sync with res/values/colors.xml (window_background). */
-val DonkerColors = KLineColors(
-    background = Color(0xFF101418),
-    panel = Color(0xFF181E24),
-    panelRaised = Color(0xFF222A32),
-    ink = Color(0xFFE9EDF0),
-    inkMuted = Color(0xFF8E9AA6),
-    line = Color(0xFF2C353E),
-    ok = Color(0xFF45C486),
-    caution = Color(0xFFF2B33D),
-    danger = Color(0xFFF0524F),
+/** Default theme "Race". Keep the background in sync with res/values/colors.xml (window_background). */
+val RaceColors = KLineColors(
+    background = Color(0xFF000000),
+    surface = Color(0xFF1C1C1C),
+    rule = Color(0xFF2A2A2A),
+    ink = Color(0xFFFFFFFF),
+    inkMuted = Color(0xFF8C8C8C),
+    inkFaint = Color(0xFF4D4D4D),
+    ok = Color(0xFF2ED47A),
+    caution = Color(0xFFFFB000),
+    danger = Color(0xFFFF2D2D),
 )
 
-val LocalKLineColors = staticCompositionLocalOf { DonkerColors }
+val LocalKLineColors = staticCompositionLocalOf { RaceColors }
 
-/** 8 dp grid, margins and sizes. Identical in every theme. */
+/** 8 dp grid and the sizes of the layout. Identical in every theme; there are no corner radii. */
 object Spacing {
     val grid = 8.dp
-    val screenMargin = 24.dp
-    val gutter = 16.dp
-    val panelPadding = 16.dp
-    val heroPadding = 20.dp
-    val railWidth = 104.dp
+    val fieldPaddingHorizontal = 16.dp
+    val fieldPaddingVertical = 12.dp
     val touchMin = 72.dp
     val listRowMin = 56.dp
-    val panelRadius = 16.dp
-    val controlRadius = 12.dp
-    val dividerThickness = 1.dp
+    val ruleThickness = 1.dp
+    val markerThickness = 4.dp
 }
