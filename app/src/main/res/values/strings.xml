@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">K-Line Dash</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_connection">Verbinding</string>
+    <string name="nav_debug">Debug</string>
+
+    <!-- Connection state (also used in the notification) -->
+    <string name="state_idle">Niet verbonden</string>
+    <string name="state_connecting">Verbinden met %1$s…</string>
+    <string name="state_initializing">Initialiseren: %1$s</string>
+    <string name="state_connected">Verbonden – %1$s</string>
+    <string name="state_connected_voltage">Verbonden – %1$s – %2$s V</string>
+    <string name="state_reconnecting">Opnieuw verbinden over %1$d s (poging %2$d)</string>
+    <string name="state_failed">Mislukt: %1$s</string>
+
+    <!-- Service / notification -->
+    <string name="notif_channel_name">Verbinding</string>
+    <string name="notif_channel_description">Toont de status van de verbinding met de OBD-adapter</string>
+    <string name="notif_stop">Stop</string>
+    <string name="error_no_adapter">Geen adapter gekozen</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_adapter_title">Adapter</string>
+    <string name="dashboard_not_connected_hint">Ga naar Verbinding om een adapter te kiezen en te verbinden.</string>
+    <string name="dashboard_phase_note">De meters volgen in een volgende fase.</string>
+    <string name="label_elm_version">ELM-versie</string>
+    <string name="label_protocol">Protocol</string>
+    <string name="label_voltage">Accuspanning</string>
+    <string name="label_saved_protocol">Opgeslagen protocol gebruikt</string>
+    <string name="label_unsupported">Niet ondersteunde commando\'s</string>
+    <string name="value_yes">Ja</string>
+    <string name="value_no">Nee</string>
+    <string name="value_none">Geen</string>
+    <string name="value_unknown">Onbekend</string>
+    <string name="sim_engine_title">Simulatormotor</string>
+    <string name="sim_engine_on">Aan</string>
+    <string name="sim_engine_off">Uit</string>
+
+    <!-- Connection screen -->
+    <string name="transport_simulator">Simulator</string>
+    <string name="transport_bt_classic">Bluetooth Classic</string>
+    <string name="transport_ble">Bluetooth LE</string>
+    <string name="transport_wifi">Wi-Fi</string>
+    <string name="auto_connect">Automatisch verbinden bij start</string>
+    <string name="btn_connect">Verbinden</string>
+    <string name="btn_disconnect">Verbreken</string>
+    <string name="btn_forget_protocol">Opgeslagen protocol vergeten</string>
+    <string name="notice_protocol_forgotten">Opgeslagen protocol vergeten</string>
+    <string name="sim_hint">Er is geen echte adapter nodig. Op het dashboard zet je de motor aan of uit.</string>
+    <string name="bt_hint">Koppel de adapter eerst in de Bluetooth-instellingen van Android (pincode meestal 1234 of 0000).</string>
+    <string name="btn_open_bt_settings">Bluetooth-instellingen</string>
+    <string name="btn_refresh">Vernieuwen</string>
+    <string name="bt_no_devices">Geen gekoppelde apparaten gevonden. Controleer of Bluetooth aanstaat en de machtiging is gegeven.</string>
+    <string name="ble_scan">Zoeken</string>
+    <string name="ble_scanning">Zoeken…</string>
+    <string name="ble_no_results">Nog geen apparaten gevonden.</string>
+    <string name="ble_scan_failed">Zoeken mislukt: %1$s</string>
+    <string name="wifi_hint">Maak eerst verbinding met het Wi-Fi-netwerk van de adapter. Meestal is dat 192.168.0.10, poort 35000.</string>
+    <string name="wifi_host">IP-adres of hostnaam</string>
+    <string name="wifi_port">Poort</string>
+    <string name="device_obd_badge">OBD</string>
+    <string name="device_selected">Gekozen</string>
+
+    <!-- Debug screen -->
+    <string name="debug_auto_scroll">Auto-scroll</string>
+    <string name="debug_pause">Pauze</string>
+    <string name="debug_resume">Hervat</string>
+    <string name="debug_clear">Wissen</string>
+    <string name="debug_export">Exporteren</string>
+    <string name="debug_log_empty">Nog geen berichten.</string>
+    <string name="debug_command">Commando</string>
+    <string name="debug_send">Verstuur</string>
+    <string name="debug_reply_error">FOUT</string>
+    <string name="debug_not_connected">Niet verbonden</string>
+    <string name="debug_export_ok">Log opgeslagen</string>
+    <string name="debug_export_failed">Exporteren mislukt</string>
+    <string name="debug_export_saved_to">Log opgeslagen in %1$s</string>
+    <string name="debug_export_no_picker">Geen bestandskiezer beschikbaar. Log opgeslagen in %1$s</string>
+</resources>

@@ -1,0 +1,221 @@
+package nl.stijnvdpol.klinedash.core.elm
+
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runTest
+import nl.stijnvdpol.klinedash.core.assertFails
+import nl.stijnvdpol.klinedash.core.assertIs
+import nl.stijnvdpol.klinedash.core.log.LogKind
+import nl.stijnvdpol.klinedash.core.log.RingCommLog
+import nl.stijnvdpol.klinedash.core.sim.SimulatorConfig
+import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
+import nl.stijnvdpol.klinedash.core.transport.TransportException
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class Elm327SessionTest {
+
+    private class Rig(val config: SimulatorConfig = SimulatorConfig()) {
+        val sim = SimulatorTransport(config)
+        val log = RingCommLog()
+        val session = Elm327Session(sim, log)
+        val steps = mutableListOf<String>()
+
+        fun sent(): List<String> = log.snapshot().filter { it.kind == LogKind.TX }.map { it.text }
+    }
+
+    @Test
+    fun `auto detect path finds protocol 3 and reports adapter info`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        val info = rig.session.initialize(null) { rig.steps.add(it) }
+
+        assertEquals("ELM327 v1.5", info.elmVersion)
+        assertEquals("3", info.protocolNumber)
+        assertEquals("ISO 9141-2", info.protocolName)
+        assertFalse(info.usedSavedProtocol)
+        assertEquals(13.9, info.voltage!!, 0.001)
+        assertTrue(info.unsupportedCommands.isEmpty())
+        assertTrue(rig.steps.isNotEmpty())
+        assertEquals(
+            listOf("ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATAT1", "ATI", "AT@1", "ATSP0", "0100", "ATDPN", "ATDP", "ATRV"),
+            rig.sent(),
+        )
+    }
+
+    @Test
+    fun `engine off gives the lower battery voltage`() = runTest {
+        val rig = Rig()
+        rig.sim.setEngineRunning(false)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+        assertEquals(12.4, info.voltage!!, 0.001)
+    }
+
+    @Test
+    fun `saved protocol skips detection`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        val info = rig.session.initialize("3") { rig.steps.add(it) }
+
+        assertTrue(info.usedSavedProtocol)
+        assertEquals("3", info.protocolNumber)
+        assertEquals("ISO 9141-2", info.protocolName)
+        val sent = rig.sent()
+        assertTrue("ATSP3" in sent)
+        assertFalse("ATSP0" in sent)
+        assertFalse("ATDPN" in sent)
+    }
+
+    @Test
+    fun `saved protocol that fails falls back to detection`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        val info = rig.session.initialize("5") {}
+
+        assertFalse(info.usedSavedProtocol)
+        assertEquals("3", info.protocolNumber)
+        val sent = rig.sent()
+        assertTrue("ATSP5" in sent)
+        assertTrue("ATSP0" in sent)
+        assertTrue(sent.indexOf("ATSP5") < sent.indexOf("ATSP0"))
+    }
+
+    @Test
+    fun `clone rejecting atat1 and at at 1 is tolerated and recorded`() = runTest {
+        val config = SimulatorConfig().apply { cloneRejectsAt.addAll(listOf("ATAT1", "AT@1")) }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals(setOf("ATAT1", "AT@1"), info.unsupportedCommands)
+        assertEquals("3", info.protocolNumber)
+    }
+
+    @Test
+    fun `adapter reset in the middle of init restarts the sequence once`() = runTest {
+        val config = SimulatorConfig().apply { spontaneousResetAtCommand = 4 } // ATS0 gets a banner
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) { rig.steps.add(it) }
+
+        assertEquals("3", info.protocolNumber)
+        assertEquals(2, rig.sent().count { it == "ATZ" })
+        assertTrue(rig.steps.any { it.contains("restarting", ignoreCase = true) })
+    }
+
+    @Test
+    fun `adapter that keeps resetting gives up with a transport exception`() = runTest {
+        val config = SimulatorConfig().apply { spontaneousResetRate = 1.0 }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val e = assertFails<TransportException> { rig.session.initialize(null) {} }
+        assertTrue(e.message!!.contains("resetting"))
+    }
+
+    @Test
+    fun `ecu that never answers throws ecu not responding`() = runTest {
+        val config = SimulatorConfig().apply { initFails = true }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val e = assertFails<EcuNotRespondingException> { rig.session.initialize(null) {} }
+        assertTrue(e.message!!.contains("ignition", ignoreCase = true))
+    }
+
+    @Test
+    fun `ecu not responding also when a saved protocol was tried first`() = runTest {
+        val config = SimulatorConfig().apply { initFails = true }
+        val rig = Rig(config)
+        rig.sim.connect()
+        assertFails<EcuNotRespondingException> { rig.session.initialize("3") {} }
+        val sent = rig.sent()
+        assertTrue("ATSP3" in sent)
+        assertTrue("ATSP0" in sent)
+    }
+
+    @Test
+    fun `failed auto search falls back to explicit k-line protocols`() = runTest {
+        val config = SimulatorConfig().apply {
+            autoDetectFails = true
+            carProtocol = "5"
+        }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) { rig.steps.add(it) }
+
+        assertEquals("5", info.protocolNumber)
+        assertFalse(info.usedSavedProtocol)
+        val sent = rig.sent()
+        // ISO 9141-2 is tried before KWP fast init, the Toyota profile is never reached.
+        assertTrue(sent.indexOf("ATSP0") < sent.indexOf("ATSP3"))
+        assertTrue(sent.indexOf("ATSP3") < sent.indexOf("ATSP5"))
+        assertFalse("ATIIA13" in sent)
+    }
+
+    @Test
+    fun `fallback ladder ends with the toyota profile and skips the saved protocol`() = runTest {
+        val config = SimulatorConfig().apply { initFails = true }
+        val rig = Rig(config)
+        rig.sim.connect()
+        assertFails<EcuNotRespondingException> { rig.session.initialize("3") {} }
+
+        val sent = rig.sent()
+        assertEquals(1, sent.count { it == "ATSP3" })
+        assertTrue(listOf("ATIB96", "ATIIA13", "ATSH8113F1", "ATSW00").all { it in sent })
+    }
+
+    @Test
+    fun `execute returns parsed data after init`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.session.initialize(null) {}
+
+        val result = rig.session.execute("0100", 2_000)
+        val data = assertIs<ElmResult.Data>(result)
+        assertEquals(1, data.lines.size)
+        assertTrue(data.lines[0].startsWith("4100"))
+    }
+
+    @Test
+    fun `execute turns a missing prompt into timeout and logs an error`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.config.timeoutRate = 1.0
+
+        val result = rig.session.execute("010C", 500)
+        assertIs<ElmResult.Timeout>(result)
+        assertTrue(rig.log.snapshot().any { it.kind == LogKind.ERROR })
+    }
+
+    @Test
+    fun `execute logs tx and rx`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.session.execute("ATI", 2_000)
+        val entries = rig.log.snapshot()
+        assertEquals(LogKind.TX, entries[0].kind)
+        assertEquals("ATI", entries[0].text)
+        assertEquals(LogKind.RX, entries[1].kind)
+        assertTrue(entries[1].text.contains("ELM327"))
+    }
+
+    @Test
+    fun `execute lets a dropped link propagate`() = runTest {
+        val config = SimulatorConfig().apply { dropConnectionAfterCommands = 1 }
+        val rig = Rig(config)
+        rig.sim.connect()
+        rig.session.execute("ATI", 2_000)
+        assertFails<TransportException> { rig.session.execute("ATI", 2_000) }
+    }
+
+    @Test
+    fun `adapter that is silent during setup fails fast`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.config.timeoutRate = 1.0
+        val e = assertFails<TransportException> { rig.session.initialize(null) {} }
+        assertTrue(e.message!!.contains("ATZ"))
+    }
+}

@@ -1,0 +1,124 @@
+package nl.stijnvdpol.klinedash.core.sim
+
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CopyOnWriteArraySet
+
+/** What the simulated engine does while running. */
+enum class Scenario {
+    /** Stationary at idle. */
+    IDLE,
+
+    /** Looping scripted drive: launch, shift through the gears, cruise, VVTL-i pull, decel, stop. */
+    DRIVE_CYCLE,
+}
+
+/**
+ * Tunable behaviour of [SimulatorTransport]: the simulated car (a 2ZZ-GE Corolla T-Sport on
+ * ISO 9141-2), timing, and fault injection for exercising reconnect and clone-quirk handling.
+ *
+ * All properties are @Volatile and the collections are copy-on-write, so a debug screen on the
+ * UI thread can flip them while the OBD thread is talking to the simulator. Every fault is off
+ * by default. The object is shared by the transports a reconnecting manager creates, so
+ * one-shot faults (see [dropConnectionAfterCommands]) clear themselves once they fire.
+ */
+class SimulatorConfig {
+    /** Seed for the fault dice and engine noise; same seed + same traffic = same replies. */
+    @Volatile var seed: Long = 20_240_607L
+
+    /** ELM protocol number the simulated car really speaks ("3" = ISO 9141-2). */
+    @Volatile var carProtocol: String = "3"
+
+    /** What ATI answers. Real clones claim "ELM327 v1.5" or "v2.1" regardless of hardware. */
+    @Volatile var elmVersion: String = "ELM327 v1.5"
+
+    // --- Timing (all in simulated milliseconds, realised with coroutine delay()) ---
+
+    @Volatile var connectLatencyMs: Long = 150
+    @Volatile var atLatencyMs: Long = 15
+    @Volatile var resetLatencyMs: Long = 400
+
+    /** K-line request/response latency is drawn uniformly from this range per OBD request. */
+    @Volatile var latencyMinMs: Long = 60
+    @Volatile var latencyMaxMs: Long = 120
+
+    /** Extra wait before the adapter gives up on an unanswered request ("NO DATA"). */
+    @Volatile var noDataLatencyMs: Long = 250
+
+    /** Duration of the 5-baud / fast bus init triggered by the first OBD request. */
+    @Volatile var busInitMs: Long = 2_500
+
+    // --- Car ---
+
+    /** Stored (Mode 03) DTCs such as "P0171". Clearing via Mode 04 empties this list. */
+    val storedDtcs: MutableList<String> = CopyOnWriteArrayList(listOf("P0171", "P1349"))
+
+    /** Pending (Mode 07) DTCs. */
+    val pendingDtcs: MutableList<String> = CopyOnWriteArrayList(listOf("P0300"))
+
+    /** Mode 01 PIDs the ECU supports. 0x0B (MAP) is absent on purpose: the 2ZZ-GE uses a MAF. */
+    @Volatile var supportedPids: Set<Int> = DEFAULT_SUPPORTED_PIDS
+
+    /** 17-character VIN; Mode 09 answers "NO DATA" while both this and [ecuName] are null. */
+    @Volatile var vin: String? = null
+
+    /** ECU name for Mode 09 PID 0A (max 20 characters). */
+    @Volatile var ecuName: String? = null
+
+    @Volatile var scenario: Scenario = Scenario.DRIVE_CYCLE
+    @Volatile var ambientC: Double = 15.0
+
+    /** Coolant start temperature; null = ambient (cold start). */
+    @Volatile var initialCoolantC: Double? = null
+
+    /** Warm-up time constant in seconds (real cars ~300+; short default so demos get warm). */
+    @Volatile var warmupTimeConstantS: Double = 90.0
+
+    @Volatile var batteryVoltageEngineOn: Double = 13.9
+    @Volatile var batteryVoltageEngineOff: Double = 12.4
+
+    // --- Fault injection (all off by default) ---
+
+    /** Connection attempts fail with a TransportException. */
+    @Volatile var failConnect: Boolean = false
+
+    /** AT commands (upper case, no spaces, e.g. "ATAT1", "ATLP", "AT@1") answered with "?". */
+    val cloneRejectsAt: MutableSet<String> = CopyOnWriteArraySet()
+
+    /** Probability that an OBD request that would be answered gets "NO DATA" instead. */
+    @Volatile var randomNoDataRate: Double = 0.0
+
+    /** Probability that a reply is corrupted (NUL/0xFF bytes and a stray printable character). */
+    @Volatile var garbageRate: Double = 0.0
+
+    /** Probability that a command never gets a prompt (readUntilPrompt times out). */
+    @Volatile var timeoutRate: Double = 0.0
+
+    /** Probability that a command is answered with the power-up banner and the adapter resets. */
+    @Volatile var spontaneousResetRate: Double = 0.0
+
+    /**
+     * One-shot: the Nth command written on a connection (1-based) is answered with the banner
+     * and the adapter resets. Cleared when it fires. Deterministic alternative to the rate.
+     */
+    @Volatile var spontaneousResetAtCommand: Int? = null
+
+    /** Bus init always fails ("BUS INIT: ...ERROR" / "UNABLE TO CONNECT"). */
+    @Volatile var initFails: Boolean = false
+
+    /** ATSP0 auto-search never finds the ECU, but selecting [carProtocol] explicitly works (flaky clone search). */
+    @Volatile var autoDetectFails: Boolean = false
+
+    /**
+     * One-shot: after this many commands on a connection the next write throws a
+     * TransportException and the connection closes. Cleared when it fires, so the reconnect works.
+     */
+    @Volatile var dropConnectionAfterCommands: Int? = null
+
+    companion object {
+        /** PIDs a 2002-2006 European 2ZZ-GE plausibly reports (bitmap PIDs 00/20 are derived). */
+        val DEFAULT_SUPPORTED_PIDS: Set<Int> = setOf(
+            0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x13, 0x14, 0x15, 0x1C, 0x20,
+        )
+    }
+}

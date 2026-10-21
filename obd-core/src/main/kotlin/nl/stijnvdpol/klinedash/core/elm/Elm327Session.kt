@@ -1,0 +1,288 @@
+package nl.stijnvdpol.klinedash.core.elm
+
+import kotlinx.coroutines.delay
+import nl.stijnvdpol.klinedash.core.log.CommLog
+import nl.stijnvdpol.klinedash.core.log.LogKind
+import nl.stijnvdpol.klinedash.core.transport.Transport
+import nl.stijnvdpol.klinedash.core.transport.TransportException
+import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
+
+/**
+ * The adapter initialised fine but the ECU never answered the 0100 probe, with the saved
+ * protocol (if any) and with full auto-detection. Usually ignition off or the wrong car/port.
+ */
+class EcuNotRespondingException(message: String) : TransportException(message)
+
+/**
+ * One connected [Transport] plus a [CommLog]: sends single commands and runs the ELM327
+ * init / protocol-detection sequence. Not thread-safe; [ElmConnectionManager] serialises calls.
+ */
+class Elm327Session(
+    private val transport: Transport,
+    private val log: CommLog,
+) {
+
+    /**
+     * Sends [cmd] (without CR) and returns the classified reply. A missing prompt yields
+     * [ElmResult.Timeout] with whatever text did arrive; a dropped link throws
+     * [TransportException].
+     */
+    suspend fun execute(cmd: String, timeoutMs: Long): ElmResult {
+        // Late replies to a previous (timed-out) command would otherwise be taken for this answer.
+        transport.discardPending()
+        log.record(LogKind.TX, cmd)
+        transport.write(cmd + "\r")
+        val raw = try {
+            transport.readUntilPrompt(timeoutMs)
+        } catch (e: TransportTimeoutException) {
+            log.record(LogKind.ERROR, "Timeout after ${timeoutMs}ms on \"$cmd\", partial: \"${e.partial}\"")
+            return ElmResult.Timeout(e.partial)
+        }
+        log.record(LogKind.RX, raw)
+        return ElmParser.parse(cmd, raw)
+    }
+
+    /**
+     * Resets and configures the adapter, then makes sure the ECU answers on a protocol.
+     *
+     * With [savedProtocol] it first tries that protocol (skipping the slow ATSP0 search); if the
+     * ECU does not answer it falls back to auto-detection. [onStep] receives short progress texts.
+     * If the adapter resets itself mid-init (clone brown-out) the whole sequence is restarted once.
+     *
+     * @throws EcuNotRespondingException when the adapter works but no protocol gets an answer.
+     * @throws TransportException when the adapter stops answering or keeps resetting.
+     */
+    suspend fun initialize(savedProtocol: String?, onStep: (String) -> Unit): AdapterInfo {
+        var restarted = false
+        while (true) {
+            try {
+                return runInit(savedProtocol, onStep)
+            } catch (e: AdapterResetException) {
+                if (restarted) {
+                    throw TransportException(
+                        "Adapter keeps resetting itself during init (weak power or faulty clone)",
+                    )
+                }
+                restarted = true
+                step(onStep, "Adapter reset itself, restarting init")
+            }
+        }
+    }
+
+    /** Thrown inside init when an unexpected "ELM327" banner shows up; never leaves this class. */
+    private class AdapterResetException : Exception("Adapter reset during init")
+
+    private suspend fun runInit(savedProtocol: String?, onStep: (String) -> Unit): AdapterInfo {
+        val unsupported = LinkedHashSet<String>()
+
+        step(onStep, "Resetting adapter")
+        resetAdapter()
+
+        for (cmd in SETUP_COMMANDS) {
+            step(onStep, "Configuring adapter ($cmd)")
+            when (send(cmd)) {
+                is ElmResult.Unknown -> {
+                    // Typical for clones (ATAT1 and friends). Nothing depends on them.
+                    unsupported.add(cmd)
+                    log.record(LogKind.INFO, "$cmd not supported by this adapter, continuing")
+                }
+                is ElmResult.Timeout ->
+                    throw TransportException("Adapter stopped answering during setup ($cmd)")
+                else -> Unit
+            }
+        }
+
+        step(onStep, "Reading adapter info")
+        val ati = send("ATI")
+        if (ati is ElmResult.Unknown) unsupported.add("ATI")
+        val elmVersion = (ati as? ElmResult.Data)?.lines
+            ?.let { lines -> lines.firstOrNull { it.contains("ELM", ignoreCase = true) } ?: lines.firstOrNull() }
+            ?: "unknown"
+
+        val description = send("AT@1")
+        when (description) {
+            is ElmResult.Unknown -> unsupported.add("AT@1")
+            is ElmResult.Data -> log.record(LogKind.INFO, "Adapter description: ${description.lines.joinToString(" ")}")
+            else -> Unit
+        }
+
+        var protocolNumber: String? = null
+        var usedSaved = false
+
+        if (savedProtocol != null) {
+            step(onStep, "Connecting to ECU (saved protocol $savedProtocol)")
+            val probe = tryProtocol(savedProtocol, unsupported, SAVED_PROBE_TIMEOUT_MS)
+            if (probe is ElmResult.Data) {
+                protocolNumber = savedProtocol
+                usedSaved = true
+            } else {
+                log.record(LogKind.INFO, "Saved protocol $savedProtocol failed (${describe(probe)}), falling back to auto-detect")
+                // ISO 9141-2 wants the bus idle for a while before the next 5-baud init.
+                delay(KLINE_REINIT_PAUSE_MS)
+            }
+        }
+
+        var lastProbe: ElmResult? = null
+        if (protocolNumber == null) {
+            step(onStep, "Detecting protocol (ECU init takes a few seconds)")
+            send("ATSP0")
+            val probe = probeEcu(DETECT_PROBE_TIMEOUT_MS)
+            lastProbe = probe
+            if (probe is ElmResult.Data) {
+                val dpn = send("ATDPN")
+                protocolNumber = (dpn as? ElmResult.Data)?.lines?.firstOrNull()
+                    ?.let { ElmParser.parseProtocolNumber(it) } ?: "0"
+            }
+        }
+
+        // Clone auto-search is unreliable on K-line, and some Toyota ECUs only answer a 5-baud
+        // init to address 0x13. Try the K-line protocols explicitly before giving up.
+        if (protocolNumber == null) {
+            for (candidate in FALLBACK_PROTOCOLS) {
+                if (candidate == savedProtocol) continue
+                delay(KLINE_REINIT_PAUSE_MS)
+                step(onStep, "Trying ${protocolLabel(candidate)}")
+                val probe = tryProtocol(candidate, unsupported, SAVED_PROBE_TIMEOUT_MS)
+                lastProbe = probe
+                if (probe is ElmResult.Data) {
+                    protocolNumber = candidate
+                    break
+                }
+            }
+        }
+
+        if (protocolNumber == null) {
+            throw EcuNotRespondingException(
+                "ECU did not respond (${lastProbe?.let { describe(it) } ?: "no answer"}). Is the ignition on, " +
+                    "is the adapter plugged into the car and is this the right vehicle?",
+            )
+        }
+
+        val dp = send("ATDP")
+        val reportedName = (dp as? ElmResult.Data)?.lines?.firstOrNull()
+            ?.let { ElmParser.parseProtocolName(it) } ?: "unknown"
+        val protocolName = if (protocolNumber == TOYOTA_PROFILE) "$reportedName (Toyota)" else reportedName
+
+        val rv = send("ATRV")
+        if (rv is ElmResult.Unknown) unsupported.add("ATRV")
+        val voltage = (rv as? ElmResult.Data)?.lines?.firstOrNull()?.let { ElmParser.parseVoltage(it) }
+
+        return AdapterInfo(
+            elmVersion = elmVersion,
+            protocolNumber = protocolNumber ?: "0",
+            protocolName = protocolName,
+            voltage = voltage,
+            usedSavedProtocol = usedSaved,
+            unsupportedCommands = unsupported,
+        )
+    }
+
+    /** ATZ, retried once: many clones swallow the first one right after power-up. */
+    private suspend fun resetAdapter() {
+        var last: ElmResult? = null
+        repeat(RESET_ATTEMPTS) { attempt ->
+            val r = execute("ATZ", RESET_TIMEOUT_MS)
+            last = r
+            if (r is ElmResult.Data) return
+            log.record(LogKind.INFO, "ATZ attempt ${attempt + 1} failed (${describe(r)})")
+            delay(RETRY_PAUSE_MS)
+        }
+        if (last is ElmResult.Timeout) {
+            throw TransportException("Adapter did not answer ATZ; wrong device or adapter asleep?")
+        }
+        // Garbage/"?" on both tries: carry on, the next command tells whether the adapter is alive.
+    }
+
+    /**
+     * Selects [protocol] (an ELM protocol number, or [TOYOTA_PROFILE]) and probes the ECU.
+     * Optional tuning commands answered with "?" are recorded and skipped.
+     */
+    private suspend fun tryProtocol(protocol: String, unsupported: MutableSet<String>, timeoutMs: Long): ElmResult {
+        for (cmd in protocolCommands(protocol)) {
+            val r = send(cmd)
+            if (r is ElmResult.Unknown) {
+                unsupported.add(cmd)
+                // Without the protocol selection itself there is nothing to probe.
+                if (cmd.startsWith("ATSP")) return r
+            }
+        }
+        return probeEcu(timeoutMs)
+    }
+
+    private fun protocolCommands(protocol: String): List<String> =
+        if (protocol == TOYOTA_PROFILE) TOYOTA_COMMANDS else listOf("ATSP$protocol")
+
+    private fun protocolLabel(protocol: String): String = when (protocol) {
+        "3" -> "ISO 9141-2"
+        "4" -> "KWP2000 (5-baud init)"
+        "5" -> "KWP2000 (fast init)"
+        TOYOTA_PROFILE -> "Toyota K-line profile"
+        else -> "protocol $protocol"
+    }
+
+    /** 0100 with a long timeout (K-line init). Garbage and bus errors get one retry. */
+    private suspend fun probeEcu(timeoutMs: Long): ElmResult {
+        var result = send("0100", timeoutMs)
+        if (result is ElmResult.Garbage || result is ElmResult.BusError || result is ElmResult.Stopped) {
+            delay(RETRY_PAUSE_MS)
+            result = send("0100", timeoutMs)
+        }
+        return result
+    }
+
+    /** [execute] for init steps: a banner in reply to anything but ATZ/ATI means the adapter reset. */
+    private suspend fun send(cmd: String, timeoutMs: Long = AT_TIMEOUT_MS): ElmResult {
+        val result = execute(cmd, timeoutMs)
+        if (result !is ElmResult.Timeout &&
+            cmd.uppercase() !in BANNER_EXPECTED &&
+            ElmParser.looksLikeReset(result.raw)
+        ) {
+            log.record(LogKind.ERROR, "Unexpected adapter banner in reply to \"$cmd\"")
+            throw AdapterResetException()
+        }
+        return result
+    }
+
+    private fun step(onStep: (String) -> Unit, text: String) {
+        log.record(LogKind.INFO, text)
+        onStep(text)
+    }
+
+    private fun describe(result: ElmResult): String = when (result) {
+        is ElmResult.Data -> "data"
+        is ElmResult.NoData -> "NO DATA"
+        is ElmResult.Unknown -> "?"
+        is ElmResult.InitError -> "bus init failed"
+        is ElmResult.BusError -> "bus error"
+        is ElmResult.CanError -> "CAN error"
+        is ElmResult.Stopped -> "stopped"
+        is ElmResult.BufferFull -> "buffer full"
+        is ElmResult.Timeout -> "timeout"
+        is ElmResult.Garbage -> "garbled reply"
+    }
+
+    companion object {
+        /**
+         * Pseudo protocol id for the Toyota K-line init that owners of ZZE12x Corollas needed
+         * (see docs/research/2zz-ge-obd.md): 9600 baud, 5-baud init to ECU address 0x13,
+         * KWP header 81 13 F1, no ELM wakeup messages. Stored like a protocol number.
+         */
+        const val TOYOTA_PROFILE = "T"
+
+        private val TOYOTA_COMMANDS = listOf("ATIB96", "ATIIA13", "ATSH8113F1", "ATSW00", "ATSPA4")
+
+        /** Tried in order when ATSP0 finds nothing: ISO 9141-2 first, it is the likeliest for a 2ZZ-GE. */
+        private val FALLBACK_PROTOCOLS = listOf("3", "5", "4", TOYOTA_PROFILE)
+
+        private val SETUP_COMMANDS = listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATAT1")
+        private val BANNER_EXPECTED = setOf("ATZ", "ATWS", "ATI")
+
+        private const val AT_TIMEOUT_MS = 2_000L
+        private const val RESET_TIMEOUT_MS = 4_000L
+        private const val SAVED_PROBE_TIMEOUT_MS = 10_000L
+        private const val DETECT_PROBE_TIMEOUT_MS = 15_000L
+        private const val RESET_ATTEMPTS = 2
+        private const val RETRY_PAUSE_MS = 300L
+        private const val KLINE_REINIT_PAUSE_MS = 1_500L
+    }
+}
