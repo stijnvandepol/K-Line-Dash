@@ -26,6 +26,10 @@ import nl.stijnvdpol.klinedash.core.transport.TransportException
 /**
  * Exponential reconnect delay: [initialMs] * [factor]^(attempt-1), capped at [maxMs], with
  * +/- [jitter] (fraction) of random spread so a flock of retries does not synchronise.
+ *
+ * Deliberately no maximum attempt count: ignition off is the normal state of a parked car, so
+ * [ElmConnectionManager] keeps retrying at the capped delay until the ECU answers or [ElmLink.stop]
+ * is called. The cap keeps that cheap; reconnecting (connect + ATZ init) is idempotent.
  */
 data class BackoffPolicy(
     val initialMs: Long = 1_000,
@@ -158,7 +162,9 @@ class ElmConnectionManager(
                 val info = session.initialize(saved) { step ->
                     _state.value = ConnectionState.Initializing(step)
                 }
-                if (!info.usedSavedProtocol && info.protocolNumber != "0") saveProtocol(info.protocolNumber)
+                if (!info.usedSavedProtocol && info.protocolNumber != Elm327Session.AUTO_PROTOCOL) {
+                    saveProtocol(info.protocolNumber)
+                }
 
                 val lost = CompletableDeferred<String>()
                 link = Link(session, lost)

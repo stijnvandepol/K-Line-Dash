@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
+import android.annotation.SuppressLint
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -25,6 +27,8 @@ import nl.stijnvdpol.klinedash.transport.bondedDevices as queryBondedDevices
 import nl.stijnvdpol.klinedash.transport.scanBle
 
 class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
+    // The application context: it lives as long as the process, so holding it leaks nothing.
+    @SuppressLint("StaticFieldLeak")
     private val context = graph.appContext
     private val repository = graph.settingsRepository
 
@@ -55,6 +59,9 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         _bondedDevices.value = try {
             queryBondedDevices(context)
         } catch (e: RuntimeException) {
+            // Missing permission is already handled inside; anything else from the stack ends up as
+            // an empty list, whose hint tells the user to check Bluetooth and the permission.
+            Log.w(TAG, "Listing bonded devices failed", e)
             emptyList()
         }
     }
@@ -111,7 +118,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
             if (link != null) {
                 link.forgetSavedProtocol()
             } else {
-                val key = TransportFactory.create(context, repository.connectionSettings.first()).second
+                val key = TransportFactory.adapterKey(repository.connectionSettings.first())
                 graph.protocolStore.clearProtocol(key)
             }
             showNotice(context.getString(R.string.notice_protocol_forgotten))
@@ -132,6 +139,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     private companion object {
+        const val TAG = "ConnectionViewModel"
         const val SCAN_DURATION_MS = 10_000L
         const val WIFI_DEBOUNCE_MS = 700L
         const val NOTICE_MS = 5_000L

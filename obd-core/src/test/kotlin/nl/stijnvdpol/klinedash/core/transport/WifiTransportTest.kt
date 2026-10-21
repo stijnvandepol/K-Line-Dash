@@ -5,15 +5,24 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
 
-/** Real-time tests against a local ServerSocket pretending to be an ELM327 over TCP. */
+/**
+ * Real-time integration tests against a loopback ServerSocket pretending to be an ELM327 over
+ * TCP: the point is the real socket and reader thread, so no virtual time here. Every read has its
+ * own timeout, and the rule below stops a broken transport from hanging the build.
+ */
 class WifiTransportTest {
+
+    @get:Rule
+    val timeout: Timeout = Timeout.seconds(TEST_TIMEOUT_S)
 
     /** One-shot fake adapter: accepts a single client and hands the socket to [handler]. */
     private class FakeElm(handler: (Socket) -> Unit) : AutoCloseable {
@@ -190,5 +199,9 @@ class WifiTransportTest {
         val t = WifiTransport()
         assertEquals("192.168.0.10:35000", t.description)
         assertEquals(TransportKind.WIFI, t.kind)
+    }
+
+    private companion object {
+        const val TEST_TIMEOUT_S = 15L
     }
 }

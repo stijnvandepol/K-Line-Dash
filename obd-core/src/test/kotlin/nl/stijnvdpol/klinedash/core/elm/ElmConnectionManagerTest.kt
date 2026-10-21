@@ -95,6 +95,17 @@ class ElmConnectionManagerTest {
     }
 
     @Test
+    fun `auto protocol from an unreadable atdpn is not stored`() = runTest {
+        val config = SimulatorConfig().apply { cloneRejectsAt.add("ATDPN") }
+        val store = FakeProtocolStore()
+        val manager = ElmConnectionManager({ SimulatorTransport(config) }, "sim", store, backgroundScope)
+        manager.start()
+        withTimeout(60_000) { manager.state.first { it is ConnectionState.Connected } }
+        assertEquals(0, store.saveCalls)
+        assertNull(store.saved["sim"])
+    }
+
+    @Test
     fun `start is a no-op while already running`() = runTest {
         var created = 0
         val manager = ElmConnectionManager(
@@ -189,7 +200,9 @@ class ElmConnectionManagerTest {
         val config = SimulatorConfig().apply { dropConnectionAfterCommands = 20 }
         val store = FakeProtocolStore()
         var created = 0
-        val manager = ElmConnectionManager({ created++; SimulatorTransport(config) }, "sim", store, backgroundScope)
+        val manager = ElmConnectionManager(
+            { created++; SimulatorTransport(config) }, "sim", store, backgroundScope, random = Random(1),
+        )
         manager.start()
         withTimeout(60_000) { manager.state.first { it is ConnectionState.Connected } }
         assertEquals(1, created)

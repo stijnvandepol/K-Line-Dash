@@ -22,9 +22,9 @@ import java.net.Socket
  * Wi-Fi network via ConnectivityManager.
  */
 class WifiTransport(
-    private val host: String = "192.168.0.10",
-    private val port: Int = 35000,
-    private val connectTimeoutMs: Int = 5000,
+    private val host: String = DEFAULT_HOST,
+    private val port: Int = DEFAULT_PORT,
+    private val connectTimeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
 ) : StreamTransport() {
 
     override val kind: TransportKind = TransportKind.WIFI
@@ -58,8 +58,15 @@ class WifiTransport(
         socket = null
         try {
             s.close()
-        } catch (ignored: IOException) {
-            // nothing useful to do
+        } catch (e: IOException) {
+            // A failing close() leaves nothing to release or retry; the socket is dropped either way.
         }
+    }
+
+    companion object {
+        /** Address and port most Wi-Fi ELM327 clones ship with. */
+        const val DEFAULT_HOST = "192.168.0.10"
+        const val DEFAULT_PORT = 35000
+        const val DEFAULT_CONNECT_TIMEOUT_MS = 5_000
     }
 }

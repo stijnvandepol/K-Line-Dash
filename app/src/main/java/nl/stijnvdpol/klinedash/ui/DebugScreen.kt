@@ -91,55 +91,73 @@ fun DebugScreen() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = { vm.setPaused(!paused) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = MinTouch),
-                ) { Text(stringResource(if (paused) R.string.debug_resume else R.string.debug_pause)) }
-                OutlinedButton(
-                    onClick = vm::clear,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = MinTouch),
-                ) { Text(stringResource(R.string.debug_clear)) }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = MinTouch)
-                        .toggleable(value = autoScroll, role = Role.Switch, onValueChange = vm::setAutoScroll),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Switch(checked = autoScroll, onCheckedChange = null)
-                    Text(stringResource(R.string.debug_auto_scroll), style = MaterialTheme.typography.bodyLarge)
-                }
-                OutlinedButton(
-                    onClick = {
-                        val name = vm.exportFileName()
-                        try {
-                            exportLauncher.launch(name)
-                        } catch (e: ActivityNotFoundException) {
-                            // Many head units ship without a DocumentsUI app.
-                            vm.exportToAppFolder(name, pickerMissing = true)
-                        }
-                    },
-                    enabled = link != null,
-                    modifier = Modifier.heightIn(min = MinTouch),
-                ) { Text(stringResource(R.string.debug_export)) }
-            }
+            LogControls(
+                vm = vm,
+                paused = paused,
+                autoScroll = autoScroll,
+                canExport = link != null,
+                onExport = {
+                    val name = vm.exportFileName()
+                    try {
+                        exportLauncher.launch(name)
+                    } catch (e: ActivityNotFoundException) {
+                        // Many head units ship without a DocumentsUI app.
+                        vm.exportToAppFolder(name, pickerMissing = true)
+                    }
+                },
+            )
             notice?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
             }
 
             CommandPanel(sending = sending, reply = reply, onSend = vm::send)
         }
+    }
+}
+
+/** Pause/resume, clear, auto-scroll and export for the log panel. */
+@Composable
+private fun LogControls(
+    vm: DebugViewModel,
+    paused: Boolean,
+    autoScroll: Boolean,
+    canExport: Boolean,
+    onExport: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(
+            onClick = { vm.setPaused(!paused) },
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = MinTouch),
+        ) { Text(stringResource(if (paused) R.string.debug_resume else R.string.debug_pause)) }
+        OutlinedButton(
+            onClick = vm::clear,
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = MinTouch),
+        ) { Text(stringResource(R.string.debug_clear)) }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = MinTouch)
+                .toggleable(value = autoScroll, role = Role.Switch, onValueChange = vm::setAutoScroll),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Switch(checked = autoScroll, onCheckedChange = null)
+            Text(stringResource(R.string.debug_auto_scroll), style = MaterialTheme.typography.bodyLarge)
+        }
+        OutlinedButton(
+            onClick = onExport,
+            enabled = canExport,
+            modifier = Modifier.heightIn(min = MinTouch),
+        ) { Text(stringResource(R.string.debug_export)) }
     }
 }
 

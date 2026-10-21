@@ -28,7 +28,7 @@ class RingCommLog(
     private val buffer = ArrayDeque<LogEntry>()
     private val flow = MutableSharedFlow<LogEntry>(
         replay = 0,
-        extraBufferCapacity = 256,
+        extraBufferCapacity = LIVE_BUFFER_CAPACITY,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
@@ -70,10 +70,10 @@ class RingCommLog(
     private fun appendTime(out: StringBuilder, timestampMs: Long) {
         val local = timestampMs + timeZone.getOffset(timestampMs)
         val msOfDay = Math.floorMod(local, DAY_MS).toInt()
-        val h = msOfDay / 3_600_000
-        val m = msOfDay / 60_000 % 60
-        val s = msOfDay / 1000 % 60
-        val ms = msOfDay % 1000
+        val h = msOfDay / HOUR_MS
+        val m = msOfDay / MINUTE_MS % 60
+        val s = msOfDay / SECOND_MS % 60
+        val ms = msOfDay % SECOND_MS
         out.append(pad(h, 2)).append(':').append(pad(m, 2)).append(':')
             .append(pad(s, 2)).append('.').append(pad(ms, 3))
     }
@@ -83,5 +83,11 @@ class RingCommLog(
     companion object {
         const val DEFAULT_CAPACITY = 5000
         private const val DAY_MS = 86_400_000L
+        private const val HOUR_MS = 3_600_000
+        private const val MINUTE_MS = 60_000
+        private const val SECOND_MS = 1_000
+
+        /** Live entries a slow collector may lag behind before the oldest are dropped. */
+        private const val LIVE_BUFFER_CAPACITY = 256
     }
 }

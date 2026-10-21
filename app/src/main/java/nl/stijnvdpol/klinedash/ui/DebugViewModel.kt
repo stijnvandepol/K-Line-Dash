@@ -1,6 +1,8 @@
 package nl.stijnvdpol.klinedash.ui
 
+import android.annotation.SuppressLint
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -44,6 +46,8 @@ data class CommandReply(val command: String, val type: String, val text: String,
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DebugViewModel(graph: AppGraph) : ViewModel() {
+    // The application context: it lives as long as the process, so holding it leaks nothing.
+    @SuppressLint("StaticFieldLeak")
     private val context = graph.appContext
 
     private val _paused = MutableStateFlow(false)
@@ -182,7 +186,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
                     val text = link?.log?.exportText().orEmpty()
                     context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
                         ?: error("No output stream")
-                }.isSuccess
+                }.onFailure { Log.w(TAG, "Log export to $uri failed", it) }.isSuccess
             }
             showNotice(context.getString(if (ok) R.string.debug_export_ok else R.string.debug_export_failed))
         }
@@ -199,7 +203,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
                 runCatching {
                     val dir = context.getExternalFilesDir(null) ?: context.filesDir
                     File(dir, fileName).also { it.writeText(link?.log?.exportText().orEmpty()) }
-                }.getOrNull()
+                }.onFailure { Log.w(TAG, "Log export to app folder ($fileName) failed", it) }.getOrNull()
             }
             val message = when {
                 file == null -> context.getString(R.string.debug_export_failed)
@@ -223,6 +227,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
     }
 
     private companion object {
+        const val TAG = "DebugViewModel"
         const val MAX_LINES = 2_000
 
         /** Far more entries than can be recorded between subscribing and taking the snapshot. */

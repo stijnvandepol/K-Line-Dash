@@ -61,8 +61,8 @@ object ElmParser {
                 val restUpper = rest.uppercase()
                 if (restUpper.startsWith("ERROR")) {
                     if (status == null) status = Status.INIT_ERROR
-                } else if (restUpper.startsWith("OK")) {
-                    val tail = rest.substring(2).trim { it <= ' ' }
+                } else if (restUpper.startsWith(BUS_INIT_OK)) {
+                    val tail = rest.substring(BUS_INIT_OK.length).trim { it <= ' ' }
                     if (tail.isNotEmpty()) addPayload(payload, tail, isAt)
                 }
                 // "BUS INIT: ..." with neither OK nor ERROR is a truncated progress line: ignore.
@@ -127,10 +127,12 @@ object ElmParser {
     /** Strips the "AUTO, " prefix the adapter adds to ATDP when the protocol was auto-detected. */
     fun parseProtocolName(text: String): String {
         val t = text.trim { it <= ' ' }
-        return if (t.startsWith("AUTO,", ignoreCase = true)) t.substring(5).trim() else t
+        return if (t.startsWith(AUTO_PREFIX, ignoreCase = true)) t.substring(AUTO_PREFIX.length).trim() else t
     }
 
     private const val BUS_INIT_PREFIX_LENGTH = 8 // "BUS INIT"
+    private const val BUS_INIT_OK = "OK"
+    private const val AUTO_PREFIX = "AUTO,"
 
     private fun toResult(status: Status, raw: String): ElmResult = when (status) {
         Status.UNKNOWN -> ElmResult.Unknown(raw)
@@ -170,7 +172,7 @@ object ElmParser {
         for (c in line) {
             when (c) {
                 in '0'..'9', in 'A'..'F' -> sb.append(c)
-                in 'a'..'f' -> sb.append(c - 32)
+                in 'a'..'f' -> sb.append(c.uppercaseChar())
                 ' ', '\t' -> Unit
                 else -> return null
             }

@@ -52,28 +52,24 @@ class BtClassicTransport(
     @Volatile private var deviceName: String? = null
 
     override val description: String
-        get() = "${deviceName ?: lookupName() ?: "OBD-adapter"} ($address)"
+        get() = "${deviceName ?: lookupName() ?: DEFAULT_ADAPTER_NAME} ($address)"
 
     @Volatile private var socket: BluetoothSocket? = null
 
-    private fun lookupName(): String? = try {
-        if (!hasBtConnectPermission(appContext) || !BluetoothAdapter.checkBluetoothAddress(address)) {
-            null
-        } else {
-            bluetoothAdapter(appContext)?.getRemoteDevice(address)?.name?.also { deviceName = it }
-        }
-    } catch (e: Exception) {
-        null
+    /** Cosmetic: falls back to [DEFAULT_ADAPTER_NAME] without permission or with a bad address. */
+    private fun lookupName(): String? {
+        if (!hasBtConnectPermission(appContext) || !BluetoothAdapter.checkBluetoothAddress(address)) return null
+        return bluetoothAdapter(appContext)?.getRemoteDevice(address)?.nameOrNull()?.also { deviceName = it }
     }
 
     override suspend fun openStreams(): Pair<InputStream, OutputStream> {
         requireBtConnectPermission(appContext)
         val adapter = bluetoothAdapter(appContext) ?: throw TransportException(ADAPTER_UNAVAILABLE_MESSAGE)
         if (!adapter.isEnabled) {
-            throw TransportException("Bluetooth staat uit. Zet Bluetooth aan en probeer opnieuw.")
+            throw TransportException(BLUETOOTH_OFF_MESSAGE)
         }
         if (!BluetoothAdapter.checkBluetoothAddress(address)) {
-            throw TransportException("Ongeldig Bluetooth-adres: $address")
+            throw TransportException(invalidAddressMessage(address))
         }
         val device = adapter.getRemoteDevice(address)
         deviceName = device.name
@@ -149,13 +145,14 @@ class BtClassicTransport(
 
     private fun createRfcommSocketReflectively(device: BluetoothDevice): BluetoothSocket {
         val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-        return method.invoke(device, 1) as BluetoothSocket
+        return method.invoke(device, SPP_FALLBACK_CHANNEL) as BluetoothSocket
     }
 
     private fun closeQuietly(s: BluetoothSocket) {
         try {
             s.close()
-        } catch (ignored: IOException) {
+        } catch (e: IOException) {
+            // A failing close() leaves nothing to release or retry; the socket is dropped either way.
         }
     }
 
@@ -169,6 +166,9 @@ class BtClassicTransport(
         const val TAG = "KLineDash"
         const val CONNECT_TIMEOUT_MS = 12_000L
         const val RETRY_DELAY_MS = 300L
+
+        /** RFCOMM channel clones put SPP on when their SDP record is missing. */
+        const val SPP_FALLBACK_CHANNEL = 1
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 }

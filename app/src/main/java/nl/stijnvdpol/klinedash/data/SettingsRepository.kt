@@ -1,11 +1,13 @@
 package nl.stijnvdpol.klinedash.data
 
+import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
+import nl.stijnvdpol.klinedash.core.transport.WifiTransport
 
 data class ConnectionSettings(
     val kind: TransportKind = TransportKind.SIMULATOR,
@@ -13,8 +15,8 @@ data class ConnectionSettings(
     val btName: String? = null,
     val bleAddress: String? = null,
     val bleName: String? = null,
-    val wifiHost: String = "192.168.0.10",
-    val wifiPort: Int = 35000,
+    val wifiHost: String = WifiTransport.DEFAULT_HOST,
+    val wifiPort: Int = WifiTransport.DEFAULT_PORT,
     val autoConnect: Boolean = true,
 )
 
@@ -40,6 +42,7 @@ class SettingsRepository(private val dao: SettingsDao) {
     }
 
     private companion object {
+        const val TAG = "SettingsRepository"
         const val KIND = "conn.kind"
         const val BT_ADDRESS = "conn.btAddress"
         const val BT_NAME = "conn.btName"
@@ -50,19 +53,29 @@ class SettingsRepository(private val dao: SettingsDao) {
         const val AUTO_CONNECT = "conn.autoConnect"
     }
 
+    /**
+     * Missing rows mean "never set" and give the default. A row that does not parse (written by a
+     * newer app version, or corrupted) is treated the same way, so the user can simply pick again
+     * on the connection screen, but it is logged instead of passing silently.
+     */
     private fun List<SettingEntry>.toConnectionSettings(): ConnectionSettings {
         val map = associate { it.key to it.value }
         val d = ConnectionSettings()
         return ConnectionSettings(
-            kind = map[KIND]?.let { name -> TransportKind.entries.firstOrNull { it.name == name } } ?: d.kind,
+            kind = map.parsed(KIND, d.kind) { name -> TransportKind.entries.firstOrNull { it.name == name } },
             btAddress = map[BT_ADDRESS],
             btName = map[BT_NAME],
             bleAddress = map[BLE_ADDRESS],
             bleName = map[BLE_NAME],
             wifiHost = map[WIFI_HOST] ?: d.wifiHost,
-            wifiPort = map[WIFI_PORT]?.toIntOrNull() ?: d.wifiPort,
-            autoConnect = map[AUTO_CONNECT]?.toBooleanStrictOrNull() ?: d.autoConnect,
+            wifiPort = map.parsed(WIFI_PORT, d.wifiPort) { it.toIntOrNull() },
+            autoConnect = map.parsed(AUTO_CONNECT, d.autoConnect) { it.toBooleanStrictOrNull() },
         )
+    }
+
+    private fun <T> Map<String, String>.parsed(key: String, default: T, parse: (String) -> T?): T {
+        val raw = this[key] ?: return default
+        return parse(raw) ?: default.also { Log.w(TAG, "Unreadable setting $key=\"$raw\", using $it") }
     }
 
     /** Null value means "remove the row". */

@@ -95,6 +95,18 @@ class Elm327SessionTest {
     }
 
     @Test
+    fun `unreadable atdpn after a successful search stays on auto detect`() = runTest {
+        val config = SimulatorConfig().apply { cloneRejectsAt.add("ATDPN") }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals(Elm327Session.AUTO_PROTOCOL, info.protocolNumber)
+        assertFalse(info.usedSavedProtocol)
+        assertTrue(rig.log.snapshot().any { it.kind == LogKind.INFO && it.text.contains("ATDPN") })
+    }
+
+    @Test
     fun `adapter reset in the middle of init restarts the sequence once`() = runTest {
         val config = SimulatorConfig().apply { spontaneousResetAtCommand = 4 } // ATS0 gets a banner
         val rig = Rig(config)

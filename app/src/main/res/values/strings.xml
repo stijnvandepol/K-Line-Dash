@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!-- Default resources are Dutch (the only UI language); tools:locale tells lint's spell check. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="nl">
     <string name="app_name">K-Line Dash</string>
 
     <!-- Navigation -->

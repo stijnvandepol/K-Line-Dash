@@ -17,25 +17,23 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import nl.stijnvdpol.klinedash.core.transport.TransportKind
 
 private const val TAG = "KLineDash"
-
-/** Transport technology a Bluetooth device supports, as reported by the stack. */
-enum class BtDeviceType { CLASSIC, LE, DUAL, UNKNOWN }
 
 /**
  * A Bluetooth device the user can pick as OBD adapter.
  *
- * @property name display name; "(naamloos)" when the device does not advertise one
+ * @property name display name; [UNNAMED_DEVICE] when the device does not advertise one
  * @property looksLikeObd name matches a known ELM327/OBD adapter brand (heuristic only)
  */
 data class BtDeviceInfo(
     val name: String,
     val address: String,
-    val type: BtDeviceType,
     val looksLikeObd: Boolean,
-    val rssi: Int? = null,
 )
+
+private const val UNNAMED_DEVICE = "(naamloos)"
 
 private val OBD_NAME_HINTS = listOf(
     "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "VIECAR",
@@ -47,6 +45,9 @@ internal fun nameLooksLikeObd(name: String?): Boolean {
     val upper = name.uppercase()
     return OBD_NAME_HINTS.any { upper.contains(it) }
 }
+
+/** Whether connecting over this transport needs the Bluetooth runtime permissions below. */
+fun TransportKind.needsBluetoothPermissions(): Boolean = this == TransportKind.BT_CLASSIC || this == TransportKind.BLE
 
 /** Runtime permissions the settings UI must request before listing, scanning or connecting. */
 fun requiredPermissions(): Array<String> =
@@ -87,13 +88,22 @@ internal fun bluetoothAdapter(context: Context): BluetoothAdapter? =
     context.applicationContext.getSystemService(BluetoothManager::class.java)?.adapter
 
 internal const val ADAPTER_UNAVAILABLE_MESSAGE = "Bluetooth adapter niet beschikbaar voor apps op deze head unit"
+internal const val BLUETOOTH_OFF_MESSAGE = "Bluetooth staat uit. Zet Bluetooth aan en probeer opnieuw."
 
-@Suppress("DEPRECATION")
-private fun mapType(raw: Int): BtDeviceType = when (raw) {
-    BluetoothDevice.DEVICE_TYPE_CLASSIC -> BtDeviceType.CLASSIC
-    BluetoothDevice.DEVICE_TYPE_LE -> BtDeviceType.LE
-    BluetoothDevice.DEVICE_TYPE_DUAL -> BtDeviceType.DUAL
-    else -> BtDeviceType.UNKNOWN
+/** Shown in a transport description until the device's own name is known. */
+internal const val DEFAULT_ADAPTER_NAME = "OBD-adapter"
+
+internal fun invalidAddressMessage(address: String) = "Ongeldig Bluetooth-adres: $address"
+
+/**
+ * The device's advertised name, or null. The permission can be revoked at any moment; the name is
+ * cosmetic, so then the device is just shown unnamed (a connect attempt fails loudly instead).
+ */
+@SuppressLint("MissingPermission")
+internal fun BluetoothDevice.nameOrNull(): String? = try {
+    name
+} catch (e: SecurityException) {
+    null
 }
 
 /**
@@ -108,11 +118,10 @@ fun bondedDevices(context: Context): List<BtDeviceInfo> {
     return try {
         adapter.bondedDevices.orEmpty()
             .map { d ->
-                val rawName = try { d.name } catch (e: SecurityException) { null }
+                val rawName = d.nameOrNull()
                 BtDeviceInfo(
-                    name = rawName?.takeIf { it.isNotBlank() } ?: "(naamloos)",
+                    name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
                     address = d.address,
-                    type = mapType(d.type),
                     looksLikeObd = nameLooksLikeObd(rawName),
                 )
             }
@@ -146,7 +155,7 @@ fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = cal
     val scanner = if (adapter != null && adapter.isEnabled) adapter.bluetoothLeScanner else null
     if (scanner == null) {
         close(IllegalStateException(
-            if (adapter == null) ADAPTER_UNAVAILABLE_MESSAGE else "Bluetooth staat uit. Zet Bluetooth aan en probeer opnieuw.",
+            if (adapter == null) ADAPTER_UNAVAILABLE_MESSAGE else BLUETOOTH_OFF_MESSAGE,
         ))
         awaitClose { }
         return@callbackFlow
@@ -157,14 +166,12 @@ fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = cal
     fun handle(result: ScanResult) {
         val device = result.device ?: return
         if (!seen.add(device.address)) return
-        val rawName = result.scanRecord?.deviceName ?: try { device.name } catch (e: SecurityException) { null }
+        val rawName = result.scanRecord?.deviceName ?: device.nameOrNull()
         trySend(
             BtDeviceInfo(
-                name = rawName?.takeIf { it.isNotBlank() } ?: "(naamloos)",
+                name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
                 address = device.address,
-                type = mapType(device.type),
                 looksLikeObd = nameLooksLikeObd(rawName),
-                rssi = result.rssi,
             ),
         )
     }

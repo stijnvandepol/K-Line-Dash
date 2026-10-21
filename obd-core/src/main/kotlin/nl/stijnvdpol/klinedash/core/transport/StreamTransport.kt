@@ -156,20 +156,24 @@ abstract class StreamTransport : Transport {
         }
         ch?.close(TransportException("Verbinding met de adapter is gesloten"))
         // Close the socket BEFORE cancelling: that is what unblocks the reader's read().
-        try {
-            closeUnderlying()
-        } catch (ignored: Throwable) {
-            // close() never throws
-        }
+        closeUnderlyingGuarded()
         readerScope?.cancel()
     }
 
     private suspend fun releaseAfterFailedOpen() {
-        withContext(NonCancellable + Dispatchers.IO) {
-            try {
-                closeUnderlying()
-            } catch (ignored: Throwable) {
-            }
+        withContext(NonCancellable + Dispatchers.IO) { closeUnderlyingGuarded() }
+    }
+
+    /**
+     * [closeUnderlying] must not throw by contract. This guard only stops a subclass that breaks
+     * that contract from also breaking [close] (documented as never throwing) and the teardown
+     * after it; the socket is discarded either way, so there is nothing left to recover.
+     */
+    private fun closeUnderlyingGuarded() {
+        try {
+            closeUnderlying()
+        } catch (e: Exception) {
+            // Intentionally ignored, see above. Errors (OOM etc.) still propagate.
         }
     }
 
@@ -205,13 +209,8 @@ abstract class StreamTransport : Transport {
             }
             wasConnected
         }
-        if (first) {
-            // Free the socket right away; a later connect() starts from a clean slate anyway.
-            try {
-                closeUnderlying()
-            } catch (ignored: Throwable) {
-            }
-        }
+        // Free the socket right away; a later connect() starts from a clean slate anyway.
+        if (first) closeUnderlyingGuarded()
     }
 
     private companion object {

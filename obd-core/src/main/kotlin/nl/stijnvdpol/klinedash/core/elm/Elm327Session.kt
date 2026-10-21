@@ -77,7 +77,31 @@ class Elm327Session(
 
         step(onStep, "Resetting adapter")
         resetAdapter()
+        configureAdapter(onStep, unsupported)
+        val elmVersion = readAdapterIdentity(onStep, unsupported)
+        val protocol = connectToEcu(savedProtocol, onStep, unsupported)
 
+        val dp = send("ATDP")
+        val reportedName = (dp as? ElmResult.Data)?.lines?.firstOrNull()
+            ?.let { ElmParser.parseProtocolName(it) } ?: "unknown"
+        val protocolName = if (protocol.number == TOYOTA_PROFILE) "$reportedName (Toyota)" else reportedName
+
+        val rv = send("ATRV")
+        if (rv is ElmResult.Unknown) unsupported.add("ATRV")
+        val voltage = (rv as? ElmResult.Data)?.lines?.firstOrNull()?.let { ElmParser.parseVoltage(it) }
+
+        return AdapterInfo(
+            elmVersion = elmVersion,
+            protocolNumber = protocol.number,
+            protocolName = protocolName,
+            voltage = voltage,
+            usedSavedProtocol = protocol.isSaved,
+            unsupportedCommands = unsupported,
+        )
+    }
+
+    /** Echo, linefeeds, spaces and headers off, adaptive timing on. Rejected optional commands are recorded. */
+    private suspend fun configureAdapter(onStep: (String) -> Unit, unsupported: MutableSet<String>) {
         for (cmd in SETUP_COMMANDS) {
             step(onStep, "Configuring adapter ($cmd)")
             when (send(cmd)) {
@@ -91,7 +115,10 @@ class Elm327Session(
                 else -> Unit
             }
         }
+    }
 
+    /** Returns the ATI version text ("unknown" if absent; informational only, clones lie anyway). */
+    private suspend fun readAdapterIdentity(onStep: (String) -> Unit, unsupported: MutableSet<String>): String {
         step(onStep, "Reading adapter info")
         val ati = send("ATI")
         if (ati is ElmResult.Unknown) unsupported.add("ATI")
@@ -99,82 +126,69 @@ class Elm327Session(
             ?.let { lines -> lines.firstOrNull { it.contains("ELM", ignoreCase = true) } ?: lines.firstOrNull() }
             ?: "unknown"
 
-        val description = send("AT@1")
-        when (description) {
+        when (val description = send("AT@1")) {
             is ElmResult.Unknown -> unsupported.add("AT@1")
             is ElmResult.Data -> log.record(LogKind.INFO, "Adapter description: ${description.lines.joinToString(" ")}")
             else -> Unit
         }
+        return elmVersion
+    }
 
-        var protocolNumber: String? = null
-        var usedSaved = false
+    /** The protocol the ECU answered on, and whether it was the saved one. */
+    private class EcuProtocol(val number: String, val isSaved: Boolean)
 
+    /**
+     * Saved protocol first, then ATSP0 auto-detection, then the explicit K-line ladder.
+     *
+     * @throws EcuNotRespondingException when no protocol gets an answer to 0100.
+     */
+    private suspend fun connectToEcu(
+        savedProtocol: String?,
+        onStep: (String) -> Unit,
+        unsupported: MutableSet<String>,
+    ): EcuProtocol {
         if (savedProtocol != null) {
             step(onStep, "Connecting to ECU (saved protocol $savedProtocol)")
             val probe = tryProtocol(savedProtocol, unsupported, SAVED_PROBE_TIMEOUT_MS)
-            if (probe is ElmResult.Data) {
-                protocolNumber = savedProtocol
-                usedSaved = true
-            } else {
-                log.record(LogKind.INFO, "Saved protocol $savedProtocol failed (${describe(probe)}), falling back to auto-detect")
-                // ISO 9141-2 wants the bus idle for a while before the next 5-baud init.
-                delay(KLINE_REINIT_PAUSE_MS)
-            }
+            if (probe is ElmResult.Data) return EcuProtocol(savedProtocol, isSaved = true)
+            log.record(LogKind.INFO, "Saved protocol $savedProtocol failed (${describe(probe)}), falling back to auto-detect")
+            // ISO 9141-2 wants the bus idle for a while before the next 5-baud init.
+            delay(KLINE_REINIT_PAUSE_MS)
         }
 
-        var lastProbe: ElmResult? = null
-        if (protocolNumber == null) {
-            step(onStep, "Detecting protocol (ECU init takes a few seconds)")
-            send("ATSP0")
-            val probe = probeEcu(DETECT_PROBE_TIMEOUT_MS)
-            lastProbe = probe
-            if (probe is ElmResult.Data) {
-                val dpn = send("ATDPN")
-                protocolNumber = (dpn as? ElmResult.Data)?.lines?.firstOrNull()
-                    ?.let { ElmParser.parseProtocolNumber(it) } ?: "0"
-            }
-        }
+        step(onStep, "Detecting protocol (ECU init takes a few seconds)")
+        send("ATSP0")
+        var lastProbe = probeEcu(DETECT_PROBE_TIMEOUT_MS)
+        if (lastProbe is ElmResult.Data) return EcuProtocol(readDetectedProtocol(), isSaved = false)
 
         // Clone auto-search is unreliable on K-line, and some Toyota ECUs only answer a 5-baud
         // init to address 0x13. Try the K-line protocols explicitly before giving up.
-        if (protocolNumber == null) {
-            for (candidate in FALLBACK_PROTOCOLS) {
-                if (candidate == savedProtocol) continue
-                delay(KLINE_REINIT_PAUSE_MS)
-                step(onStep, "Trying ${protocolLabel(candidate)}")
-                val probe = tryProtocol(candidate, unsupported, SAVED_PROBE_TIMEOUT_MS)
-                lastProbe = probe
-                if (probe is ElmResult.Data) {
-                    protocolNumber = candidate
-                    break
-                }
-            }
+        for (candidate in FALLBACK_PROTOCOLS) {
+            if (candidate == savedProtocol) continue
+            delay(KLINE_REINIT_PAUSE_MS)
+            step(onStep, "Trying ${protocolLabel(candidate)}")
+            lastProbe = tryProtocol(candidate, unsupported, SAVED_PROBE_TIMEOUT_MS)
+            if (lastProbe is ElmResult.Data) return EcuProtocol(candidate, isSaved = false)
         }
 
-        if (protocolNumber == null) {
-            throw EcuNotRespondingException(
-                "ECU did not respond (${lastProbe?.let { describe(it) } ?: "no answer"}). Is the ignition on, " +
-                    "is the adapter plugged into the car and is this the right vehicle?",
-            )
-        }
-
-        val dp = send("ATDP")
-        val reportedName = (dp as? ElmResult.Data)?.lines?.firstOrNull()
-            ?.let { ElmParser.parseProtocolName(it) } ?: "unknown"
-        val protocolName = if (protocolNumber == TOYOTA_PROFILE) "$reportedName (Toyota)" else reportedName
-
-        val rv = send("ATRV")
-        if (rv is ElmResult.Unknown) unsupported.add("ATRV")
-        val voltage = (rv as? ElmResult.Data)?.lines?.firstOrNull()?.let { ElmParser.parseVoltage(it) }
-
-        return AdapterInfo(
-            elmVersion = elmVersion,
-            protocolNumber = protocolNumber ?: "0",
-            protocolName = protocolName,
-            voltage = voltage,
-            usedSavedProtocol = usedSaved,
-            unsupportedCommands = unsupported,
+        throw EcuNotRespondingException(
+            "ECU did not respond (${describe(lastProbe)}). Is the ignition on, " +
+                "is the adapter plugged into the car and is this the right vehicle?",
         )
+    }
+
+    /**
+     * Protocol number the auto-search settled on (ATDPN). An unreadable answer keeps
+     * [AUTO_PROTOCOL]: the link still works, and the connection manager does not save it, so the
+     * next start simply searches again.
+     */
+    private suspend fun readDetectedProtocol(): String {
+        val dpn = send("ATDPN")
+        val number = (dpn as? ElmResult.Data)?.lines?.firstOrNull()?.let { ElmParser.parseProtocolNumber(it) }
+        if (number == null) {
+            log.record(LogKind.INFO, "ATDPN unreadable (${describe(dpn)}), staying on auto-detect")
+        }
+        return number ?: AUTO_PROTOCOL
     }
 
     /** ATZ, retried once: many clones swallow the first one right after power-up. */
@@ -268,6 +282,9 @@ class Elm327Session(
          * KWP header 81 13 F1, no ELM wakeup messages. Stored like a protocol number.
          */
         const val TOYOTA_PROFILE = "T"
+
+        /** ATSP0: let the adapter search. Reported when detection worked but ATDPN was unreadable. */
+        const val AUTO_PROTOCOL = "0"
 
         private val TOYOTA_COMMANDS = listOf("ATIB96", "ATIIA13", "ATSH8113F1", "ATSW00", "ATSPA4")
 

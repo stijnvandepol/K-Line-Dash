@@ -32,14 +32,8 @@ import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
 import java.util.UUID
 
 /**
- * ELM327 over Bluetooth Low Energy. Cheap BLE clones expose a "serial over GATT" service; the
- * vendor differs, so after service discovery we look for these known layouts in order:
- *  - FFE0 / FFE1 (notify + write on one characteristic, HM-10 style, most common)
- *  - FFF0 / FFF1 notify + FFF2 write
- *  - 18F0 / 2AF0 notify + 2AF1 write (Vgate, "IOS-Vlink")
- *  - Nordic UART 6E400001: 6E400003 notify, 6E400002 write
- * and otherwise fall back to the first service that has both a notifiable and a writable
- * characteristic.
+ * ELM327 over Bluetooth Low Energy. Cheap BLE clones expose a "serial over GATT" service whose
+ * layout differs per vendor; [findBleUart] picks the characteristics after service discovery.
  *
  * Flow control: Android allows exactly one GATT operation at a time, so every operation sets a
  * [CompletableDeferred] that the callback completes, and writes are serialised by [opMutex].
@@ -62,7 +56,7 @@ class BleTransport(
     @Volatile private var deviceName: String? = null
 
     override val description: String
-        get() = "${deviceName ?: "OBD-adapter"} ($address)"
+        get() = "${deviceName ?: DEFAULT_ADAPTER_NAME} ($address)"
 
     override val isConnected: Boolean get() = connected
 
@@ -92,13 +86,13 @@ class BleTransport(
             requireBtConnectPermission(appContext)
             val adapter = bluetoothAdapter(appContext) ?: throw TransportException(ADAPTER_UNAVAILABLE_MESSAGE)
             if (!adapter.isEnabled) {
-                throw TransportException("Bluetooth staat uit. Zet Bluetooth aan en probeer opnieuw.")
+                throw TransportException(BLUETOOTH_OFF_MESSAGE)
             }
             if (!BluetoothAdapter.checkBluetoothAddress(address)) {
-                throw TransportException("Ongeldig Bluetooth-adres: $address")
+                throw TransportException(invalidAddressMessage(address))
             }
             val device = adapter.getRemoteDevice(address)
-            deviceName = try { device.name } catch (e: SecurityException) { null }
+            deviceName = device.nameOrNull()
 
             val ch = Channel<String>(Channel.UNLIMITED)
             val handler = GattHandler(ch)
@@ -126,7 +120,8 @@ class BleTransport(
                 delay(POST_CONNECT_DELAY_MS)
 
                 discoverServices(g, handler)
-                val uart = pickUart(g)
+                Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
+                val uart = findBleUart(g)
                     ?: throw TransportException(
                         "Dit apparaat heeft geen seriele BLE-service (FFE0/FFF0/18F0/Nordic UART). " +
                             "Waarschijnlijk is het een Bluetooth Classic adapter.",
@@ -241,26 +236,6 @@ class BleTransport(
         }
     }
 
-    private data class Uart(val notify: BluetoothGattCharacteristic, val write: BluetoothGattCharacteristic)
-
-    private fun pickUart(g: BluetoothGatt): Uart? {
-        Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
-        for (profile in KNOWN_PROFILES) {
-            val service = g.getService(profile.service) ?: continue
-            val notify = service.getCharacteristic(profile.notify) ?: continue
-            val write = service.getCharacteristic(profile.write) ?: continue
-            if (notify.canNotify() && write.canWrite()) return Uart(notify, write)
-        }
-        // Unknown clone: first service offering a notify characteristic and a writable one.
-        for (service in g.services) {
-            val chars = service.characteristics
-            val notify = chars.firstOrNull { it.canNotify() } ?: continue
-            val write = if (notify.canWrite()) notify else chars.firstOrNull { it.canWrite() } ?: continue
-            return Uart(notify, write)
-        }
-        return null
-    }
-
     private suspend fun enableNotifications(g: BluetoothGatt, h: GattHandler, notify: BluetoothGattCharacteristic) {
         if (!g.setCharacteristicNotification(notify, true)) {
             throw TransportException("Kon notificaties van de adapter niet inschakelen")
@@ -338,12 +313,6 @@ class BleTransport(
             d.value = value
             g.writeDescriptor(d)
         }
-
-    private fun BluetoothGattCharacteristic.canNotify(): Boolean =
-        (properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0
-
-    private fun BluetoothGattCharacteristic.canWrite(): Boolean =
-        (properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)) != 0
 
     // ---------------------------------------------------------------- helpers
 
@@ -438,7 +407,7 @@ class BleTransport(
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             if (!isCurrent) return
-            if (status == BluetoothGatt.GATT_SUCCESS) maxChunk = (mtu - 3).coerceAtLeast(DEFAULT_CHUNK)
+            if (status == BluetoothGatt.GATT_SUCCESS) maxChunk = (mtu - ATT_HEADER_BYTES).coerceAtLeast(DEFAULT_CHUNK)
             mtuResult?.complete(status)
         }
 
@@ -482,8 +451,6 @@ class BleTransport(
         }
     }
 
-    private class Profile(val service: UUID, val notify: UUID, val write: UUID)
-
     private companion object {
         const val TAG = "KLineDash"
 
@@ -499,19 +466,9 @@ class BleTransport(
         const val MAX_WRITE_RETRIES = 60
         const val WRITE_RETRY_DELAY_MS = 10L
 
-        fun uuid16(short: Int): UUID = UUID.fromString(String.format("%08x-0000-1000-8000-00805f9b34fb", short))
+        /** Bytes of every ATT packet taken by the opcode and handle, so payload = MTU - 3. */
+        const val ATT_HEADER_BYTES = 3
 
         val CCCD_UUID: UUID = uuid16(0x2902)
-
-        val KNOWN_PROFILES = listOf(
-            Profile(uuid16(0xFFE0), uuid16(0xFFE1), uuid16(0xFFE1)),
-            Profile(uuid16(0xFFF0), uuid16(0xFFF1), uuid16(0xFFF2)),
-            Profile(uuid16(0x18F0), uuid16(0x2AF0), uuid16(0x2AF1)),
-            Profile(
-                UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e"),
-                UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"),
-                UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e"),
-            ),
-        )
     }
 }

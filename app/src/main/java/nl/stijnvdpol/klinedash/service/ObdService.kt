@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.service
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -129,6 +130,9 @@ class ObdService : LifecycleService() {
         }
     }
 
+    // The connectedDevice type constant is API 29; ServiceCompat ignores the type below that, so
+    // inlining it on API 26-28 is harmless.
+    @SuppressLint("InlinedApi")
     private fun enterForeground(notification: Notification): Boolean = try {
         ServiceCompat.startForeground(
             this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
@@ -162,12 +166,12 @@ class ObdService : LifecycleService() {
 
     private fun buildNotification(text: String): Notification {
         val open = PendingIntent.getActivity(
-            this, 0,
+            this, REQUEST_OPEN_APP,
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stop = PendingIntent.getService(
-            this, 1,
+            this, REQUEST_STOP_SERVICE,
             Intent(this, ObdService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -194,6 +198,8 @@ class ObdService : LifecycleService() {
         private const val ACTION_CONNECT = "nl.stijnvdpol.klinedash.action.CONNECT"
         private const val ACTION_STOP = "nl.stijnvdpol.klinedash.action.STOP"
         private const val NOTIFICATION_MIN_INTERVAL_MS = 500L
+        private const val REQUEST_OPEN_APP = 0
+        private const val REQUEST_STOP_SERVICE = 1
 
         /** Makes sure the service runs; an already running link is left alone. */
         fun start(context: Context) {

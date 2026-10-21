@@ -3,6 +3,7 @@ package nl.stijnvdpol.klinedash.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,9 +47,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
+import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
+import nl.stijnvdpol.klinedash.transport.needsBluetoothPermissions
 
 private val MinTouch = 64.dp
+private const val TAG = "ConnectionScreen"
+private val ValidPorts = 1..65535
+private const val MAX_PORT_DIGITS = 5
+
+/** The port typed so far, or null while it is not (yet) a usable TCP port. */
+private fun String.toValidPort(): Int? = toIntOrNull()?.takeIf { it in ValidPorts }
 
 /**
  * @param onConnect called with whether the chosen transport needs Bluetooth permissions; the
@@ -66,10 +75,6 @@ fun ConnectionScreen(
     val vm = graphViewModel { ConnectionViewModel(it) }
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.connectionState.collectAsStateWithLifecycle()
-    val bonded by vm.bondedDevices.collectAsStateWithLifecycle()
-    val bleResults by vm.bleResults.collectAsStateWithLifecycle()
-    val scanning by vm.scanning.collectAsStateWithLifecycle()
-    val notice by vm.notice.collectAsStateWithLifecycle()
     val s = settings ?: return
 
     LaunchedEffect(s.kind, permissionRevision) {
@@ -90,97 +95,117 @@ fun ConnectionScreen(
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Column(
+            ConnectionControls(vm, s, state, onConnect, Modifier.weight(0.42f))
+            TransportDetails(vm, s, onScanRequested, Modifier.weight(0.58f))
+        }
+    }
+}
+
+/** Left column: transport choice, auto-connect and the connect/disconnect/forget actions. */
+@Composable
+private fun ConnectionControls(
+    vm: ConnectionViewModel,
+    s: ConnectionSettings,
+    state: ConnectionState,
+    onConnect: (needsBluetooth: Boolean) -> Unit,
+    modifier: Modifier,
+) {
+    val notice by vm.notice.collectAsStateWithLifecycle()
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        TransportOption(R.string.transport_simulator, s.kind == TransportKind.SIMULATOR) {
+            vm.selectKind(TransportKind.SIMULATOR)
+        }
+        TransportOption(R.string.transport_bt_classic, s.kind == TransportKind.BT_CLASSIC) {
+            vm.selectKind(TransportKind.BT_CLASSIC)
+        }
+        TransportOption(R.string.transport_ble, s.kind == TransportKind.BLE) {
+            vm.selectKind(TransportKind.BLE)
+        }
+        TransportOption(R.string.transport_wifi, s.kind == TransportKind.WIFI) {
+            vm.selectKind(TransportKind.WIFI)
+        }
+
+        SwitchRow(stringResource(R.string.auto_connect), s.autoConnect, vm::setAutoConnect)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = { onConnect(s.kind.needsBluetoothPermissions()) },
                 modifier = Modifier
-                    .weight(0.42f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                TransportOption(R.string.transport_simulator, s.kind == TransportKind.SIMULATOR) {
-                    vm.selectKind(TransportKind.SIMULATOR)
-                }
-                TransportOption(R.string.transport_bt_classic, s.kind == TransportKind.BT_CLASSIC) {
-                    vm.selectKind(TransportKind.BT_CLASSIC)
-                }
-                TransportOption(R.string.transport_ble, s.kind == TransportKind.BLE) {
-                    vm.selectKind(TransportKind.BLE)
-                }
-                TransportOption(R.string.transport_wifi, s.kind == TransportKind.WIFI) {
-                    vm.selectKind(TransportKind.WIFI)
-                }
+                    .weight(1f)
+                    .heightIn(min = MinTouch),
+            ) { Text(stringResource(R.string.btn_connect)) }
+            OutlinedButton(
+                onClick = vm::disconnect,
+                enabled = state !is ConnectionState.Idle,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = MinTouch),
+            ) { Text(stringResource(R.string.btn_disconnect)) }
+        }
+        OutlinedButton(
+            onClick = vm::forgetProtocol,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = MinTouch),
+        ) { Text(stringResource(R.string.btn_forget_protocol)) }
 
-                SwitchRow(stringResource(R.string.auto_connect), s.autoConnect, vm::setAutoConnect)
+        notice?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = {
-                            onConnect(s.kind == TransportKind.BT_CLASSIC || s.kind == TransportKind.BLE)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = MinTouch),
-                    ) { Text(stringResource(R.string.btn_connect)) }
-                    OutlinedButton(
-                        onClick = vm::disconnect,
-                        enabled = state !is ConnectionState.Idle,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = MinTouch),
-                    ) { Text(stringResource(R.string.btn_disconnect)) }
-                }
-                OutlinedButton(
-                    onClick = vm::forgetProtocol,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = MinTouch),
-                ) { Text(stringResource(R.string.btn_forget_protocol)) }
+/** Right column: what the selected transport needs (device list, BLE scan or Wi-Fi address). */
+@Composable
+private fun TransportDetails(
+    vm: ConnectionViewModel,
+    s: ConnectionSettings,
+    onScanRequested: () -> Boolean,
+    modifier: Modifier,
+) {
+    val bonded by vm.bondedDevices.collectAsStateWithLifecycle()
+    val bleResults by vm.bleResults.collectAsStateWithLifecycle()
+    val scanning by vm.scanning.collectAsStateWithLifecycle()
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        when (s.kind) {
+            TransportKind.SIMULATOR -> Hint(stringResource(R.string.sim_hint))
 
-                notice?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
-                }
+            TransportKind.BT_CLASSIC -> {
+                Hint(stringResource(R.string.bt_hint))
+                BluetoothSettingsRow(onRefresh = vm::refreshBonded)
+                DeviceList(
+                    devices = bonded,
+                    selectedAddress = s.btAddress,
+                    emptyText = stringResource(R.string.bt_no_devices),
+                    onSelect = vm::selectBtDevice,
+                )
             }
 
-            Column(
-                modifier = Modifier
-                    .weight(0.58f)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                when (s.kind) {
-                    TransportKind.SIMULATOR -> Hint(stringResource(R.string.sim_hint))
-
-                    TransportKind.BT_CLASSIC -> {
-                        Hint(stringResource(R.string.bt_hint))
-                        BluetoothSettingsRow(onRefresh = vm::refreshBonded)
-                        DeviceList(
-                            devices = bonded,
-                            selectedAddress = s.btAddress,
-                            emptyText = stringResource(R.string.bt_no_devices),
-                            onSelect = vm::selectBtDevice,
-                        )
-                    }
-
-                    TransportKind.BLE -> {
-                        Button(
-                            onClick = { if (onScanRequested()) vm.startScan() },
-                            enabled = !scanning,
-                            modifier = Modifier.heightIn(min = MinTouch),
-                        ) {
-                            Text(stringResource(if (scanning) R.string.ble_scanning else R.string.ble_scan))
-                        }
-                        DeviceList(
-                            devices = bleResults,
-                            selectedAddress = s.bleAddress,
-                            emptyText = stringResource(R.string.ble_no_results),
-                            onSelect = vm::selectBleDevice,
-                            // A previously chosen device is shown even before the first scan.
-                            pinnedName = s.bleName,
-                        )
-                    }
-
-                    TransportKind.WIFI -> WifiPanel(s.wifiHost, s.wifiPort, vm::setWifi)
+            TransportKind.BLE -> {
+                Button(
+                    onClick = { if (onScanRequested()) vm.startScan() },
+                    enabled = !scanning,
+                    modifier = Modifier.heightIn(min = MinTouch),
+                ) {
+                    Text(stringResource(if (scanning) R.string.ble_scanning else R.string.ble_scan))
                 }
+                DeviceList(
+                    devices = bleResults,
+                    selectedAddress = s.bleAddress,
+                    emptyText = stringResource(R.string.ble_no_results),
+                    onSelect = vm::selectBleDevice,
+                    // A previously chosen device is shown even before the first scan.
+                    pinnedName = s.bleName,
+                )
             }
+
+            TransportKind.WIFI -> WifiPanel(s.wifiHost, s.wifiPort, vm::setWifi)
         }
     }
 }
@@ -233,6 +258,7 @@ private fun BluetoothSettingsRow(onRefresh: () -> Unit) {
                     context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 } catch (e: ActivityNotFoundException) {
                     // Some head units strip the stock settings app; nothing sensible to fall back to.
+                    Log.w(TAG, "No Bluetooth settings screen on this device", e)
                 }
             },
             modifier = Modifier.heightIn(min = MinTouch),
@@ -325,7 +351,7 @@ private fun WifiPanel(initialHost: String, initialPort: Int, onChange: (String, 
             value = host,
             onValueChange = { value ->
                 host = value
-                port.toIntOrNull()?.takeIf { it in 1..65535 }?.let { onChange(value.trim(), it) }
+                port.toValidPort()?.let { onChange(value.trim(), it) }
             },
             label = { Text(stringResource(R.string.wifi_host)) },
             singleLine = true,
@@ -335,9 +361,9 @@ private fun WifiPanel(initialHost: String, initialPort: Int, onChange: (String, 
         OutlinedTextField(
             value = port,
             onValueChange = { value ->
-                val digits = value.filter { it.isDigit() }.take(5)
+                val digits = value.filter { it.isDigit() }.take(MAX_PORT_DIGITS)
                 port = digits
-                digits.toIntOrNull()?.takeIf { it in 1..65535 }?.let { onChange(host.trim(), it) }
+                digits.toValidPort()?.let { onChange(host.trim(), it) }
             },
             label = { Text(stringResource(R.string.wifi_port)) },
             singleLine = true,

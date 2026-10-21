@@ -61,8 +61,6 @@ class SimulatorTransport(
     /** Engine on/off for the debug screen: off = ignition on, engine stopped (rpm 0). */
     fun setEngineRunning(running: Boolean) = engine.setRunning(running, clock())
 
-    val isEngineRunning: Boolean get() = engine.isRunning
-
     override suspend fun connect() {
         if (connected) return
         delay(config.connectLatencyMs)
