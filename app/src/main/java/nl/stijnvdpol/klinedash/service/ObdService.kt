@@ -21,11 +21,11 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,10 +62,11 @@ class ObdService : LifecycleService() {
             return
         }
         linkJob = lifecycleScope.launch {
-            // autoConnect only matters at app start; ignore it here so toggling it does not drop the link.
+            // Only a different adapter rebuilds the link: toggling autoConnect, the stored device name
+            // (written as a separate row right after the address) or another kind's fields must not
+            // drop a running connection or abort one that is being set up.
             val settings = appGraph.settingsRepository.connectionSettings
-                .map { it.copy(autoConnect = false) }
-                .distinctUntilChanged()
+                .distinctUntilChangedBy { TransportFactory.adapterKey(it) }
             combine(settings, restartTicks) { s, _ -> s }.collectLatest { runLink(it) }
         }
     }
@@ -104,7 +105,12 @@ class ObdService : LifecycleService() {
         ObdServiceState.publish(link)
         link.start()
         try {
-            link.state.collect { updateNotification(it.describe(resources)) }
+            // Throttled: init steps can follow each other within milliseconds and the system sheds
+            // notification updates above ~5/s, which could leave a stale "Initialiseren" text.
+            // StateFlow is conflated, so after the pause the latest state is shown.
+            link.state.collect {
+                if (updateNotification(it.describe(resources))) delay(NOTIFICATION_MIN_INTERVAL_MS)
+            }
         } finally {
             withContext(NonCancellable) {
                 ObdServiceState.unpublish(link)
@@ -134,10 +140,12 @@ class ObdService : LifecycleService() {
         false
     }
 
-    private fun updateNotification(text: String) {
-        if (text == lastText) return
+    /** Returns whether a notification update was actually posted. */
+    private fun updateNotification(text: String): Boolean {
+        if (text == lastText) return false
         lastText = text
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
+        return true
     }
 
     private fun createChannel() {
@@ -185,17 +193,29 @@ class ObdService : LifecycleService() {
         private const val NOTIFICATION_ID = 1
         private const val ACTION_CONNECT = "nl.stijnvdpol.klinedash.action.CONNECT"
         private const val ACTION_STOP = "nl.stijnvdpol.klinedash.action.STOP"
+        private const val NOTIFICATION_MIN_INTERVAL_MS = 500L
 
         /** Makes sure the service runs; an already running link is left alone. */
         fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, ObdService::class.java))
+            startSafely(context, Intent(context, ObdService::class.java))
         }
 
         /** Starts the service if needed and (re)builds the link from the current settings. */
         fun connect(context: Context) {
-            ContextCompat.startForegroundService(
-                context, Intent(context, ObdService::class.java).setAction(ACTION_CONNECT),
-            )
+            startSafely(context, Intent(context, ObdService::class.java).setAction(ACTION_CONNECT))
+        }
+
+        /**
+         * API 31+ throws ForegroundServiceStartNotAllowedException (an IllegalStateException) when
+         * the app is not considered foreground, e.g. a head unit that resumes the activity behind
+         * its launcher. Not worth a crash: the user can tap Verbinden again.
+         */
+        private fun startSafely(context: Context, intent: Intent) {
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "Cannot start ObdService now", e)
+            }
         }
     }
 }

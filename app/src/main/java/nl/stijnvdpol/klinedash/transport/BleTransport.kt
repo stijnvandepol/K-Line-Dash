@@ -114,12 +114,17 @@ class BleTransport(
             try {
                 val g = device.connectGatt(appContext, false, handler, BluetoothDevice.TRANSPORT_LE)
                     ?: throw TransportException("Kon geen BLE-verbinding starten")
-                gatt = g
+                // close() may have run teardown() while connectGatt() was being called; it then
+                // never saw this client, so release it here.
+                val accepted = synchronized(lock) { (active === handler).also { if (it) gatt = g } }
+                if (!accepted) {
+                    g.close()
+                    throw TransportException("Verbinding met de adapter is gesloten")
+                }
                 awaitStep(handler.connectResult, CONNECT_TIMEOUT_MS, "verbinden")
                 // Some stacks return GATT_ERROR/133 when discovering immediately after connect.
                 delay(POST_CONNECT_DELAY_MS)
 
-                requestMtu(g, handler)
                 discoverServices(g, handler)
                 val uart = pickUart(g)
                     ?: throw TransportException(
@@ -134,9 +139,14 @@ class BleTransport(
                 }
                 handler.notifyUuid = uart.notify.uuid
                 enableNotifications(g, handler, uart.notify)
+                // Last, because it is optional (it only enlarges chunks): the stack queues GATT
+                // operations, so a clone that is slow to answer the MTU exchange used to push the
+                // mandatory discovery/CCCD steps into their timeouts.
+                requestMtu(g, handler)
 
                 synchronized(lock) {
-                    if (handler.disconnected.isCompleted) {
+                    // gatt !== g: close() tore the session down between two steps.
+                    if (handler.disconnected.isCompleted || active !== handler || gatt !== g) {
                         throw TransportException("BLE-verbinding verbroken tijdens opzetten")
                     }
                     connected = true

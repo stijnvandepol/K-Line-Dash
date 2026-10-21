@@ -26,7 +26,7 @@ object TransportFactory {
                 val factory: () -> Transport = {
                     SimulatorTransport().also { ObdServiceState.attachSimulator(it) }
                 }
-                factory to "sim"
+                factory to adapterKey(settings)
             }
 
             TransportKind.BT_CLASSIC -> {
@@ -34,7 +34,7 @@ object TransportFactory {
                 val factory: () -> Transport = {
                     BtClassicTransport(appContext, address ?: throw noAdapter(appContext))
                 }
-                factory to "bt:${address.orEmpty()}"
+                factory to adapterKey(settings)
             }
 
             TransportKind.BLE -> {
@@ -42,7 +42,7 @@ object TransportFactory {
                 val factory: () -> Transport = {
                     BleTransport(appContext, address ?: throw noAdapter(appContext))
                 }
-                factory to "ble:${address.orEmpty()}"
+                factory to adapterKey(settings)
             }
 
             TransportKind.WIFI -> {
@@ -52,9 +52,20 @@ object TransportFactory {
                     if (host.isEmpty()) throw noAdapter(appContext)
                     WifiTransport(host, port)
                 }
-                factory to "wifi:$host:$port"
+                factory to adapterKey(settings)
             }
         }
+    }
+
+    /**
+     * Identifies the physical adapter the settings point at: only the fields of the selected
+     * transport kind. Also what [ObdService] compares to decide whether the link must be rebuilt.
+     */
+    fun adapterKey(settings: ConnectionSettings): String = when (settings.kind) {
+        TransportKind.SIMULATOR -> "sim"
+        TransportKind.BT_CLASSIC -> "bt:${settings.btAddress.orEmpty()}"
+        TransportKind.BLE -> "ble:${settings.bleAddress.orEmpty()}"
+        TransportKind.WIFI -> "wifi:${settings.wifiHost.trim()}:${settings.wifiPort}"
     }
 
     private fun noAdapter(context: Context) = TransportException(context.getString(R.string.error_no_adapter))

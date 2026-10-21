@@ -26,11 +26,14 @@ import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
+import nl.stijnvdpol.klinedash.core.log.LogEntry
 import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Collections
 import java.util.Date
+import java.util.IdentityHashMap
 import java.util.Locale
 
 /** One rendered log line; text is precomputed so scrolling does no string work. */
@@ -83,16 +86,33 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
         var nextId = 0L
         var dirty = false
 
+        fun add(entry: LogEntry) {
+            buffer.addLast(
+                LogLine(nextId++, timeFormat.format(Date(entry.timestampMs)), entry.kind, renderLogText(entry.kind, entry.text)),
+            )
+            if (buffer.size > MAX_LINES) buffer.removeFirst()
+            dirty = true
+        }
+
         launch {
             val log = link.log
+            // Entries recorded between registering the subscription and taking the snapshot are
+            // in both. They are the very same instances and arrive first on the live flow, so live
+            // entries are skipped while they match the snapshot tail (identity, not equals).
+            val overlap: MutableSet<LogEntry> = Collections.newSetFromMap(IdentityHashMap())
             log.entries
-                .onSubscription { log.snapshot().forEach { emit(it) } }
+                .onSubscription {
+                    val history = log.snapshot()
+                    overlap.addAll(history.takeLast(OVERLAP_CHECK))
+                    // Only what the screen keeps: rendering 5000 lines on a weak CPU is a visible stall.
+                    history.takeLast(MAX_LINES).forEach(::add)
+                }
                 .collect { entry ->
-                    buffer.addLast(
-                        LogLine(nextId++, timeFormat.format(Date(entry.timestampMs)), entry.kind, renderLogText(entry.kind, entry.text)),
-                    )
-                    if (buffer.size > MAX_LINES) buffer.removeFirst()
-                    dirty = true
+                    if (overlap.isNotEmpty()) {
+                        if (overlap.remove(entry)) return@collect
+                        overlap.clear()
+                    }
+                    add(entry)
                 }
         }
         launch {
@@ -204,6 +224,9 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
 
     private companion object {
         const val MAX_LINES = 2_000
+
+        /** Far more entries than can be recorded between subscribing and taking the snapshot. */
+        const val OVERLAP_CHECK = 512
         const val FLUSH_MS = 100L
         const val NOTICE_MS = 8_000L
     }

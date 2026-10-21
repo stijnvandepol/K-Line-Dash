@@ -325,7 +325,7 @@ private fun WifiPanel(initialHost: String, initialPort: Int, onChange: (String, 
             value = host,
             onValueChange = { value ->
                 host = value
-                port.toIntOrNull()?.let { onChange(value.trim(), it) }
+                port.toIntOrNull()?.takeIf { it in 1..65535 }?.let { onChange(value.trim(), it) }
             },
             label = { Text(stringResource(R.string.wifi_host)) },
             singleLine = true,
