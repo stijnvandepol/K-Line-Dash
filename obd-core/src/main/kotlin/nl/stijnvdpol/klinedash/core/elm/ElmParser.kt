@@ -20,6 +20,8 @@ object ElmParser {
 
     private val VOLTAGE = Regex("""^(\d{1,2})(?:[.,](\d{1,2}))?\s*[Vv]?$""")
     private val ERROR_CODE = Regex("""^ERR\d+$""")
+    private val CAN_FRAME_LINE = Regex("""^\s*([0-9A-Fa-f])\s*:(.*)$""")
+    private const val CAN_LENGTH_LINE_DIGITS = 3
     private val PROTOCOL_NUMBER = Regex("""^[0-9A-C]$""")
 
     private val BUS_ERROR_TEXTS = setOf(
@@ -166,10 +168,30 @@ object ElmParser {
         }
     }
 
-    /** Upper-case hex without spaces, or null if the line is not a whole number of hex bytes. */
+    /**
+     * Upper-case hex without spaces, or null if the line is not a whole number of hex bytes.
+     * Two CAN multi-frame forms are kept as the ELM prints them, because the message they belong
+     * to can only be reassembled with them: the length line ("00A", three hex digits) and numbered
+     * frames ("0:43040171..."), which keep their "N:" prefix.
+     */
     private fun normaliseHex(line: String): String? {
-        val sb = StringBuilder(line.length)
-        for (c in line) {
+        val frame = CAN_FRAME_LINE.matchEntire(line)
+        if (frame != null) {
+            val bytes = hexDigits(frame.groupValues[2]) ?: return null
+            return if (bytes.length % 2 != 0) null else "${frame.groupValues[1].uppercase()}:$bytes"
+        }
+        val digits = hexDigits(line) ?: return null
+        return when {
+            digits.length == CAN_LENGTH_LINE_DIGITS -> digits
+            digits.isEmpty() || digits.length % 2 != 0 -> null
+            else -> digits
+        }
+    }
+
+    /** [text] as upper-case hex digits without spaces, or null if it contains anything else. */
+    private fun hexDigits(text: String): String? {
+        val sb = StringBuilder(text.length)
+        for (c in text) {
             when (c) {
                 in '0'..'9', in 'A'..'F' -> sb.append(c)
                 in 'a'..'f' -> sb.append(c.uppercaseChar())
@@ -177,7 +199,7 @@ object ElmParser {
                 else -> return null
             }
         }
-        return if (sb.isEmpty() || sb.length % 2 != 0) null else sb.toString()
+        return sb.toString()
     }
 
     private fun compact(s: String): String {

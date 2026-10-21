@@ -60,11 +60,34 @@ class SimulatorConfig {
 
     // --- Car ---
 
-    /** Stored (Mode 03) DTCs such as "P0171". Clearing via Mode 04 empties this list. */
+    /**
+     * Stored (Mode 03) DTCs such as "P0171". Clearing via Mode 04 empties this list. The freeze
+     * frame (Mode 02) is the snapshot of the first entry and disappears with it.
+     */
     val storedDtcs: MutableList<String> = CopyOnWriteArrayList(listOf("P0171", "P1349"))
 
     /** Pending (Mode 07) DTCs. */
     val pendingDtcs: MutableList<String> = CopyOnWriteArrayList(listOf("P0300"))
+
+    /**
+     * Continuous monitors that have not completed yet, as bits 0-2 of PID 01 byte B: misfire (1),
+     * fuel system (2), comprehensive components (4). Service 04 sets all three, like a real ECU.
+     */
+    @Volatile var incompleteContinuousMonitors: Int = 0
+
+    /**
+     * Non-continuous monitors that have not completed yet, as PID 01 byte D (bit positions as in
+     * byte C): catalyst 0x01, evaporative system 0x04, oxygen sensor 0x20, oxygen sensor heater
+     * 0x40. The default has only the evaporative monitor pending, which needs a special drive
+     * cycle and is the usual straggler. Service 04 sets every monitor the ECU has.
+     */
+    @Volatile var incompleteMonitors: Int = EVAP_MONITOR_BIT
+
+    /**
+     * Service 04 is answered with "NO DATA" and changes nothing, like an ECU that refuses to clear
+     * codes while the engine runs.
+     */
+    @Volatile var refusesClear: Boolean = false
 
     /** Mode 01 PIDs the ECU supports; the default is the list read from the real car. */
     @Volatile var supportedPids: Set<Int> = DEFAULT_SUPPORTED_PIDS
@@ -142,6 +165,9 @@ class SimulatorConfig {
         /** Assumed (to verify in the car) latency of a request with the response-count suffix. */
         const val RESPONSE_COUNT_LATENCY_MIN_MS = 120L
         const val RESPONSE_COUNT_LATENCY_MAX_MS = 160L
+
+        /** Evaporative system bit in PID 01 bytes C and D. */
+        const val EVAP_MONITOR_BIT = 0x04
 
         /** Coolant temperature the real car showed with the ignition on and the engine cold. */
         const val REAL_CAR_COOLANT_C = 46.0

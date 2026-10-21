@@ -104,9 +104,9 @@ class SimulatorTransportTest {
     @Test
     fun `monitor status shows mil and dtc count`() = runTest {
         val sim = SimulatorTransport().ready()
-        assertEquals(listOf("410182076500"), sim.lines("0101"))
+        assertEquals(listOf("410182076504"), sim.lines("0101"))
         sim.config.storedDtcs.clear()
-        assertEquals(listOf("410100076500"), sim.lines("0101"))
+        assertEquals(listOf("410100076504"), sim.lines("0101"))
     }
 
     @Test
@@ -211,8 +211,17 @@ class SimulatorTransportTest {
         assertEquals(listOf("44"), sim.lines("04"))
         assertEquals(listOf("43000000000000"), sim.lines("03"))
         assertEquals(listOf("47000000000000"), sim.lines("07"))
-        assertEquals(listOf("410100076500"), sim.lines("0101"))
+        // Like a real ECU: no codes, but every monitor has to run again.
+        assertEquals(listOf("410100776565"), sim.lines("0101"))
         assertIs<ElmResult.NoData>(sim.send("0202"))
+    }
+
+    @Test
+    fun `mode 04 is ignored when the ecu refuses to clear`() = runTest {
+        val sim = SimulatorTransport(SimulatorConfig().apply { refusesClear = true }).ready()
+        assertIs<ElmResult.NoData>(sim.send("04"))
+        assertEquals(listOf("43017113490000"), sim.lines("03"))
+        assertEquals(listOf("410182076504"), sim.lines("0101"))
     }
 
     @Test
@@ -224,20 +233,35 @@ class SimulatorTransportTest {
         assertEquals(listOf("420C0020D0"), sim.lines("020C"))
         assertEquals(listOf("420D0038"), sim.lines("020D"))
         assertIs<ElmResult.NoData>(sim.send("020501"))
-        assertIs<ElmResult.NoData>(sim.send("0210"))
+        assertIs<ElmResult.NoData>(sim.send("0214"))
+    }
+
+    @Test
+    fun `freeze frame bitmap lists the stored pids`() = runTest {
+        val sim = SimulatorTransport().ready()
+        // PIDs 02, 04-07 -> 0x5E; 0C-10 -> 0x1F; 11 -> 0x80.
+        assertEquals(listOf("4200005E1F8000"), sim.lines("020000"))
+    }
+
+    @Test
+    fun `freeze frame follows the first stored code`() = runTest {
+        val sim = SimulatorTransport().ready()
+        sim.config.storedDtcs.clear()
+        sim.config.storedDtcs.add("U1234")
+        assertEquals(listOf("420200D234"), sim.lines("020200"))
     }
 
     @Test
     fun `dtc encoding`() {
-        assertEquals(Pair(0x01, 0x71), SimulatorTransport.encodeDtc("P0171"))
-        assertEquals(Pair(0x13, 0x49), SimulatorTransport.encodeDtc("P1349"))
-        assertEquals(Pair(0x43, 0x00), SimulatorTransport.encodeDtc("C0300"))
-        assertEquals(Pair(0x9A, 0xBC), SimulatorTransport.encodeDtc("B1ABC"))
-        assertEquals(Pair(0xD2, 0x34), SimulatorTransport.encodeDtc("u1234"))
-        assertNull(SimulatorTransport.encodeDtc("X0000"))
-        assertNull(SimulatorTransport.encodeDtc("P4000"))
-        assertNull(SimulatorTransport.encodeDtc("P01"))
-        assertNull(SimulatorTransport.encodeDtc("P01G1"))
+        assertEquals(Pair(0x01, 0x71), SimulatorDiagnosticsEcu.encodeDtc("P0171"))
+        assertEquals(Pair(0x13, 0x49), SimulatorDiagnosticsEcu.encodeDtc("P1349"))
+        assertEquals(Pair(0x43, 0x00), SimulatorDiagnosticsEcu.encodeDtc("C0300"))
+        assertEquals(Pair(0x9A, 0xBC), SimulatorDiagnosticsEcu.encodeDtc("B1ABC"))
+        assertEquals(Pair(0xD2, 0x34), SimulatorDiagnosticsEcu.encodeDtc("u1234"))
+        assertNull(SimulatorDiagnosticsEcu.encodeDtc("X0000"))
+        assertNull(SimulatorDiagnosticsEcu.encodeDtc("P4000"))
+        assertNull(SimulatorDiagnosticsEcu.encodeDtc("P01"))
+        assertNull(SimulatorDiagnosticsEcu.encodeDtc("P01G1"))
     }
 
     // ---- mode 09 ----

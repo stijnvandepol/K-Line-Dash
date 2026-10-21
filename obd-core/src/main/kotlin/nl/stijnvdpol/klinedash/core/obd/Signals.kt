@@ -202,23 +202,23 @@ object Signals {
         minBytes: Int,
         display: Display,
         formula: (IntArray) -> Double?,
-    ): Signal = Signal(
-        id = id,
-        command = "%02X%02X".format(MODE_CURRENT_DATA, pid),
-        pid = pid,
-        name = display.name,
-        shortName = display.shortName,
-        unit = display.unit,
-        min = display.min,
-        max = display.max,
-        decimals = display.decimals,
-        defaultTier = tier,
-        decode = { data ->
-            ObdReply.payload(data, MODE_CURRENT_DATA, pid)
-                ?.takeIf { it.size >= minBytes }
-                ?.let(formula)
-        },
-    )
+    ): Signal {
+        val decodePayload: (IntArray) -> Double? = { bytes -> bytes.takeIf { it.size >= minBytes }?.let(formula) }
+        return Signal(
+            id = id,
+            command = "%02X%02X".format(MODE_CURRENT_DATA, pid),
+            pid = pid,
+            name = display.name,
+            shortName = display.shortName,
+            unit = display.unit,
+            min = display.min,
+            max = display.max,
+            decimals = display.decimals,
+            defaultTier = tier,
+            decode = { data -> ObdReply.payload(data, MODE_CURRENT_DATA, pid)?.let(decodePayload) },
+            decodePayload = decodePayload,
+        )
+    }
 
     private fun word(high: Int, low: Int): Int = BYTE_RANGE * high + low
 

@@ -154,6 +154,17 @@ class ElmParserTest {
     }
 
     @Test
+    fun `can multi-frame layout keeps its length line and frame numbers`() {
+        val raw = "00A\r0: 43 04 01 71 13 49\r1: 03 00 04 20 00 00 00\r\r"
+        assertData(listOf("00A", "0:430401711349", "1:03000420000000"), ElmParser.parse("03", raw))
+    }
+
+    @Test
+    fun `a can frame line with an odd number of hex digits is dropped`() {
+        assertData(listOf("00A", "0:430401711349"), ElmParser.parse("03", "00A\r0: 43 04 01 71 13 49\r1: 03 0\r\r"))
+    }
+
+    @Test
     fun `high byte garbage inside a line invalidates only that line`() {
         assertData(listOf("410C1AF8"), ElmParser.parse("010C", "41 0C 1A F8\r41 0C \u00ff1A F8\r\r"))
         assertIs<ElmResult.Garbage>(ElmParser.parse("010C", "41 0C \u00ff1A F8\r\r"))

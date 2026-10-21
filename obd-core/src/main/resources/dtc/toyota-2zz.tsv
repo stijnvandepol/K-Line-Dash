@@ -1,0 +1,45 @@
+# K-Line Dash: Toyota 2ZZ-GE (Corolla E12 T-Sport) trouble code descriptions and vehicle notes
+# Format: CODE<TAB>description<TAB>vehicle note
+#   - description empty: use the generic description from generic.tsv and only add the note.
+#   - description set: Toyota-specific meaning (P1xxx codes mean different things per brand).
+# Sources (see docs/research/2zz-ge-obd.md section 3):
+#   https://procarmanuals.com/toyota-engine-1zz-fe-2zz-fe-error-codes-list  (1ZZ-FE/2ZZ-GE flash codes and DTCs)
+#   https://toyotaspace.com/toyota-obd2-codes-list
+#   https://www.autotalk.com/toyota-obd-ii-codes-2104
+#   https://github.com/Wal33D/dtc-database/blob/main/data/source-data/toyota_codes.txt
+#   Thermostat opening temperature: https://www.123spareparts.co.uk/car-parts/toyota/corolla-zze12-nde12-zde12/1-8-vvtl-i-ts-zze123-165-kw/thermostat/19252
+#   MAF with built-in intake air temperature sensor, narrow-band O2: https://support.haltech.com/portal/en/kb/articles/2zz-ge-engine
+# Notes are general troubleshooting hints for this engine, not confirmed diagnoses.
+# Toyota flash codes are for the shop manual only; the OBD code is what the ECU reports.
+P0010		VVT actuator circuit. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen.
+P0011		VVT timing off. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen.
+P0012		VVT timing off. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen.
+P0101		The 2ZZ-GE has no MAP sensor and measures airflow with the MAF sensor: check for intake leaks after the MAF and clean or replace the sensor.
+P0110		On this engine the intake air temperature sensor is built into the MAF sensor.
+P0111		On this engine the intake air temperature sensor is built into the MAF sensor.
+P0112		On this engine the intake air temperature sensor is built into the MAF sensor.
+P0113		On this engine the intake air temperature sensor is built into the MAF sensor.
+P0125		Usually a thermostat stuck open (it should open at about 82 C) or a coolant temperature sensor fault.
+P0128		Usually a thermostat stuck open (it should open at about 82 C) or a coolant temperature sensor fault.
+P0135		Heater of the upstream O2 sensor (before the catalyst). Check the connector and wiring before replacing the sensor. Toyota flash code 21.
+P0136		Downstream O2 sensor (after the catalyst). Check the connector and wiring before replacing the sensor.
+P0141		Heater of the downstream O2 sensor (after the catalyst). Check the connector and wiring before replacing the sensor.
+P0171		On the 2ZZ-GE often a vacuum leak at the intake or a PCV hose, or a dirty MAF sensor.
+P0172		Check for a clogged air filter, a leaking injector or too high fuel pressure; a faulty O2 sensor can also cause it.
+P0300		Coil-on-plug ignition: check the spark plugs and ignition coils first; a failing coil usually shows up as a misfire on one cylinder.
+P0301		Coil-on-plug ignition: swap this coil and spark plug with another cylinder to see if the misfire follows.
+P0302		Coil-on-plug ignition: swap this coil and spark plug with another cylinder to see if the misfire follows.
+P0303		Coil-on-plug ignition: swap this coil and spark plug with another cylinder to see if the misfire follows.
+P0304		Coil-on-plug ignition: swap this coil and spark plug with another cylinder to see if the misfire follows.
+P0335		Check the crankshaft position sensor connector and wiring, then the sensor. Toyota flash code 12/13.
+P0420		Often an ageing catalytic converter, but check for exhaust leaks, misfires and a failing downstream O2 sensor first.
+P1300	Igniter Circuit Malfunction No. 1	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
+P1305	Igniter Circuit Malfunction No. 2	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
+P1310	Igniter Circuit Malfunction No. 3	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
+P1315	Igniter Circuit Malfunction No. 4	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
+P1335	No Crankshaft Position Sensor Signal While Engine Is Running	Crank signal lost while running: check the crankshaft sensor connector and wiring, then the sensor. Toyota flash code 13; see also P0335.
+P1346	VVT Sensor/Camshaft Position Sensor Range/Performance (Bank 1)	Cam/VVT signal out of range: check the camshaft position sensor, its connector and wiring, and the oil level; a worn timing chain can also cause it. Toyota flash code 18.
+P1349	VVT System Malfunction (Bank 1)	VVT-i/VVTL-i fault. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen. Toyota flash code 59.
+P1600	ECM BATT Malfunction	Backup power to the ECU memory was interrupted; often seen after the battery was disconnected. Clear it and see if it returns; if so, check the battery terminals.
+P1605	Knock Control CPU Malfunction	Internal ECU fault (knock control processor). Clear it once; if it returns, have the ECU checked.
+P1656	OCV (Oil Control Valve) Circuit Malfunction (Bank 1)	Electrical fault in the VVT oil control valve circuit: check the OCV connector and wiring, then the valve. Toyota flash code 39.

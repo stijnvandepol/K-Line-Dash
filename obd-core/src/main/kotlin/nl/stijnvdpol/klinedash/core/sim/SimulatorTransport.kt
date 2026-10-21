@@ -2,8 +2,6 @@ package nl.stijnvdpol.klinedash.core.sim
 
 import java.util.Locale
 import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlinx.coroutines.delay
 import nl.stijnvdpol.klinedash.core.transport.PromptBuffer
@@ -41,6 +39,7 @@ class SimulatorTransport(
     private class Reply(val text: String, val latencyMs: Long, val partial: String)
 
     private val random = Random(config.seed)
+    private val ecu = SimulatorEcu(config, engine, clock)
 
     // Adapter state; ATZ restores these defaults.
     private var echo = true
@@ -269,7 +268,7 @@ class SimulatorTransport(
             latency += config.busInitMs
         }
 
-        var frames = answer(request)
+        var frames = ecu.answer(request)
         if (frames != null && chance(config.randomNoDataRate)) frames = null
 
         val lines = ArrayList<String>()
@@ -330,149 +329,6 @@ class SimulatorTransport(
         return PromptBuffer().feed(bytes).firstOrNull() ?: text
     }
 
-    // ---------------------------------------------------------------- the car
-
-    /** Frames (without header/checksum) for an OBD request, or null for "NO DATA". */
-    private fun answer(request: IntArray): List<List<Int>>? = when (request[0]) {
-        0x01 -> if (request.size == 2) mode01(request[1])?.let { listOf(it) } else null
-        0x02 -> mode02(request)
-        0x03 -> if (request.size == 1) dtcFrames(0x43, config.storedDtcs) else null
-        0x04 -> if (request.size == 1) {
-            config.storedDtcs.clear()
-            config.pendingDtcs.clear()
-            listOf(listOf(0x44))
-        } else null
-        0x07 -> if (request.size == 1) dtcFrames(0x47, config.pendingDtcs) else null
-        0x09 -> mode09(request)
-        else -> null // includes 0x0A (permanent DTCs): not supported on this era
-    }
-
-    private fun mode01(pid: Int): List<Int>? {
-        val supported = config.supportedPids
-        if (pid % 0x20 == 0) {
-            if (pid != 0 && pid !in supported) return null
-            return listOf(0x41, pid) + bitmapBytes(supported, pid)
-        }
-        if (pid !in supported) return null
-
-        val s = engine.snapshot(clock())
-        val data: List<Int> = when (pid) {
-            0x01 -> {
-                val n = config.storedDtcs.size
-                listOf((if (n > 0) 0x80 else 0) or min(n, 0x7F), 0x07, 0x65, 0x00)
-            }
-            0x03 -> listOf(s.fuelSystemStatus, 0)
-            0x04 -> listOf(byteOf(s.loadPct * 255.0 / 100.0))
-            0x05 -> listOf(byteOf(s.coolantC + 40.0))
-            0x06 -> listOf(trimByte(s.shortTrimPct))
-            0x07 -> listOf(trimByte(s.longTrimPct))
-            0x0C -> twoBytes(s.rpm * 4)
-            0x0D -> listOf(s.speedKmh.coerceIn(0, 255))
-            0x0E -> listOf(byteOf(s.timingDeg * 2.0 + 64.0))
-            0x0F -> listOf(byteOf(s.intakeC + 40.0))
-            0x10 -> twoBytes((s.mafGs * 100.0).roundToInt())
-            0x11 -> listOf(byteOf(s.throttlePct * 255.0 / 100.0))
-            0x12 -> listOf(SECONDARY_AIR_OFF)
-            0x13 -> listOf(O2_SENSORS_B1S1_B1S2)
-            0x14 -> listOf(byteOf(s.o2UpstreamV * 200.0), trimByte(s.shortTrimPct))
-            0x15 -> listOf(byteOf(s.o2DownstreamV * 200.0), 0xFF)
-            0x1C -> listOf(OBD_STANDARD_EOBD)
-            0x21 -> twoBytes(DISTANCE_WITH_MIL_KM)
-            else -> return null
-        }
-        return listOf(0x41, pid) + data
-    }
-
-    /** Freeze frame data; only exists while a DTC is stored, and only frame 0. */
-    private fun mode02(request: IntArray): List<List<Int>>? {
-        if (request.size !in 2..3) return null
-        val pid = request[1]
-        val frameNo = if (request.size == 3) request[2] else 0
-        if (frameNo != 0) return null
-        val dtc = config.storedDtcs.firstOrNull()?.let { encodeDtc(it) } ?: return null
-        val data: List<Int> = when (pid) {
-            0x00 -> bitmapBytes(setOf(0x02, 0x05, 0x0C, 0x0D), 0)
-            0x02 -> listOf(dtc.first, dtc.second)
-            0x05 -> listOf(85 + 40)
-            0x0C -> twoBytes(2100 * 4)
-            0x0D -> listOf(56)
-            else -> return null
-        }
-        return listOf(listOf(0x42, pid, frameNo) + data)
-    }
-
-    private fun mode09(request: IntArray): List<List<Int>>? {
-        if (request.size != 2) return null
-        val vin = config.vin
-        val name = config.ecuName
-        if (vin == null && name == null) return null
-        return when (request[1]) {
-            0x00 -> {
-                val pids = HashSet<Int>()
-                if (vin != null) pids.add(0x02)
-                if (name != null) pids.add(0x0A)
-                listOf(listOf(0x49, 0x00) + bitmapBytes(pids, 0))
-            }
-            // ISO 9141-2 sends the VIN as 4-byte pieces behind three padding bytes.
-            0x02 -> vin?.let { multiFrame(0x02, List(3) { 0 } + ascii(it)) }
-            0x0A -> name?.let {
-                val bytes = ascii(it.take(20))
-                multiFrame(0x0A, bytes + List(20 - bytes.size) { 0 })
-            }
-            else -> null
-        }
-    }
-
-    private fun multiFrame(pid: Int, payload: List<Int>): List<List<Int>> =
-        payload.chunked(4).mapIndexed { i, chunk ->
-            listOf(0x49, pid, i + 1) + chunk + List(4 - chunk.size) { 0 }
-        }
-
-    private fun ascii(s: String): List<Int> = s.map { it.code and 0xFF }
-
-    private fun dtcFrames(responseMode: Int, codes: List<String>): List<List<Int>> {
-        val encoded = codes.mapNotNull { encodeDtc(it) }
-        // With nothing stored the ECU still answers: one frame of zeros.
-        if (encoded.isEmpty()) return listOf(listOf(responseMode, 0, 0, 0, 0, 0, 0))
-        return encoded.chunked(3).map { chunk ->
-            val frame = ArrayList<Int>(7)
-            frame.add(responseMode)
-            for ((hi, lo) in chunk) {
-                frame.add(hi)
-                frame.add(lo)
-            }
-            repeat(3 - chunk.size) {
-                frame.add(0)
-                frame.add(0)
-            }
-            frame
-        }
-    }
-
-    private fun bitmapBytes(pids: Set<Int>, base: Int): List<Int> {
-        var bits = 0L
-        for (p in pids) {
-            val k = p - base
-            if (k in 1..32) bits = bits or (1L shl (32 - k))
-        }
-        return listOf(
-            ((bits shr 24) and 0xFF).toInt(),
-            ((bits shr 16) and 0xFF).toInt(),
-            ((bits shr 8) and 0xFF).toInt(),
-            (bits and 0xFF).toInt(),
-        )
-    }
-
-    private fun byteOf(value: Double): Int = value.roundToInt().coerceIn(0, 255)
-
-    /** Fuel trim percent to the OBD byte: 128 = 0 %, 1.28 counts per percent. */
-    private fun trimByte(percent: Double): Int = byteOf(128.0 + percent * 1.28)
-
-    private fun twoBytes(value: Int): List<Int> {
-        val v = value.coerceIn(0, 0xFFFF)
-        return listOf(v shr 8, v and 0xFF)
-    }
-
     companion object {
         private const val NEVER = Long.MAX_VALUE
         private const val HEX = "0123456789ABCDEF"
@@ -481,18 +337,6 @@ class SimulatorTransport(
 
         /** Shortest request with a count digit: a one-byte request such as "03" plus the digit ("031"). */
         private const val MIN_COUNT_REQUEST_LENGTH = 3
-
-        /** PID 12: air status "off / atmosphere". Fixed: the real value is bit-coded, nothing to chart. */
-        private const val SECONDARY_AIR_OFF = 0x04
-
-        /** PID 13: oxygen sensors present, bank 1 sensor 1 and 2 (bits 0 and 1). */
-        private const val O2_SENSORS_B1S1_B1S2 = 0x03
-
-        /** PID 1C: 6 = EOBD, what the real car reports. */
-        private const val OBD_STANDARD_EOBD = 0x06
-
-        /** PID 21: the real car reports 0 km driven with the MIL on. */
-        private const val DISTANCE_WITH_MIL_KM = 0
 
         private fun isHex(s: String): Boolean = s.isNotEmpty() && s.all { it in '0'..'9' || it in 'A'..'F' }
 
@@ -508,23 +352,6 @@ class SimulatorTransport(
             "9" -> "ISO 15765-4 (CAN 29/250)"
             "A" -> "SAE J1939 (CAN 29/250)"
             else -> "USER"
-        }
-
-        /**
-         * Encodes a DTC such as "P0171" into its two OBD bytes (0x01 0x71): two bits for the
-         * letter (P, C, B, U), two for the first digit (0-3), then three hex digits.
-         * Returns null for anything that is not a valid code.
-         */
-        fun encodeDtc(code: String): Pair<Int, Int>? {
-            val c = code.trim().uppercase()
-            if (c.length != 5) return null
-            val type = "PCBU".indexOf(c[0])
-            if (type < 0 || c[1] !in '0'..'3') return null
-            val d1 = c[1] - '0'
-            val d2 = c[2].digitToIntOrNull(16) ?: return null
-            val d3 = c[3].digitToIntOrNull(16) ?: return null
-            val d4 = c[4].digitToIntOrNull(16) ?: return null
-            return Pair((type shl 6) or (d1 shl 4) or d2, (d3 shl 4) or d4)
         }
     }
 }

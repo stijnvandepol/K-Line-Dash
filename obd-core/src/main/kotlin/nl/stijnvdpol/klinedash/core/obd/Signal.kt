@@ -31,6 +31,8 @@ enum class PollTier {
  * @property decimals digits after the decimal point when shown as a number.
  * @property decode extracts this signal's value from a successful reply; null when the reply does
  *   not contain it (wrong PID echoed back, too few bytes, garbage).
+ * @property decodePayload the PID's formula applied to its data bytes only (after service and PID
+ *   echo); null for adapter commands. Lets freeze-frame data (Mode 02) reuse the Mode 01 formulas.
  */
 class Signal(
     val id: String,
@@ -44,6 +46,7 @@ class Signal(
     val max: Double,
     val decimals: Int,
     val defaultTier: PollTier,
+    val decodePayload: ((IntArray) -> Double?)? = null,
     val decode: (ElmResult.Data) -> Double?,
 ) {
     override fun toString(): String = "Signal($id, $command)"
