@@ -3,15 +3,11 @@ package nl.stijnvdpol.klinedash.service
 import android.content.res.Resources
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
-import java.util.Locale
 import kotlin.math.ceil
 
-private val DutchLocale: Locale = Locale.forLanguageTag("nl-NL")
+private const val MILLIS_PER_SECOND = 1000.0
 
-/** "13,9" - Dutch decimal comma regardless of the head unit's (often Chinese) system locale. */
-fun formatVoltage(volts: Double): String = String.format(DutchLocale, "%.1f", volts)
-
-/** One-line Dutch description, shared by the notification and the UI. */
+/** One-line description, shared by the notification and the UI. */
 fun ConnectionState.describe(res: Resources): String = when (this) {
     ConnectionState.Idle -> res.getString(R.string.state_idle)
     is ConnectionState.Connecting -> res.getString(R.string.state_connecting, target)
@@ -25,6 +21,36 @@ fun ConnectionState.describe(res: Resources): String = when (this) {
         }
     }
     is ConnectionState.Reconnecting ->
-        res.getString(R.string.state_reconnecting, ceil(delayMs / 1000.0).toInt(), attempt)
+        res.getString(R.string.state_reconnecting, ceil(delayMs / MILLIS_PER_SECOND).toInt(), attempt)
     is ConnectionState.Failed -> res.getString(R.string.state_failed, reason)
+}
+
+/** Short state name for a single line, e.g. "Verbonden". Details come from [detail]. */
+fun ConnectionState.headline(res: Resources): String = res.getString(
+    when (this) {
+        ConnectionState.Idle -> R.string.state_idle
+        is ConnectionState.Connecting -> R.string.headline_connecting
+        is ConnectionState.Initializing -> R.string.headline_initializing
+        is ConnectionState.Connected -> R.string.headline_connected
+        is ConnectionState.Reconnecting -> R.string.headline_reconnecting
+        is ConnectionState.Failed -> R.string.headline_failed
+    },
+)
+
+/** Second, muted line under [headline]: protocol and voltage, the target, or what to do next. */
+fun ConnectionState.detail(res: Resources): String = when (this) {
+    ConnectionState.Idle -> res.getString(R.string.detail_idle)
+    is ConnectionState.Connecting -> res.getString(R.string.detail_connecting, target)
+    is ConnectionState.Initializing -> step
+    is ConnectionState.Connected -> {
+        val volts = info.voltage
+        if (volts != null) {
+            res.getString(R.string.detail_connected_voltage, info.protocolName, formatVoltage(volts))
+        } else {
+            info.protocolName
+        }
+    }
+    is ConnectionState.Reconnecting ->
+        res.getString(R.string.detail_reconnecting, attempt, ceil(delayMs / MILLIS_PER_SECOND).toInt())
+    is ConnectionState.Failed -> res.getString(R.string.detail_failed, reason.trimEnd('.'))
 }

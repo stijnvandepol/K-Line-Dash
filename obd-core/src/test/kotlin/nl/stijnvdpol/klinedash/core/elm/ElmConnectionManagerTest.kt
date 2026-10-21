@@ -156,7 +156,7 @@ class ElmConnectionManagerTest {
 
         sim!!.close() // stands in for Bluetooth going away underneath us
         val state = withTimeout(5_000) { manager.state.first { it is ConnectionState.Reconnecting } }
-        assertTrue(assertIs<ConnectionState.Reconnecting>(state).reason.contains("verbroken"))
+        assertTrue(assertIs<ConnectionState.Reconnecting>(state).reason.contains("dropped"))
     }
 
     @Test

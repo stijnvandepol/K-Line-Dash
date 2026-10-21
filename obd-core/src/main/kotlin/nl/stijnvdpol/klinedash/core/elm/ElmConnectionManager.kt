@@ -115,7 +115,7 @@ class ElmConnectionManager(
                 if (++current.consecutiveTimeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
                     log.record(LogKind.ERROR, "$MAX_CONSECUTIVE_TIMEOUTS timeouts in a row, reconnecting")
                     if (link === current) link = null
-                    current.lost.complete("Adapter reageert niet meer")
+                    current.lost.complete("The adapter stopped responding")
                 }
             } else {
                 current.consecutiveTimeouts = 0
@@ -212,7 +212,7 @@ class ElmConnectionManager(
                     delay(LINK_CHECK_INTERVAL_MS)
                     if (!transport.isConnected) {
                         link = null
-                        lost.complete("Verbinding met de adapter is verbroken")
+                        lost.complete("The connection to the adapter dropped")
                         break
                     }
                 }

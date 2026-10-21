@@ -37,7 +37,7 @@ class ObdPollSchedulerTest {
     // ---------------------------------------------------------------- fixtures
 
     private fun pidSignal(id: String, pid: Int, tier: PollTier, decode: (IntArray) -> Double?): Signal =
-        Signal(id, "01%02X".format(pid), pid, id, id, id, "", 0.0, 100.0, 0, tier) { data ->
+        Signal(id, "01%02X".format(pid), pid, id, id, "", 0.0, 100.0, 0, tier) { data ->
             ObdReply.payload(data, 1, pid)?.let(decode)
         }
 
@@ -51,7 +51,7 @@ class ObdPollSchedulerTest {
         pidSignal("trim", 0x06, PollTier.SLOW) { it[0] * 100.0 / 128.0 - 100.0 },
         pidSignal("o2_v", 0x14, PollTier.SLOW) { it[0] / 200.0 },
         pidSignal("o2_trim", 0x14, PollTier.SLOW) { it[1] * 100.0 / 128.0 - 100.0 },
-        Signal("battery", "ATRV", null, "battery", "battery", "battery", "V", 0.0, 20.0, 1, PollTier.SLOW) { data ->
+        Signal("battery", "ATRV", null, "battery", "battery", "V", 0.0, 20.0, 1, PollTier.SLOW) { data ->
             data.lines.firstOrNull()?.removeSuffix("V")?.toDoubleOrNull()
         },
     )

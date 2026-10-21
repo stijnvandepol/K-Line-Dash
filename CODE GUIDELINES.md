@@ -235,7 +235,8 @@ Known oddities:   obd-core has no Android imports on purpose, so its tests run o
                   targetSdk is 34, not 35, to avoid forced edge-to-edge on head units with odd bars.
                   ElmConnectionManager retries forever (capped backoff, no max attempts) by design:
                   ignition off is the normal state, not an error.
-                  UI strings and user-facing errors are Dutch; log/debug texts are English.
+                  UI strings and user-facing errors are English (numbers: Locale.US); the install/test
+                  guides in docs/ are Dutch.
 Do not touch:     app/schemas/ (generated Room schema, committed on purpose as the migration
                   baseline), gradle/wrapper/.
 ```

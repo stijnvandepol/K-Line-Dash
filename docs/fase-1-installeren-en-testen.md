@@ -43,37 +43,37 @@ foutopsporing" moet je eerst koppelen met `adb pair <ip>:<poort>` en de code die
 ## Eerst testen zonder auto (simulator)
 
 1. Open de app. Geef de Bluetooth- en meldingsrechten.
-2. Ga naar **Verbinding**, kies **Simulator** en tik **Verbinden**.
-3. Verwacht: status gaat via "Verbinden" en "Initialiseren" naar **Verbonden – ISO 9141-2**.
+2. Ga naar **Connection**, kies **Simulator** en tik **Connect**.
+3. Verwacht: status gaat via "Connecting" en "Initializing" naar **Connected** (protocol ISO 9141-2).
    De eerste keer duurt dat een paar seconden ("SEARCHING..."), daarna gebruikt de app het
    opgeslagen protocol.
 4. Ga naar **Debug**: je ziet ATZ, ATE0, … , 0100, ATDPN als TX/RX-regels. Probeer de knoppen
    `010C` (toerental) en `03` (foutcodes: P0171 en P1349 in de simulator).
-5. Tik **Exporteren** en controleer dat er een tekstbestand wordt opgeslagen.
+5. Tik **Export log** en controleer dat er een tekstbestand wordt opgeslagen.
 
 ## Testen in de auto
 
-Neem voor elke stap het debuglog mee (Exporteren) als iets niet werkt: dat is precies wat ik nodig
+Neem voor elke stap het debuglog mee (**Export log**) als iets niet werkt: dat is precies wat ik nodig
 heb om de clone-quirks van jouw adapter in te bouwen.
 
 1. **Koppelen.** Adapter in de OBD-poort (onder het dashboard links van het stuur), contact aan
    (stand II, motor mag uit). Koppel de adapter in de Bluetooth-instellingen van de head unit
    (PIN meestal `1234` of `0000`). Lukt dat niet via Android-instellingen, probeer dan het
    OBD-/Bluetooth-menu van de unit zelf.
-2. **Kiezen.** In de app: Verbinding > Bluetooth Classic > kies de adapter (OBD-achtige namen staan
-   bovenaan). Bij een BLE-adapter: Bluetooth LE > Zoeken.
-3. **Eerste verbinding.** Tik Verbinden. Verwacht binnen ~10–20 s "Verbonden". Noteer welk protocol
+2. **Kiezen.** In de app: Connection > Bluetooth Classic > kies de adapter (OBD-achtige namen staan
+   bovenaan). Bij een BLE-adapter: Bluetooth LE > Scan.
+3. **Eerste verbinding.** Tik Connect. Verwacht binnen ~10–20 s "Connected". Noteer welk protocol
    er staat (verwacht ISO 9141-2 of KWP2000).
-   - Blijft hij hangen op "Initialiseren: Trying …": de app loopt de K-line-protocollen af en als
+   - Blijft hij hangen op "Initializing" (stap "Trying …"): de app loopt de K-line-protocollen af en als
      laatste het Toyota-profiel. Wacht tot het eind en exporteer het log.
-   - "Bluetooth adapter niet beschikbaar voor apps op deze head unit": de unit laat apps niet bij
+   - "Bluetooth is not available to apps on this head unit": de unit laat apps niet bij
      Bluetooth. Dan is een wifi-adapter de uitweg.
-4. **Tweede verbinding.** Tik Verbreken en weer Verbinden. Nu moet het merkbaar sneller gaan
+4. **Tweede verbinding.** Tik Disconnect en weer Connect. Nu moet het merkbaar sneller gaan
    (opgeslagen protocol, geen SEARCHING).
 5. **Handmatige commando's** (Debug-scherm, motor draaiend): `010C`, `010D`, `0105`, `ATRV`, `03`.
    Elk antwoord hoort als *Data* geclassificeerd te worden.
 6. **Herverbinden.** Trek de adapter eruit terwijl hij verbonden is. Verwacht binnen enkele
-   seconden "Opnieuw verbinden over … s". Steek hem terug: hij moet vanzelf weer verbinden.
+   seconden "Reconnecting". Steek hem terug: hij moet vanzelf weer verbinden.
 7. **Contact uit en aan.** Contact uit: de app gaat herverbinden met oplopende wachttijd (max. 30 s).
    Contact weer aan: verbinding moet vanzelf terugkomen.
 

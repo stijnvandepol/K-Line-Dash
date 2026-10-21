@@ -39,6 +39,8 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     val connectionState: StateFlow<ConnectionState> = ObdServiceState.connectionState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConnectionState.Idle)
 
+    val engineRunning: StateFlow<Boolean> = ObdServiceState.simulatorEngineRunning
+
     private val _bondedDevices = MutableStateFlow<List<BtDeviceInfo>>(emptyList())
     val bondedDevices: StateFlow<List<BtDeviceInfo>> = _bondedDevices.asStateFlow()
 
@@ -81,7 +83,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // SecurityException (permission) or IllegalStateException (Bluetooth off), Dutch message.
+                // SecurityException (permission) or IllegalStateException (Bluetooth off), English message.
                 showNotice(context.getString(R.string.ble_scan_failed, e.message ?: e.javaClass.simpleName))
             } finally {
                 _scanning.value = false
@@ -107,6 +109,8 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
             repository.update { it.copy(wifiHost = host, wifiPort = port) }
         }
     }
+
+    fun setEngineRunning(running: Boolean) = ObdServiceState.setSimulatorEngineRunning(running)
 
     fun disconnect() {
         viewModelScope.launch { ObdServiceState.link.value?.stop() }

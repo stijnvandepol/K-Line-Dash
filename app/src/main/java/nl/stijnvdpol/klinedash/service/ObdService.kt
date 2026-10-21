@@ -33,11 +33,13 @@ import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.appGraph
 import nl.stijnvdpol.klinedash.core.elm.ElmConnectionManager
+import nl.stijnvdpol.klinedash.core.obd.ObdPollScheduler
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.ui.MainActivity
 
 /**
- * Foreground service that owns the one [ElmConnectionManager]. It is independent of the UI: the
+ * Foreground service that owns the one [ElmConnectionManager] and the [ObdPollScheduler] on top of
+ * it (same scope, same lifetime). It is independent of the UI: the
  * activity may be killed and recreated while the link stays up; the UI finds the link through
  * [ObdServiceState].
  *
@@ -103,8 +105,11 @@ class ObdService : LifecycleService() {
             protocolStore = appGraph.protocolStore,
             scope = linkScope,
         )
-        ObdServiceState.publish(link)
+        val poller = ObdPollScheduler(link, linkScope)
+        ObdServiceState.publish(link, poller)
         link.start()
+        // Waits for the link to be Connected; with nothing demanded it only detects the supported PIDs.
+        poller.start()
         try {
             // Throttled: init steps can follow each other within milliseconds and the system sheds
             // notification updates above ~5/s, which could leave a stale "Initialiseren" text.
@@ -115,6 +120,7 @@ class ObdService : LifecycleService() {
         } finally {
             withContext(NonCancellable) {
                 ObdServiceState.unpublish(link)
+                poller.stop()
                 link.stop()
                 linkScope.cancel()
             }

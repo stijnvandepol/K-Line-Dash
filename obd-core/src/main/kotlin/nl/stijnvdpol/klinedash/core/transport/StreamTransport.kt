@@ -84,7 +84,7 @@ abstract class StreamTransport : Transport {
                 throw e
             } catch (e: Exception) {
                 releaseAfterFailedOpen()
-                throw TransportException(e.message ?: "Verbinden met de adapter is mislukt", e)
+                throw TransportException(e.message ?: "Connecting to the adapter failed", e)
             }
 
             val ch = Channel<String>(Channel.UNLIMITED)
@@ -102,7 +102,7 @@ abstract class StreamTransport : Transport {
 
     override suspend fun write(data: String) {
         val out = output
-        if (!connected || out == null) throw TransportException("Niet verbonden met de adapter")
+        if (!connected || out == null) throw TransportException("Not connected to the adapter")
         val bytes = data.toByteArray(Charsets.US_ASCII)
         try {
             withContext(Dispatchers.IO) {
@@ -113,12 +113,12 @@ abstract class StreamTransport : Transport {
             }
         } catch (e: IOException) {
             channel?.let { onLinkLost(it, e) }
-            throw TransportException("Schrijven naar de adapter mislukt: ${e.message}", e)
+            throw TransportException("Writing to the adapter failed: ${e.message}", e)
         }
     }
 
     override suspend fun readUntilPrompt(timeoutMs: Long): String {
-        val ch = channel ?: throw TransportException("Niet verbonden met de adapter")
+        val ch = channel ?: throw TransportException("Not connected to the adapter")
         // A channel closed with a cause rethrows that TransportException straight from receive().
         return try {
             withTimeout(timeoutMs) { ch.receive() }
@@ -127,7 +127,7 @@ abstract class StreamTransport : Transport {
             throw TransportTimeoutException(partial, timeoutMs)
         } catch (e: ClosedReceiveChannelException) {
             // Only reachable if somebody closed the channel without a cause; we always pass one.
-            throw TransportException("Verbinding met de adapter is gesloten", e)
+            throw TransportException("The connection to the adapter was closed", e)
         }
     }
 
@@ -154,7 +154,7 @@ abstract class StreamTransport : Transport {
             scope = null
             pair
         }
-        ch?.close(TransportException("Verbinding met de adapter is gesloten"))
+        ch?.close(TransportException("The connection to the adapter was closed"))
         // Close the socket BEFORE cancelling: that is what unblocks the reader's read().
         closeUnderlyingGuarded()
         readerScope?.cancel()
@@ -205,7 +205,7 @@ abstract class StreamTransport : Transport {
             val wasConnected = connected
             connected = false
             if (wasConnected) {
-                ch.close(TransportException("Verbinding met de adapter is verbroken", cause))
+                ch.close(TransportException("The connection to the adapter dropped", cause))
             }
             wasConnected
         }

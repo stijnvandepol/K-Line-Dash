@@ -1,83 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Default resources are Dutch (the only UI language); tools:locale tells lint's spell check. -->
-<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="nl">
+<!-- English is the only UI language; tools:locale tells lint's spell check. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="en">
     <string name="app_name">K-Line Dash</string>
 
     <!-- Navigation -->
     <string name="nav_dashboard">Dashboard</string>
-    <string name="nav_connection">Verbinding</string>
+    <string name="nav_sensors">Sensors</string>
+    <string name="nav_connection">Connection</string>
     <string name="nav_debug">Debug</string>
 
-    <!-- Connection state (also used in the notification) -->
-    <string name="state_idle">Niet verbonden</string>
-    <string name="state_connecting">Verbinden met %1$s…</string>
-    <string name="state_initializing">Initialiseren: %1$s</string>
-    <string name="state_connected">Verbonden – %1$s</string>
-    <string name="state_connected_voltage">Verbonden – %1$s – %2$s V</string>
-    <string name="state_reconnecting">Opnieuw verbinden over %1$d s (poging %2$d)</string>
-    <string name="state_failed">Mislukt: %1$s</string>
+    <!-- Connection state: one line for the notification, headline + detail for the screens -->
+    <string name="state_idle">Not connected</string>
+    <string name="state_connecting">Connecting to %1$s…</string>
+    <string name="state_initializing">Initializing: %1$s</string>
+    <string name="state_connected">Connected – %1$s</string>
+    <string name="state_connected_voltage">Connected – %1$s – %2$s V</string>
+    <string name="state_reconnecting">Reconnecting in %1$d s (attempt %2$d)</string>
+    <string name="state_failed">Failed: %1$s</string>
+    <string name="headline_connecting">Connecting</string>
+    <string name="headline_initializing">Initializing</string>
+    <string name="headline_connected">Connected</string>
+    <string name="headline_reconnecting">Reconnecting</string>
+    <string name="headline_failed">Connection failed</string>
+    <string name="detail_idle">Choose an adapter and tap Connect.</string>
+    <string name="detail_connecting">To %1$s</string>
+    <string name="detail_connected_voltage">%1$s, battery %2$s V</string>
+    <string name="detail_reconnecting">Attempt %1$d, next in %2$d s</string>
+    <string name="detail_failed">%1$s. Check the adapter and tap Connect.</string>
 
     <!-- Service / notification -->
-    <string name="notif_channel_name">Verbinding</string>
-    <string name="notif_channel_description">Toont de status van de verbinding met de OBD-adapter</string>
+    <string name="notif_channel_name">Connection</string>
+    <string name="notif_channel_description">Shows the status of the connection to the OBD adapter</string>
     <string name="notif_stop">Stop</string>
-    <string name="error_no_adapter">Geen adapter gekozen</string>
+    <string name="error_no_adapter">No adapter chosen</string>
 
     <!-- Dashboard -->
-    <string name="dashboard_adapter_title">Adapter</string>
-    <string name="dashboard_not_connected_hint">Ga naar Verbinding om een adapter te kiezen en te verbinden.</string>
-    <string name="dashboard_phase_note">De meters volgen in een volgende fase.</string>
-    <string name="label_elm_version">ELM-versie</string>
-    <string name="label_protocol">Protocol</string>
-    <string name="label_voltage">Accuspanning</string>
-    <string name="label_saved_protocol">Opgeslagen protocol gebruikt</string>
-    <string name="label_unsupported">Niet ondersteunde commando\'s</string>
-    <string name="value_yes">Ja</string>
-    <string name="value_no">Nee</string>
-    <string name="value_none">Geen</string>
-    <string name="value_unknown">Onbekend</string>
-    <string name="sim_engine_title">Simulatormotor</string>
-    <string name="sim_engine_on">Aan</string>
-    <string name="sim_engine_off">Uit</string>
+    <string name="status_engine_off">Engine off, power saving</string>
+    <string name="status_detecting">Finding sensors…</string>
+    <string name="status_rate">%1$s per sec.</string>
+    <string name="status_hint_idle">Connect under Connection.</string>
+    <string name="status_hint_failed">Check the adapter under Connection.</string>
+
+    <!-- Sensors -->
+    <string name="sensors_not_connected">Not connected yet. Connect under Connection.</string>
+    <string name="sensors_detecting">The car is still reporting which sensors it has…</string>
+    <string name="btn_go_to_connection">Go to Connection</string>
+    <string name="sensors_column_name">Sensor</string>
+    <string name="sensors_column_value">Value</string>
+    <string name="sensors_column_rate">Updates</string>
+    <string name="sensors_rate">%1$s per sec.</string>
 
     <!-- Connection screen -->
+    <string name="section_adapter_kind">Adapter type</string>
+    <string name="section_devices_paired">Paired devices</string>
+    <string name="section_devices_nearby">Devices nearby</string>
+    <string name="section_network">Network</string>
+    <string name="section_simulator">Simulator</string>
     <string name="transport_simulator">Simulator</string>
     <string name="transport_bt_classic">Bluetooth Classic</string>
     <string name="transport_ble">Bluetooth LE</string>
     <string name="transport_wifi">Wi-Fi</string>
-    <string name="auto_connect">Automatisch verbinden bij start</string>
-    <string name="btn_connect">Verbinden</string>
-    <string name="btn_disconnect">Verbreken</string>
-    <string name="btn_forget_protocol">Opgeslagen protocol vergeten</string>
-    <string name="notice_protocol_forgotten">Opgeslagen protocol vergeten</string>
-    <string name="sim_hint">Er is geen echte adapter nodig. Op het dashboard zet je de motor aan of uit.</string>
-    <string name="bt_hint">Koppel de adapter eerst in de Bluetooth-instellingen van Android (pincode meestal 1234 of 0000).</string>
-    <string name="btn_open_bt_settings">Bluetooth-instellingen</string>
-    <string name="btn_refresh">Vernieuwen</string>
-    <string name="bt_no_devices">Geen gekoppelde apparaten gevonden. Controleer of Bluetooth aanstaat en de machtiging is gegeven.</string>
-    <string name="ble_scan">Zoeken</string>
-    <string name="ble_scanning">Zoeken…</string>
-    <string name="ble_no_results">Nog geen apparaten gevonden.</string>
-    <string name="ble_scan_failed">Zoeken mislukt: %1$s</string>
-    <string name="wifi_hint">Maak eerst verbinding met het Wi-Fi-netwerk van de adapter. Meestal is dat 192.168.0.10, poort 35000.</string>
-    <string name="wifi_host">IP-adres of hostnaam</string>
-    <string name="wifi_port">Poort</string>
-    <string name="device_obd_badge">OBD</string>
-    <string name="device_selected">Gekozen</string>
+    <string name="auto_connect">Connect automatically at start</string>
+    <string name="btn_connect">Connect</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_forget_protocol">Forget saved protocol</string>
+    <string name="notice_protocol_forgotten">Protocol forgotten. The next connection searches again.</string>
+    <string name="sim_hint">No real adapter needed. Use the switch below to turn the engine on or off.</string>
+    <string name="sim_engine_title">Simulator engine</string>
+    <string name="sim_engine_on">On</string>
+    <string name="sim_engine_off">Off</string>
+    <string name="bt_hint">Pair the adapter in the Android Bluetooth settings first (the PIN is usually 1234 or 0000).</string>
+    <string name="ble_hint">Switch the adapter on and tap Scan. A Konnwei KW905 needs its button pressed so the LED is on.</string>
+    <string name="btn_open_bt_settings">Bluetooth settings</string>
+    <string name="btn_refresh">Refresh</string>
+    <string name="bt_no_devices">No paired devices found. Check that Bluetooth is on and the permission is granted.</string>
+    <string name="ble_scan">Scan</string>
+    <string name="ble_scanning">Scanning…</string>
+    <string name="ble_no_results">No devices found yet. Tap Scan.</string>
+    <string name="ble_scan_failed">Scan failed: %1$s. Check that Bluetooth is on and try again.</string>
+    <string name="wifi_hint">Join the Wi-Fi network of the adapter first. It is usually 192.168.0.10, port 35000.</string>
+    <string name="wifi_host">IP address or host name</string>
+    <string name="wifi_port">Port</string>
+    <string name="device_obd_badge">OBD adapter</string>
+    <string name="device_selected">Selected</string>
 
     <!-- Debug screen -->
-    <string name="debug_auto_scroll">Auto-scroll</string>
-    <string name="debug_pause">Pauze</string>
-    <string name="debug_resume">Hervat</string>
-    <string name="debug_clear">Wissen</string>
-    <string name="debug_export">Exporteren</string>
-    <string name="debug_log_empty">Nog geen berichten.</string>
-    <string name="debug_command">Commando</string>
-    <string name="debug_send">Verstuur</string>
-    <string name="debug_reply_error">FOUT</string>
-    <string name="debug_not_connected">Niet verbonden</string>
-    <string name="debug_export_ok">Log opgeslagen</string>
-    <string name="debug_export_failed">Exporteren mislukt</string>
-    <string name="debug_export_saved_to">Log opgeslagen in %1$s</string>
-    <string name="debug_export_no_picker">Geen bestandskiezer beschikbaar. Log opgeslagen in %1$s</string>
+    <string name="debug_section_adapter">Adapter</string>
+    <string name="debug_section_log">Log</string>
+    <string name="debug_section_command">Command</string>
+    <string name="debug_auto_scroll">Scroll with new messages</string>
+    <string name="debug_pause">Pause log</string>
+    <string name="debug_resume">Resume log</string>
+    <string name="debug_clear">Clear log</string>
+    <string name="debug_export">Export log</string>
+    <string name="debug_log_empty">No messages yet. Connect under Connection to see the communication.</string>
+    <string name="debug_command_hint">Command, e.g. 010C</string>
+    <string name="debug_send">Send</string>
+    <string name="debug_reply_error">Error</string>
+    <string name="debug_not_connected">Not connected. Connect under Connection.</string>
+    <string name="debug_export_ok">Log saved</string>
+    <string name="debug_export_failed">Export failed. Try again.</string>
+    <string name="debug_export_saved_to">Log saved to %1$s</string>
+    <string name="debug_export_no_picker">No file picker available. Log saved to %1$s</string>
+    <string name="label_elm_version">ELM version</string>
+    <string name="label_protocol">Protocol</string>
+    <string name="label_voltage">Battery voltage</string>
+    <string name="label_saved_protocol">Saved protocol used</string>
+    <string name="label_unsupported">Unsupported commands</string>
+    <string name="value_yes">Yes</string>
+    <string name="value_no">No</string>
+    <string name="value_none">None</string>
+    <string name="value_unknown">Unknown</string>
 </resources>

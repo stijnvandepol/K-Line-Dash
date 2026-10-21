@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
 import nl.stijnvdpol.klinedash.core.log.LogEntry
@@ -77,6 +78,9 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptyList())
 
     val link: StateFlow<ElmLink?> = ObdServiceState.link
+
+    val connectionState: StateFlow<ConnectionState> = ObdServiceState.connectionState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), ConnectionState.Idle)
 
     /**
      * Collects entries into a bounded buffer and publishes an immutable snapshot at most every

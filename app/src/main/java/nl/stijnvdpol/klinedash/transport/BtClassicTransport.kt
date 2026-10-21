@@ -112,8 +112,8 @@ class BtClassicTransport(
             }
         }
         throw TransportException(
-            "Kan geen Bluetooth-verbinding maken met $address. Controleer of de adapter in de OBD-poort " +
-                "zit, het contact aan staat en het apparaat gekoppeld is in de Bluetooth-instellingen.",
+            "Cannot connect to $address over Bluetooth. Check that the adapter is in the OBD port, " +
+                "the ignition is on and the device is paired in the Bluetooth settings.",
             lastError,
         )
     }

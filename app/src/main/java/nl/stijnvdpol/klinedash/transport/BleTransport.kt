@@ -107,15 +107,15 @@ class BleTransport(
 
             try {
                 val g = device.connectGatt(appContext, false, handler, BluetoothDevice.TRANSPORT_LE)
-                    ?: throw TransportException("Kon geen BLE-verbinding starten")
+                    ?: throw TransportException("Could not start a BLE connection")
                 // close() may have run teardown() while connectGatt() was being called; it then
                 // never saw this client, so release it here.
                 val accepted = synchronized(lock) { (active === handler).also { if (it) gatt = g } }
                 if (!accepted) {
                     g.close()
-                    throw TransportException("Verbinding met de adapter is gesloten")
+                    throw TransportException("The connection to the adapter was closed")
                 }
-                awaitStep(handler.connectResult, CONNECT_TIMEOUT_MS, "verbinden")
+                awaitStep(handler.connectResult, CONNECT_TIMEOUT_MS, "connecting")
                 // Some stacks return GATT_ERROR/133 when discovering immediately after connect.
                 delay(POST_CONNECT_DELAY_MS)
 
@@ -123,8 +123,8 @@ class BleTransport(
                 Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
                 val uart = findBleUart(g)
                     ?: throw TransportException(
-                        "Dit apparaat heeft geen seriele BLE-service (FFE0/FFF0/18F0/Nordic UART). " +
-                            "Waarschijnlijk is het een Bluetooth Classic adapter.",
+                        "This device has no serial BLE service (FFE0/FFF0/18F0/Nordic UART). " +
+                            "It is probably a Bluetooth Classic adapter: choose Bluetooth Classic instead.",
                     )
                 writeChar = uart.write
                 // Chosen from the characteristic's own properties: the Konnwei KW905's FFF2 only
@@ -144,7 +144,7 @@ class BleTransport(
                 synchronized(lock) {
                     // gatt !== g: close() tore the session down between two steps.
                     if (handler.disconnected.isCompleted || active !== handler || gatt !== g) {
-                        throw TransportException("BLE-verbinding verbroken tijdens opzetten")
+                        throw TransportException("The BLE connection dropped while connecting")
                     }
                     connected = true
                 }
@@ -153,7 +153,7 @@ class BleTransport(
                 teardown()
                 throw when (e) {
                     is CancellationException, is TransportException, is SecurityException -> e
-                    else -> TransportException(e.message ?: "BLE-verbinding mislukt", e)
+                    else -> TransportException(e.message ?: "BLE connection failed", e)
                 }
             }
         }
@@ -164,13 +164,13 @@ class BleTransport(
         val c = writeChar
         val h = active
         if (!connected || g == null || c == null || h == null) {
-            throw TransportException("Niet verbonden met de adapter")
+            throw TransportException("Not connected to the adapter")
         }
         val bytes = data.toByteArray(Charsets.US_ASCII)
         opMutex.withLock {
             var offset = 0
             while (offset < bytes.size) {
-                if (!connected) throw TransportException("BLE-verbinding verbroken")
+                if (!connected) throw TransportException("The BLE connection dropped")
                 val end = minOf(offset + maxChunk, bytes.size)
                 writeChunk(g, h, c, bytes.copyOfRange(offset, end))
                 offset = end
@@ -179,7 +179,7 @@ class BleTransport(
     }
 
     override suspend fun readUntilPrompt(timeoutMs: Long): String {
-        val ch = channel ?: throw TransportException("Niet verbonden met de adapter")
+        val ch = channel ?: throw TransportException("Not connected to the adapter")
         // A channel closed with a cause rethrows that TransportException straight from receive().
         return try {
             withTimeout(timeoutMs) { ch.receive() }
@@ -187,7 +187,7 @@ class BleTransport(
             val partial = synchronized(lock) { promptBuffer.pending() }
             throw TransportTimeoutException(partial, timeoutMs)
         } catch (e: ClosedReceiveChannelException) {
-            throw TransportException("Verbinding met de adapter is gesloten", e)
+            throw TransportException("The connection to the adapter was closed", e)
         }
     }
 
@@ -247,7 +247,7 @@ class BleTransport(
             if (attempt < DISCOVERY_ATTEMPTS) delay(DISCOVERY_RETRY_DELAY_MS)
         }
         throw TransportException(
-            if (lastStatus == null) "Time-out bij ontdekken van BLE-services" else "Services ophalen mislukt (GATT-status $lastStatus)",
+            if (lastStatus == null) "Timed out while discovering BLE services" else "Reading the adapter services failed (GATT status $lastStatus)",
         )
     }
 
@@ -256,7 +256,7 @@ class BleTransport(
         val d = CompletableDeferred<Int>()
         h.servicesResult = d
         try {
-            if (!g.discoverServices()) throw TransportException("Kon services van de adapter niet ophalen")
+            if (!g.discoverServices()) throw TransportException("Could not read the services of the adapter")
             return withTimeoutOrNull(SERVICES_TIMEOUT_MS) { d.await() }
         } finally {
             h.servicesResult = null
@@ -265,7 +265,7 @@ class BleTransport(
 
     private suspend fun enableNotifications(g: BluetoothGatt, h: GattHandler, notify: BluetoothGattCharacteristic) {
         if (!g.setCharacteristicNotification(notify, true)) {
-            throw TransportException("Kon notificaties van de adapter niet inschakelen")
+            throw TransportException("Could not enable notifications from the adapter")
         }
         // Without the CCCD write the peripheral never sends; a few clones lack the descriptor but
         // push data after setCharacteristicNotification alone, so a missing CCCD is tolerated.
@@ -283,11 +283,11 @@ class BleTransport(
         h.descriptorResult = d
         try {
             if (!writeDescriptorCompat(g, cccd, value)) {
-                throw TransportException("Kon notificaties van de adapter niet inschakelen (CCCD)")
+                throw TransportException("Could not enable notifications from the adapter (CCCD)")
             }
-            val status = awaitStep(d, DESCRIPTOR_TIMEOUT_MS, "inschakelen van notificaties")
+            val status = awaitStep(d, DESCRIPTOR_TIMEOUT_MS, "enabling notifications")
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                throw TransportException("Notificaties inschakelen mislukt (GATT-status $status)")
+                throw TransportException("Enabling notifications failed (GATT status $status)")
             }
         } finally {
             h.descriptorResult = null
@@ -301,17 +301,17 @@ class BleTransport(
             // stack rejects a new write while the previous one is in flight, so retry briefly.
             var attempts = 0
             while (!startWrite(g, c, chunk, type)) {
-                if (++attempts >= MAX_WRITE_RETRIES) throw TransportException("Schrijven naar de adapter mislukt")
+                if (++attempts >= MAX_WRITE_RETRIES) throw TransportException("Writing to the adapter failed")
                 delay(WRITE_RETRY_DELAY_MS)
             }
         } else {
             val d = CompletableDeferred<Int>()
             h.writeResult = d
             try {
-                if (!startWrite(g, c, chunk, type)) throw TransportException("Schrijven naar de adapter mislukt")
-                val status = awaitStep(d, WRITE_TIMEOUT_MS, "schrijven naar de adapter")
+                if (!startWrite(g, c, chunk, type)) throw TransportException("Writing to the adapter failed")
+                val status = awaitStep(d, WRITE_TIMEOUT_MS, "writing to the adapter")
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    throw TransportException("Schrijven naar de adapter mislukt (GATT-status $status)")
+                    throw TransportException("Writing to the adapter failed (GATT status $status)")
                 }
             } finally {
                 h.writeResult = null
@@ -347,7 +347,7 @@ class BleTransport(
         try {
             withTimeout(timeoutMs) { d.await() }
         } catch (e: TimeoutCancellationException) {
-            throw TransportException("Time-out bij $what", e)
+            throw TransportException("Timed out while $what", e)
         }
 
     /** Idempotent. Runs non-cancellable so a cancelled caller still releases the GATT client. */
@@ -358,10 +358,10 @@ class BleTransport(
                 val pair = gatt to active
                 gatt = null
                 writeChar = null
-                channel?.close(TransportException("Verbinding met de adapter is gesloten"))
+                channel?.close(TransportException("The connection to the adapter was closed"))
                 pair
             }
-            h?.failAll(TransportException("Verbinding met de adapter is gesloten"))
+            h?.failAll(TransportException("The connection to the adapter was closed"))
             if (g != null) {
                 try {
                     g.disconnect()
@@ -409,7 +409,7 @@ class BleTransport(
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         connectResult.complete(Unit)
                     } else {
-                        connectResult.completeExceptionally(TransportException("BLE-verbinding mislukt (GATT-status $status)"))
+                        connectResult.completeExceptionally(TransportException("BLE connection failed (GATT status $status)"))
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -417,10 +417,10 @@ class BleTransport(
                     disconnected.complete(Unit)
                     val ex = TransportException(
                         if (connected) {
-                            "BLE-verbinding met de adapter verbroken (status $status)"
+                            "The BLE connection to the adapter dropped (status $status)"
                         } else {
                             // Typically 133 / 62 while connecting: adapter asleep, out of range or busy.
-                            "BLE-verbinding mislukt (GATT-status $status). Is de adapter in bereik en niet al verbonden met een telefoon?"
+                            "BLE connection failed (GATT status $status). Is the adapter in range and not already connected to a phone?"
                         },
                     )
                     synchronized(lock) {

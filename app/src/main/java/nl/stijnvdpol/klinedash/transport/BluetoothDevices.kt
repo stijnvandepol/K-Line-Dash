@@ -33,7 +33,7 @@ data class BtDeviceInfo(
     val looksLikeObd: Boolean,
 )
 
-private const val UNNAMED_DEVICE = "(naamloos)"
+private const val UNNAMED_DEVICE = "(unnamed)"
 
 private val OBD_NAME_HINTS = listOf(
     "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "KW905", "VIECAR",
@@ -74,8 +74,8 @@ internal fun hasBtConnectPermission(context: Context): Boolean =
 internal fun requireBtConnectPermission(context: Context) {
     if (!hasBtConnectPermission(context)) {
         throw SecurityException(
-            "Bluetooth-toestemming ontbreekt (BLUETOOTH_CONNECT). Geef de app toestemming bij " +
-                "Instellingen > Apps > K-Line Dash > Machtigingen.",
+            "Bluetooth permission is missing (BLUETOOTH_CONNECT). Allow it under " +
+                "Settings > Apps > K-Line Dash > Permissions.",
         )
     }
 }
@@ -87,13 +87,13 @@ internal fun requireBtConnectPermission(context: Context) {
 internal fun bluetoothAdapter(context: Context): BluetoothAdapter? =
     context.applicationContext.getSystemService(BluetoothManager::class.java)?.adapter
 
-internal const val ADAPTER_UNAVAILABLE_MESSAGE = "Bluetooth adapter niet beschikbaar voor apps op deze head unit"
-internal const val BLUETOOTH_OFF_MESSAGE = "Bluetooth staat uit. Zet Bluetooth aan en probeer opnieuw."
+internal const val ADAPTER_UNAVAILABLE_MESSAGE = "Bluetooth is not available to apps on this head unit. Use a Wi-Fi adapter instead."
+internal const val BLUETOOTH_OFF_MESSAGE = "Bluetooth is off. Turn Bluetooth on and try again."
 
 /** Shown in a transport description until the device's own name is known. */
 internal const val DEFAULT_ADAPTER_NAME = "OBD-adapter"
 
-internal fun invalidAddressMessage(address: String) = "Ongeldig Bluetooth-adres: $address"
+internal fun invalidAddressMessage(address: String) = "Invalid Bluetooth address: $address"
 
 /**
  * The device's advertised name, or null. The permission can be revoked at any moment; the name is
@@ -137,7 +137,7 @@ fun bondedDevices(context: Context): List<BtDeviceInfo> {
  * Cancelling the collector stops the scan.
  *
  * The flow throws [SecurityException] when permissions are missing and [IllegalStateException]
- * (Dutch message) when Bluetooth is off/unavailable or the scan fails to start, so collect it
+ * (English message) when Bluetooth is off/unavailable or the scan fails to start, so collect it
  * inside try/catch or with `.catch {}`.
  *
  * Needs BLUETOOTH_SCAN on API 31+ (declare it with `neverForLocation` in the manifest) and
@@ -147,7 +147,7 @@ fun bondedDevices(context: Context): List<BtDeviceInfo> {
 @SuppressLint("MissingPermission")
 fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = callbackFlow<BtDeviceInfo> {
     if (!hasRequiredPermissions(context)) {
-        close(SecurityException("Toestemming voor Bluetooth-scan ontbreekt. Geef de app toestemming in de instellingen."))
+        close(SecurityException("Permission to scan for Bluetooth devices is missing. Allow it in the Android settings."))
         awaitClose { }
         return@callbackFlow
     }
@@ -185,7 +185,7 @@ fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = cal
 
         override fun onScanFailed(errorCode: Int) {
             Log.w(TAG, "BLE scan failed: $errorCode")
-            close(IllegalStateException("BLE-scan mislukt (foutcode $errorCode)"))
+            close(IllegalStateException("BLE scan failed (error code $errorCode)"))
         }
     }
 

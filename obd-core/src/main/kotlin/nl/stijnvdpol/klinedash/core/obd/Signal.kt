@@ -26,6 +26,7 @@ enum class PollTier {
  * @property command what is sent to the ELM327, e.g. "010C" or "ATRV".
  * @property pid Mode 01 PID number used to check ECU support; null for adapter commands (ATRV),
  *   which are always available.
+ * @property name sentence-case name for lists, e.g. "Coolant temperature".
  * @property min lower end of the display range (gauge scale); [max] the upper end.
  * @property decimals digits after the decimal point when shown as a number.
  * @property decode extracts this signal's value from a successful reply; null when the reply does
@@ -35,10 +36,9 @@ class Signal(
     val id: String,
     val command: String,
     val pid: Int?,
-    val nameNl: String,
-    val nameEn: String,
-    /** Short label for small tiles, e.g. "Koelvl." / "ECT". */
-    val shortNl: String,
+    val name: String,
+    /** Short label for small tiles, e.g. "Coolant" for "Coolant temperature". */
+    val shortName: String,
     val unit: String,
     val min: Double,
     val max: Double,

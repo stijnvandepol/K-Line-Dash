@@ -47,7 +47,7 @@ class WifiTransport(
         } catch (e: IOException) {
             closeUnderlying()
             throw TransportException(
-                "Kan geen verbinding maken met $host:$port. Zit de tablet/head unit op het Wi-Fi van de adapter?",
+                "Cannot connect to $host:$port. Is the head unit connected to the Wi-Fi network of the adapter?",
                 e,
             )
         }

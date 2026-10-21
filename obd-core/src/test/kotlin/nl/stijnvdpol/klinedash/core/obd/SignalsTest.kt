@@ -57,7 +57,7 @@ class SignalsTest {
     fun `display ranges and names are filled in`() {
         for (signal in Signals.all) {
             assertTrue("${signal.id} range", signal.min < signal.max)
-            assertTrue("${signal.id} names", signal.nameNl.isNotBlank() && signal.nameEn.isNotBlank() && signal.shortNl.isNotBlank())
+            assertTrue("${signal.id} names", signal.name.isNotBlank() && signal.shortName.isNotBlank())
             assertTrue("${signal.id} decimals", signal.decimals >= 0)
         }
     }

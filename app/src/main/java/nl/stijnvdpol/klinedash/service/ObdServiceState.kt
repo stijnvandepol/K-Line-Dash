@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
+import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
 
 /**
@@ -21,6 +22,11 @@ import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
 object ObdServiceState {
     private val _link = MutableStateFlow<ElmLink?>(null)
     val link: StateFlow<ElmLink?> = _link.asStateFlow()
+
+    private val _poller = MutableStateFlow<ObdPoller?>(null)
+
+    /** The poller that belongs to [link]; screens register the signals they show with it. */
+    val poller: StateFlow<ObdPoller?> = _poller.asStateFlow()
 
     /** State of the current link, or Idle while there is none. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,11 +50,12 @@ object ObdServiceState {
         transport.setEngineRunning(_simulatorEngineRunning.value)
     }
 
-    internal fun publish(link: ElmLink) {
+    internal fun publish(link: ElmLink, poller: ObdPoller) {
         _link.value = link
+        _poller.value = poller
     }
 
     internal fun unpublish(link: ElmLink) {
-        _link.compareAndSet(link, null)
+        if (_link.compareAndSet(link, null)) _poller.value = null
     }
 }
