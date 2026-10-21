@@ -206,7 +206,12 @@ class ObdPollSchedulerTest {
 
     @Test
     fun `a command shared by two signals is sent once and decodes both`() = runTest {
-        val rig = Rig(this)
+        // This test only has one second of virtual time; the default K-line latency would not fit.
+        val fastSim = SimulatorConfig().apply {
+            latencyMinMs = 60
+            latencyMaxMs = 120
+        }
+        val rig = Rig(this, fastSim)
         rig.connect()
         rig.poller.start()
         rig.poller.demand("screen", setOf("o2_v", "o2_trim"))

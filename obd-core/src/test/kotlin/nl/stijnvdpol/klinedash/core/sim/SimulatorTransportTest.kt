@@ -62,7 +62,25 @@ class SimulatorTransportTest {
         }
         // 0x0B (MAP) must be absent on a MAF-based 2ZZ-GE, 0x20 present.
         assertFalse(SimulatorConfig.DEFAULT_SUPPORTED_PIDS.contains(0x0B))
-        assertEquals(listOf("412000000000"), sim.lines("0120"))
+        // Only 0x21 (distance with MIL) is advertised in the second block, 0x40 is not.
+        assertEquals(listOf("412080000000"), sim.lines("0120"))
+        assertIs<ElmResult.NoData>(sim.send("0140"))
+    }
+
+    @Test
+    fun `default bitmap is the one read from the real car`() = runTest {
+        val sim = SimulatorTransport().ready()
+        // 01 03 04 05 06 07 | 0C 0D 0E 0F 10 | 11 12 13 14 15 | 1C 20, written out independently of the config.
+        assertEquals(listOf("4100BE1FF811"), sim.lines("0100"))
+    }
+
+    @Test
+    fun `fixed value pids of the real car`() = runTest {
+        val sim = SimulatorTransport().ready()
+        assertEquals(listOf("411204"), sim.lines("0112"))
+        assertEquals(listOf("411303"), sim.lines("0113"))
+        assertEquals(listOf("411C06"), sim.lines("011C"))
+        assertEquals(listOf("41210000"), sim.lines("0121"))
     }
 
     @Test
@@ -110,6 +128,34 @@ class SimulatorTransportTest {
         assertTrue("maf $maf", maf in 2.0..6.0)
         // Closed loop at operating temperature.
         assertEquals(listOf("410302" + "00"), sim.lines("0103"))
+    }
+
+    @Test
+    fun `warm idle matches the real car`() = runTest {
+        val config = SimulatorConfig().apply {
+            scenario = Scenario.IDLE
+            initialCoolantC = 90.0
+        }
+        val sim = SimulatorTransport(config, clock = { currentTime }).ready()
+
+        val rpmBytes = bytes(sim.lines("010C").single().substring(4))
+        val rpm = (rpmBytes[0] * 256 + rpmBytes[1]) / 4
+        assertTrue("rpm $rpm", rpm in 815..845)
+        // Throttle reads about 9.4 % with the pedal released, not 0.
+        val throttle = bytes(sim.lines("0111").single().substring(4)).single() * 100.0 / 255.0
+        assertTrue("throttle $throttle", throttle in 8.5..10.5)
+    }
+
+    @Test
+    fun `default coolant starts at 46 and warms towards 90`() = runTest {
+        val config = SimulatorConfig().apply { scenario = Scenario.IDLE }
+        val sim = SimulatorTransport(config, clock = { currentTime }).ready()
+
+        val start = bytes(sim.lines("0105").single().substring(4)).single() - 40
+        assertTrue("coolant $start", start in 45..50)
+        delay(600_000)
+        val warm = bytes(sim.lines("0105").single().substring(4)).single() - 40
+        assertTrue("coolant $warm", warm in 85..92)
     }
 
     @Test
@@ -459,6 +505,64 @@ class SimulatorTransportTest {
             return List(20) { sim.talk("0113") }
         }
         assertEquals(capture(), capture())
+    }
+
+    @Test
+    fun `default latency is the measured 450 to 500 ms per request`() = runTest {
+        val sim = SimulatorTransport().ready()
+        repeat(30) {
+            val t0 = currentTime
+            sim.talk("010C")
+            val dt = currentTime - t0
+            assertTrue("latency $dt", dt in 450L..500L)
+        }
+    }
+
+    @Test
+    fun `request with response count digit is accepted and answers faster`() = runTest {
+        val sim = SimulatorTransport().ready()
+        repeat(30) {
+            val t0 = currentTime
+            val line = sim.lines("010C1").single()
+            val dt = currentTime - t0
+            assertTrue("latency $dt", dt in 120L..160L)
+            assertTrue(line.startsWith("410C"))
+        }
+        // A one-byte request takes the digit too: mode 03 with count 1.
+        assertEquals(listOf("43017113490000"), sim.lines("031"))
+    }
+
+    @Test
+    fun `count digit applies to no data answers as well`() = runTest {
+        val sim = SimulatorTransport().ready()
+        assertIs<ElmResult.NoData>(sim.send("010B1"))
+    }
+
+    @Test
+    fun `clone that rejects the response count answers a question mark`() = runTest {
+        val config = SimulatorConfig().apply { cloneRejectsResponseCount = true }
+        val sim = SimulatorTransport(config).ready()
+        assertIs<ElmResult.Unknown>(sim.send("010C1"))
+        assertIs<ElmResult.Unknown>(sim.send("031"))
+        assertIs<ElmResult.Data>(sim.send("010C"))
+    }
+
+    @Test
+    fun `lone count digit and non hex input stay unknown`() = runTest {
+        val sim = SimulatorTransport().ready()
+        assertIs<ElmResult.Unknown>(sim.send("1"))
+        assertIs<ElmResult.Unknown>(sim.send("010G1"))
+    }
+
+    @Test
+    fun `character sent to a busy adapter gives stopped and a prompt`() = runTest {
+        val sim = SimulatorTransport().ready()
+        // The reply would take 450 ms; the reader gives up after 100 ms, the adapter is still busy.
+        assertFails<TransportTimeoutException> { sim.talk("010C", timeoutMs = 100) }
+
+        assertIs<ElmResult.Stopped>(ElmParser.parse("", sim.talk(" ")))
+        // Now the adapter is idle again.
+        assertIs<ElmResult.Data>(sim.send("010C"))
     }
 
     @Test

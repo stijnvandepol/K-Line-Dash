@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.core.elm
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import nl.stijnvdpol.klinedash.core.assertFails
 import nl.stijnvdpol.klinedash.core.assertIs
@@ -199,6 +200,57 @@ class Elm327SessionTest {
         val result = rig.session.execute("010C", 500)
         assertIs<ElmResult.Timeout>(result)
         assertTrue(rig.log.snapshot().any { it.kind == LogKind.ERROR })
+    }
+
+    @Test
+    fun `execute rejects blank and control character commands without sending anything`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        for (bad in listOf("", " ", "  ", "\r", "ATI\r", "01\n0C", "AT\tI", "0100\u0000")) {
+            assertFails<IllegalArgumentException> { rig.session.execute(bad, 2_000) }
+        }
+        assertTrue(rig.sent().isEmpty())
+    }
+
+    @Test
+    fun `timeout is followed by a resync space and the next command works`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.session.initialize(null) {}
+
+        // A request takes ~450 ms, so a 100 ms timeout leaves the adapter busy.
+        assertIs<ElmResult.Timeout>(rig.session.execute("010C", 100))
+        val sent = rig.sent()
+        assertEquals(" ", sent.last())
+        assertEquals("010C", sent[sent.size - 2])
+        assertTrue(rig.log.snapshot().any { it.kind == LogKind.RX && it.text.contains("STOPPED") })
+
+        // Without the resync this command would have been swallowed as "STOPPED".
+        val data = assertIs<ElmResult.Data>(rig.session.execute("010C", 2_000))
+        assertTrue(data.lines.single().startsWith("410C"))
+    }
+
+    @Test
+    fun `resync never sends a bare carriage return`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.session.initialize(null) {}
+        rig.session.execute("010C", 100)
+
+        val tx = rig.log.snapshot().filter { it.kind == LogKind.TX }.map { it.text }
+        assertTrue(tx.none { it.isEmpty() || it.contains('\r') })
+    }
+
+    @Test
+    fun `hung adapter costs only the resync wait and still returns the timeout`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        rig.config.timeoutRate = 1.0
+
+        val before = currentTime
+        assertIs<ElmResult.Timeout>(rig.session.execute("010C", 500))
+        // 500 ms for the command plus the 1.5 s resync wait, nothing more.
+        assertEquals(2_000L, currentTime - before)
     }
 
     @Test

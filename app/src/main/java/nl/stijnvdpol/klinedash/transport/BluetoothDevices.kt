@@ -36,7 +36,7 @@ data class BtDeviceInfo(
 private const val UNNAMED_DEVICE = "(naamloos)"
 
 private val OBD_NAME_HINTS = listOf(
-    "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "VIECAR",
+    "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "KW905", "VIECAR",
     "VEEPEAK", "OBDLINK", "CAN BUS", "BLUEDRIVER",
 )
 

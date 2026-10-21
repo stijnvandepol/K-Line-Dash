@@ -203,8 +203,10 @@ class EngineModel(
         const val COOLANT_TARGET_C = 90.0
         const val COOL_DOWN_FACTOR = 20.0
         const val CLOSED_LOOP_MIN_C = 55.0
-        const val IDLE_THROTTLE = 12.0
-        const val IDLE_RPM_WARM = 850.0
+        /** Throttle reads 9.4 % with the pedal released on the real car (esp32-obd2-lessons.md). */
+        const val IDLE_THROTTLE = 9.4
+        /** Warm idle measured on the real car: 830-860 rpm. */
+        const val IDLE_RPM_WARM = 830.0
         const val IDLE_RPM_COLD_EXTRA = 350.0
         const val LAUNCH_RPM = 1500.0
         const val REV_LIMIT_RPM = 8200.0
@@ -218,17 +220,17 @@ class EngineModel(
         val GEAR_RPM_PER_KMH = doubleArrayOf(135.0, 78.0, 56.6, 44.8, 37.2, 31.3)
 
         private val SCRIPT = listOf(
-            Segment(6.0, 0.0, 0.0, 0, 12.0, 12.0), // idle
+            Segment(6.0, 0.0, 0.0, 0, IDLE_THROTTLE, IDLE_THROTTLE), // idle
             Segment(3.0, 0.0, 28.0, 1, 25.0, 60.0), // launch
             Segment(3.0, 28.0, 52.0, 2, 60.0, 60.0),
             Segment(3.0, 52.0, 70.0, 3, 50.0, 50.0),
             Segment(8.0, 70.0, 70.0, 5, 18.0, 18.0), // cruise
             Segment(12.0, 70.0, 145.0, 3, 100.0, 100.0), // kick-down pull, crosses VVTL-i at ~110 km/h
-            Segment(6.0, 145.0, 80.0, 3, 12.0, 12.0), // overrun from the limiter
-            Segment(5.0, 80.0, 45.0, 4, 12.0, 12.0),
-            Segment(3.0, 45.0, 20.0, 2, 12.0, 12.0),
-            Segment(2.0, 20.0, 0.0, 1, 12.0, 12.0),
-            Segment(5.0, 0.0, 0.0, 0, 12.0, 12.0), // idle
+            Segment(6.0, 145.0, 80.0, 3, IDLE_THROTTLE, IDLE_THROTTLE), // overrun from the limiter
+            Segment(5.0, 80.0, 45.0, 4, IDLE_THROTTLE, IDLE_THROTTLE),
+            Segment(3.0, 45.0, 20.0, 2, IDLE_THROTTLE, IDLE_THROTTLE),
+            Segment(2.0, 20.0, 0.0, 1, IDLE_THROTTLE, IDLE_THROTTLE),
+            Segment(5.0, 0.0, 0.0, 0, IDLE_THROTTLE, IDLE_THROTTLE), // idle
         )
         val TOTAL_S = SCRIPT.sumOf { it.durationS }
     }

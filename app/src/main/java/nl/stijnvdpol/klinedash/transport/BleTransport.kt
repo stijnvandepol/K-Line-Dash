@@ -127,6 +127,8 @@ class BleTransport(
                             "Waarschijnlijk is het een Bluetooth Classic adapter.",
                     )
                 writeChar = uart.write
+                // Chosen from the characteristic's own properties: the Konnwei KW905's FFF2 only
+                // supports write-without-response (props 0x04), a WRITE_TYPE_DEFAULT write fails there.
                 writeType = if (uart.write.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
                     BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                 } else {
@@ -222,15 +224,40 @@ class BleTransport(
         }
     }
 
+    /**
+     * Full service discovery can stall on cheap adapters: the Konnwei KW905 answers the first
+     * handles (1800/1801/180A) and then the walk fails or never ends, on an ESP32 and on Windows
+     * alike, while its FFF0 service is perfectly usable (docs/research/esp32-obd2-lessons.md).
+     * So a failed or timed-out discovery is not fatal when the services found so far already hold
+     * a usable known UART; otherwise discovery is retried once before giving up.
+     */
     private suspend fun discoverServices(g: BluetoothGatt, h: GattHandler) {
+        var lastStatus: Int? = null
+        for (attempt in 1..DISCOVERY_ATTEMPTS) {
+            val status = discoverOnce(g, h)
+            lastStatus = status
+            if (status == BluetoothGatt.GATT_SUCCESS) return
+            val outcome = if (status == null) "timed out" else "failed (GATT status $status)"
+            val found = g.services.joinToString { it.uuid.toString() }
+            if (findKnownBleUart(g) != null) {
+                Log.w(TAG, "BLE service discovery $outcome, but a known UART service is present ($found); using it")
+                return
+            }
+            Log.w(TAG, "BLE service discovery $outcome (attempt $attempt of $DISCOVERY_ATTEMPTS), services so far: $found")
+            if (attempt < DISCOVERY_ATTEMPTS) delay(DISCOVERY_RETRY_DELAY_MS)
+        }
+        throw TransportException(
+            if (lastStatus == null) "Time-out bij ontdekken van BLE-services" else "Services ophalen mislukt (GATT-status $lastStatus)",
+        )
+    }
+
+    /** One discovery round. Returns the GATT status, or null when the callback never came. */
+    private suspend fun discoverOnce(g: BluetoothGatt, h: GattHandler): Int? {
         val d = CompletableDeferred<Int>()
         h.servicesResult = d
         try {
             if (!g.discoverServices()) throw TransportException("Kon services van de adapter niet ophalen")
-            val status = awaitStep(d, SERVICES_TIMEOUT_MS, "ontdekken van BLE-services")
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                throw TransportException("Services ophalen mislukt (GATT-status $status)")
-            }
+            return withTimeoutOrNull(SERVICES_TIMEOUT_MS) { d.await() }
         } finally {
             h.servicesResult = null
         }
@@ -460,6 +487,8 @@ class BleTransport(
         const val POST_CONNECT_DELAY_MS = 250L
         const val MTU_TIMEOUT_MS = 3_000L
         const val SERVICES_TIMEOUT_MS = 10_000L
+        const val DISCOVERY_ATTEMPTS = 2
+        const val DISCOVERY_RETRY_DELAY_MS = 500L
         const val DESCRIPTOR_TIMEOUT_MS = 5_000L
         const val WRITE_TIMEOUT_MS = 5_000L
         const val DISCONNECT_WAIT_MS = 1_000L

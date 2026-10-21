@@ -26,8 +26,18 @@ class Elm327Session(
      * Sends [cmd] (without CR) and returns the classified reply. A missing prompt yields
      * [ElmResult.Timeout] with whatever text did arrive; a dropped link throws
      * [TransportException].
+     *
+     * After a timeout the adapter is resynchronised before this returns (see [resynchronise]), so
+     * the next command never lands in a still-busy ELM327.
+     *
+     * @throws IllegalArgumentException when [cmd] is blank or contains a control character. A bare
+     * CR makes an ELM327 repeat the previous command, which could silently re-send a mode 04
+     * (clear codes) or restart a bus init, so such a command is never put on the wire.
      */
     suspend fun execute(cmd: String, timeoutMs: Long): ElmResult {
+        require(cmd.isNotBlank() && cmd.none { it.isISOControl() }) {
+            "Not a sendable ELM327 command: \"${cmd.take(MAX_LOGGED_COMMAND_LENGTH)}\""
+        }
         // Late replies to a previous (timed-out) command would otherwise be taken for this answer.
         transport.discardPending()
         log.record(LogKind.TX, cmd)
@@ -36,10 +46,30 @@ class Elm327Session(
             transport.readUntilPrompt(timeoutMs)
         } catch (e: TransportTimeoutException) {
             log.record(LogKind.ERROR, "Timeout after ${timeoutMs}ms on \"$cmd\", partial: \"${e.partial}\"")
+            resynchronise()
             return ElmResult.Timeout(e.partial)
         }
         log.record(LogKind.RX, raw)
         return ElmParser.parse(cmd, raw)
+    }
+
+    /**
+     * Aborts whatever the adapter is still doing after a timeout: any single character does that
+     * (it answers "STOPPED" or just the prompt). A space is used, never a bare CR, because a CR
+     * would repeat the previous command. Waits briefly for the prompt and drops what arrives; an
+     * adapter that stays silent is left to the caller's next command (and the manager's
+     * consecutive-timeout reconnect).
+     */
+    private suspend fun resynchronise() {
+        transport.discardPending()
+        log.record(LogKind.TX, RESYNC_CHAR)
+        transport.write(RESYNC_CHAR)
+        try {
+            log.record(LogKind.RX, transport.readUntilPrompt(RESYNC_TIMEOUT_MS))
+        } catch (e: TransportTimeoutException) {
+            log.record(LogKind.INFO, "No prompt ${RESYNC_TIMEOUT_MS}ms after the resync character")
+        }
+        transport.discardPending()
     }
 
     /**
@@ -296,10 +326,24 @@ class Elm327Session(
 
         private const val AT_TIMEOUT_MS = 2_000L
         private const val RESET_TIMEOUT_MS = 4_000L
+
+        /**
+         * A saved protocol skips the search, so only the 5-baud init (a few seconds) has to fit.
+         * Also used per rung of the explicit fallback ladder. Not yet measured in the car.
+         */
         private const val SAVED_PROBE_TIMEOUT_MS = 10_000L
-        private const val DETECT_PROBE_TIMEOUT_MS = 15_000L
+
+        /**
+         * 0100 after ATSP0: the adapter walks its protocol list (a clone searches slowly) and then
+         * does the slow 5-baud init. The real car's search took longer than the 15 s we first
+         * allowed (docs/research/esp32-obd2-lessons.md), the reference firmware allows 20 s.
+         */
+        private const val DETECT_PROBE_TIMEOUT_MS = 25_000L
         private const val RESET_ATTEMPTS = 2
         private const val RETRY_PAUSE_MS = 300L
         private const val KLINE_REINIT_PAUSE_MS = 1_500L
+        private const val RESYNC_CHAR = " "
+        private const val RESYNC_TIMEOUT_MS = 1_500L
+        private const val MAX_LOGGED_COMMAND_LENGTH = 20
     }
 }

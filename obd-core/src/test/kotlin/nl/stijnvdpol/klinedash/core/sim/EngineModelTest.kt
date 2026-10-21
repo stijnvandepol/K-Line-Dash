@@ -55,7 +55,7 @@ class EngineModelTest {
 
     @Test
     fun `coolant warms from ambient towards operating temperature`() {
-        val config = SimulatorConfig()
+        val config = SimulatorConfig().apply { initialCoolantC = null }
         val engine = EngineModel(config, Random(1))
         assertEquals(15.0, engine.snapshot(0).coolantC, 1.0)
         var last = engine.snapshot(0).coolantC
@@ -71,7 +71,10 @@ class EngineModelTest {
 
     @Test
     fun `cold engine idles higher and runs open loop`() {
-        val config = SimulatorConfig().apply { scenario = Scenario.IDLE }
+        val config = SimulatorConfig().apply {
+            scenario = Scenario.IDLE
+            initialCoolantC = null
+        }
         val engine = EngineModel(config, Random(1))
         val cold = engine.snapshot(0)
         assertTrue("cold idle ${cold.rpm}", cold.rpm in 1_100..1_300)
@@ -84,5 +87,25 @@ class EngineModelTest {
         val warm = engine.snapshot(t + 1_000)
         assertTrue("warm idle ${warm.rpm}", warm.rpm in 800..900)
         assertEquals(2, warm.fuelSystemStatus)
+    }
+
+    @Test
+    fun `default start and warm idle match the real car`() {
+        val config = SimulatorConfig().apply { scenario = Scenario.IDLE }
+        val engine = EngineModel(config, Random(1))
+        val start = engine.snapshot(0)
+        assertEquals(46.0, start.coolantC, 1.0)
+        assertEquals(9.4, start.throttlePct, 1.0)
+        assertEquals(1, start.fuelSystemStatus)
+
+        var t = 0L
+        while (t < 900_000) {
+            t += 1_000
+            engine.snapshot(t)
+        }
+        val warm = engine.snapshot(t + 1_000)
+        assertEquals(90.0, warm.coolantC, 3.0)
+        assertEquals(830.0, warm.rpm.toDouble(), 20.0)
+        assertEquals(9.4, warm.throttlePct, 1.0)
     }
 }

@@ -54,6 +54,13 @@ class SimulatorTransport(
     private var commandCount = 0
     private var pending: Reply? = null
 
+    /**
+     * True after a read timed out while the adapter was still working on its command (a slow reply
+     * that arrived too late). Any character sent now aborts that work: the adapter prints
+     * "STOPPED" and a prompt, like a real ELM327 does.
+     */
+    private var busy = false
+
     /** True while a read is waiting out its latency; a write now would mean overlapping commands. */
     @Volatile
     private var reading = false
@@ -68,6 +75,7 @@ class SimulatorTransport(
         resetAdapterState()
         commandCount = 0
         pending = null
+        busy = false
         connected = true
     }
 
@@ -94,6 +102,8 @@ class SimulatorTransport(
         try {
             if (reply == null || reply.latencyMs > timeoutMs) {
                 delay(timeoutMs)
+                // A hung adapter (NEVER) does not react to anything; a slow one is merely busy.
+                busy = reply != null && reply.latencyMs != NEVER
                 throw TransportTimeoutException(reply?.partial ?: "", timeoutMs)
             }
             delay(reply.latencyMs)
@@ -110,6 +120,7 @@ class SimulatorTransport(
     override suspend fun close() {
         connected = false
         pending = null
+        busy = false
     }
 
     // ---------------------------------------------------------------- reply construction
@@ -129,6 +140,10 @@ class SimulatorTransport(
     }
 
     private fun buildReply(received: String): Reply {
+        if (busy) {
+            busy = false
+            return textReply("", listOf("STOPPED"), config.atLatencyMs)
+        }
         val echoText = if (echo) received + eol else ""
         val cmd = received.filter { it > ' ' }.uppercase()
 
@@ -221,11 +236,20 @@ class SimulatorTransport(
     private fun protocolNumberText(): String =
         if (protocol == "0") "A${detectedProtocol ?: "0"}" else protocol
 
-    private fun handleObd(cmd: String, echoText: String): Reply {
-        if (cmd.length % 2 != 0 || !isHex(cmd)) return textReply(echoText, listOf("?"), config.atLatencyMs)
+    /**
+     * An odd number of hex digits is a request plus the ELM response-count digit ("010C1", "031").
+     * Only the shorter latency is modelled; the number of frames returned is not capped by the digit.
+     */
+    private fun handleObd(received: String, echoText: String): Reply {
+        if (!isHex(received)) return textReply(echoText, listOf("?"), config.atLatencyMs)
+        val hasCount = received.length % 2 != 0
+        if (hasCount && (received.length < MIN_COUNT_REQUEST_LENGTH || config.cloneRejectsResponseCount)) {
+            return textReply(echoText, listOf("?"), config.atLatencyMs)
+        }
+        val cmd = if (hasCount) received.dropLast(1) else received
         val request = IntArray(cmd.length / 2) { cmd.substring(it * 2, it * 2 + 2).toInt(16) }
 
-        var latency = requestLatency()
+        var latency = if (hasCount) responseCountLatency() else requestLatency()
         var status: String? = null
 
         if (!busReady) {
@@ -260,9 +284,13 @@ class SimulatorTransport(
         return textReply(echoText, lines, latency, partial)
     }
 
-    private fun requestLatency(): Long {
-        val lo = config.latencyMinMs
-        val hi = max(lo, config.latencyMaxMs)
+    private fun requestLatency(): Long = drawLatency(config.latencyMinMs, config.latencyMaxMs)
+
+    private fun responseCountLatency(): Long =
+        drawLatency(config.responseCountLatencyMinMs, config.responseCountLatencyMaxMs)
+
+    private fun drawLatency(lo: Long, maxMs: Long): Long {
+        val hi = max(lo, maxMs)
         return if (hi == lo) lo else random.nextLong(lo, hi + 1)
     }
 
@@ -344,10 +372,12 @@ class SimulatorTransport(
             0x0F -> listOf(byteOf(s.intakeC + 40.0))
             0x10 -> twoBytes((s.mafGs * 100.0).roundToInt())
             0x11 -> listOf(byteOf(s.throttlePct * 255.0 / 100.0))
-            0x13 -> listOf(0x03)
+            0x12 -> listOf(SECONDARY_AIR_OFF)
+            0x13 -> listOf(O2_SENSORS_B1S1_B1S2)
             0x14 -> listOf(byteOf(s.o2UpstreamV * 200.0), trimByte(s.shortTrimPct))
             0x15 -> listOf(byteOf(s.o2DownstreamV * 200.0), 0xFF)
-            0x1C -> listOf(0x06) // EOBD
+            0x1C -> listOf(OBD_STANDARD_EOBD)
+            0x21 -> twoBytes(DISTANCE_WITH_MIL_KM)
             else -> return null
         }
         return listOf(0x41, pid) + data
@@ -448,6 +478,21 @@ class SimulatorTransport(
         private const val HEX = "0123456789ABCDEF"
         private const val STRAY_CHARS = "#@%*"
         private val K_LINE_PROTOCOLS = setOf("3", "4", "5")
+
+        /** Shortest request with a count digit: a one-byte request such as "03" plus the digit ("031"). */
+        private const val MIN_COUNT_REQUEST_LENGTH = 3
+
+        /** PID 12: air status "off / atmosphere". Fixed: the real value is bit-coded, nothing to chart. */
+        private const val SECONDARY_AIR_OFF = 0x04
+
+        /** PID 13: oxygen sensors present, bank 1 sensor 1 and 2 (bits 0 and 1). */
+        private const val O2_SENSORS_B1S1_B1S2 = 0x03
+
+        /** PID 1C: 6 = EOBD, what the real car reports. */
+        private const val OBD_STANDARD_EOBD = 0x06
+
+        /** PID 21: the real car reports 0 km driven with the MIL on. */
+        private const val DISTANCE_WITH_MIL_KM = 0
 
         private fun isHex(s: String): Boolean = s.isNotEmpty() && s.all { it in '0'..'9' || it in 'A'..'F' }
 

@@ -37,9 +37,20 @@ class SimulatorConfig {
     @Volatile var atLatencyMs: Long = 15
     @Volatile var resetLatencyMs: Long = 400
 
-    /** K-line request/response latency is drawn uniformly from this range per OBD request. */
-    @Volatile var latencyMinMs: Long = 60
-    @Volatile var latencyMaxMs: Long = 120
+    /**
+     * K-line request/response latency is drawn uniformly from this range per OBD request. The
+     * defaults are the ~0.45-0.5 s per request measured on the real car (docs/research/esp32-obd2-lessons.md).
+     */
+    @Volatile var latencyMinMs: Long = KLINE_LATENCY_MIN_MS
+    @Volatile var latencyMaxMs: Long = KLINE_LATENCY_MAX_MS
+
+    /**
+     * Same, for a request that carries the ELM response-count suffix ("010C1"). ASSUMPTION, not yet
+     * measured in the car: the adapter answers as soon as the expected number of replies has
+     * arrived instead of waiting out its bus timeout.
+     */
+    @Volatile var responseCountLatencyMinMs: Long = RESPONSE_COUNT_LATENCY_MIN_MS
+    @Volatile var responseCountLatencyMaxMs: Long = RESPONSE_COUNT_LATENCY_MAX_MS
 
     /** Extra wait before the adapter gives up on an unanswered request ("NO DATA"). */
     @Volatile var noDataLatencyMs: Long = 250
@@ -55,7 +66,7 @@ class SimulatorConfig {
     /** Pending (Mode 07) DTCs. */
     val pendingDtcs: MutableList<String> = CopyOnWriteArrayList(listOf("P0300"))
 
-    /** Mode 01 PIDs the ECU supports. 0x0B (MAP) is absent on purpose: the 2ZZ-GE uses a MAF. */
+    /** Mode 01 PIDs the ECU supports; the default is the list read from the real car. */
     @Volatile var supportedPids: Set<Int> = DEFAULT_SUPPORTED_PIDS
 
     /** 17-character VIN; Mode 09 answers "NO DATA" while both this and [ecuName] are null. */
@@ -67,8 +78,11 @@ class SimulatorConfig {
     @Volatile var scenario: Scenario = Scenario.DRIVE_CYCLE
     @Volatile var ambientC: Double = 15.0
 
-    /** Coolant start temperature; null = ambient (cold start). */
-    @Volatile var initialCoolantC: Double? = null
+    /**
+     * Coolant start temperature; null = ambient (cold start). The default is the 46 C the real car
+     * reported with the ignition on (esp32-obd2-lessons.md).
+     */
+    @Volatile var initialCoolantC: Double? = REAL_CAR_COOLANT_C
 
     /** Warm-up time constant in seconds (real cars ~300+; short default so demos get warm). */
     @Volatile var warmupTimeConstantS: Double = 90.0
@@ -102,6 +116,12 @@ class SimulatorConfig {
      */
     @Volatile var spontaneousResetAtCommand: Int? = null
 
+    /**
+     * The simulated clone answers "?" to a request with the response-count suffix ("010C1"), as
+     * some clones do. Lets a poller's fallback to the plain request be tested end to end.
+     */
+    @Volatile var cloneRejectsResponseCount: Boolean = false
+
     /** Bus init always fails ("BUS INIT: ...ERROR" / "UNABLE TO CONNECT"). */
     @Volatile var initFails: Boolean = false
 
@@ -115,10 +135,24 @@ class SimulatorConfig {
     @Volatile var dropConnectionAfterCommands: Int? = null
 
     companion object {
-        /** PIDs a 2002-2006 European 2ZZ-GE plausibly reports (bitmap PIDs 00/20 are derived). */
+        /** Measured on the real K-line car: 0.45-0.5 s per request (5 PIDs took 2.2-2.5 s). */
+        const val KLINE_LATENCY_MIN_MS = 450L
+        const val KLINE_LATENCY_MAX_MS = 500L
+
+        /** Assumed (to verify in the car) latency of a request with the response-count suffix. */
+        const val RESPONSE_COUNT_LATENCY_MIN_MS = 120L
+        const val RESPONSE_COUNT_LATENCY_MAX_MS = 160L
+
+        /** Coolant temperature the real car showed with the ignition on and the engine cold. */
+        const val REAL_CAR_COOLANT_C = 46.0
+
+        /**
+         * Mode 01 PIDs the real Corolla E12 2ZZ-GE reported (docs/research/esp32-obd2-lessons.md);
+         * bitmap PIDs 00 and 20 are derived. 0x0B (MAP) is absent on purpose: the 2ZZ-GE uses a MAF.
+         */
         val DEFAULT_SUPPORTED_PIDS: Set<Int> = setOf(
             0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0C, 0x0D, 0x0E, 0x0F,
-            0x10, 0x11, 0x13, 0x14, 0x15, 0x1C, 0x20,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x1C, 0x20, 0x21,
         )
     }
 }
