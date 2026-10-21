@@ -395,6 +395,25 @@ class ObdPollSchedulerTest {
     }
 
     @Test
+    fun `an adapter that hangs on the response count falls back instead of timing out forever`() = runTest {
+        val link = FakeLink { command ->
+            if (command.length == 5) ElmResult.Timeout("") else ecuAnswer(command, acceptsSuffix = false)
+        }
+        link.setState(ConnectionState.Connected(adapterInfo))
+        val poller = fakePoller(this, link)
+        poller.start()
+        poller.demand("screen", setOf("rpm"))
+        runCurrent()
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        val polled = link.sent.filter { it !in DETECTION_COMMANDS }
+        assertEquals(listOf("010C1", "010C"), polled.take(2))
+        assertTrue(polled.drop(2).all { it == "010C" })
+        assertEquals(1.0 * 0x1AF8 / 4, poller.readings.value.getValue("rpm").value, 0.001)
+    }
+
+    @Test
     fun `an adapter that rejects the response count falls back to plain commands once`() = runTest {
         val link = FakeLink { ecuAnswer(it, acceptsSuffix = false) }
         link.setState(ConnectionState.Connected(adapterInfo))

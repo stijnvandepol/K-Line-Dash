@@ -253,7 +253,13 @@ class ObdPollScheduler(
             return
         }
         if (connection.mode == PollMode.ENGINE_OFF) {
-            poll(connection, commands.first { it.command == rpmSignal?.command })
+            val rpmCommand = commands.firstOrNull { it.command == rpmSignal?.command }
+            if (rpmCommand == null) {
+                // Without an RPM command there is no way to see the engine start again.
+                connection.mode = PollMode.ACTIVE
+                return
+            }
+            poll(connection, rpmCommand)
             if (connection.mode == PollMode.ENGINE_OFF) delay(config.engineOffCheckIntervalMs)
             return
         }
@@ -323,10 +329,12 @@ class ObdPollScheduler(
     /**
      * Sends [command]; OBD commands get a response-count digit appended ("010C" -> "010C1"). On K-line
      * the ELM327 otherwise waits out its bus timeout after the last reply to see if another ECU
-     * answers, which costs a good part of every request. Some clones answer "?" (or garbage) to the
-     * longer command; then the digit is dropped for the rest of this connection and the request is
-     * repeated without it. The digit is retried on the next connection, because a reset adapter or
-     * a different one may accept it.
+     * answers, which costs a good part of every request. Some clones answer "?" or garbage to the
+     * longer command, others hang until the timeout; any reply other than data or NO DATA on the first
+     * try therefore drops the digit for the rest of this connection and repeats the request without
+     * it. Keeping it after a timeout would make every request time out, force a reconnect and start
+     * the same loop on the next connection. The digit is retried on the next connection, because a
+     * reset adapter or a different one may accept it.
      */
     private suspend fun request(connection: Connection, command: String): ElmResult {
         if (connection.suffix == SuffixState.DISABLED || command.startsWith(AT_PREFIX, ignoreCase = true)) {
@@ -334,11 +342,11 @@ class ObdPollScheduler(
         }
         val result = transmit(command + RESPONSE_COUNT_SUFFIX)
         if (connection.suffix == SuffixState.UNTESTED) {
-            if (result is ElmResult.Unknown || result is ElmResult.Garbage) {
+            if (result !is ElmResult.Data && result !is ElmResult.NoData) {
                 connection.suffix = SuffixState.DISABLED
                 return transmit(command)
             }
-            if (result is ElmResult.Data || result is ElmResult.NoData) connection.suffix = SuffixState.CONFIRMED
+            connection.suffix = SuffixState.CONFIRMED
         }
         return result
     }
