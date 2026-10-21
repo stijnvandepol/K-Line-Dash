@@ -6,6 +6,7 @@
     <!-- Navigation -->
     <string name="nav_dashboard">Dash</string>
     <string name="nav_sensors">Sensors</string>
+    <string name="nav_diagnostics">Diag</string>
     <string name="nav_connection">Connection</string>
     <string name="nav_debug">Debug</string>
 
@@ -57,6 +58,59 @@
     <string name="sensors_column_value">Value</string>
     <string name="sensors_column_rate">Updates</string>
     <string name="sensors_rate">%1$s/s</string>
+
+    <!-- Diagnostics -->
+    <string name="diag_label_mil">Check engine</string>
+    <string name="diag_label_stored">Stored codes</string>
+    <string name="diag_label_last_read">Last read</string>
+    <string name="btn_diag_read">Read</string>
+    <string name="btn_diag_read_again">Read again</string>
+    <string name="btn_diag_clear">Clear codes</string>
+    <string name="diag_section_stored">Stored</string>
+    <string name="diag_section_pending">Pending</string>
+    <string name="diag_section_permanent">Permanent</string>
+    <string name="diag_codes_none">No codes</string>
+    <string name="diag_codes_unsupported">Not supported by this car</string>
+    <string name="diag_section_readiness">Readiness</string>
+    <string name="diag_readiness_summary">%1$d of %2$d ready</string>
+    <string name="diag_readiness_none">No monitors reported</string>
+    <string name="diag_monitor_ready">Ready</string>
+    <string name="diag_monitor_not_ready">Not ready</string>
+    <string name="diag_monitor_na">N/A</string>
+    <string name="diag_section_freeze">Freeze frame</string>
+    <string name="diag_freeze_none">No freeze frame stored</string>
+    <string name="diag_freeze_other">No freeze frame for %1$s. The car keeps one, stored for %2$s.</string>
+    <string name="diag_section_vehicle">Vehicle</string>
+    <string name="diag_vin">VIN</string>
+    <string name="diag_ecu">ECU</string>
+    <string name="diag_not_reported">Not reported by this car</string>
+    <string name="diag_not_connected">Not connected yet. Connect to the car under Connection, then read its fault codes.</string>
+    <string name="diag_reading">Reading the car…</string>
+    <string name="diag_reading_hint">Codes, readiness monitors and freeze frame. This takes several seconds on a K-line car. Keep the ignition on.</string>
+    <string name="diag_elapsed">%1$d s</string>
+    <string name="diag_clearing">Clearing codes…</string>
+    <string name="diag_clearing_hint">Keep the ignition on until this is done.</string>
+    <string name="diag_failed">The read did not finish. Check that the ignition is on and the adapter is connected, then read again.</string>
+    <string name="diag_notice_cleared">Codes cleared. The readiness monitors start over and need a drive cycle before they are ready again.</string>
+    <string name="diag_notice_refused">Codes not cleared. %1$s</string>
+    <string name="diag_notice_link_lost">The connection dropped while clearing. Read again to see what is left.</string>
+
+    <!-- Clear codes: two confirmations -->
+    <string name="btn_ok">OK</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_continue">Continue</string>
+    <string name="btn_clear_now">Clear codes now</string>
+    <string name="clear_engine_title">Turn the engine off first</string>
+    <string name="clear_engine_body">Codes can only be cleared with the ignition on and the engine off. Stop the engine, leave the ignition on, wait until RPM shows 0 and tap Clear codes again.</string>
+    <string name="clear_intro_title">Clear fault codes?</string>
+    <string name="clear_intro_what_label">What happens</string>
+    <string name="clear_intro_what">The stored and pending codes, the freeze frame and the readiness monitors are erased. The check-engine light goes off.</string>
+    <string name="clear_intro_then_label">Afterwards</string>
+    <string name="clear_intro_then">The monitors need a drive cycle before they are ready again. If the fault is still there, the codes come back.</string>
+    <string name="clear_requirements_label">Required</string>
+    <string name="clear_requirements">Ignition on, engine off.</string>
+    <string name="clear_final_title">Clear codes now?</string>
+    <string name="clear_final_body">This erases the codes, the freeze frame and the readiness monitors, and it cannot be undone. Only continue if you are sure.</string>
 
     <!-- Connection screen -->
     <string name="section_adapter_kind">Adapter type</string>

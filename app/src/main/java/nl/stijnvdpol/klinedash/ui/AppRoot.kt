@@ -83,6 +83,7 @@ fun AppRoot() {
                 when (screen) {
                     Screen.Dashboard -> DashboardScreen()
                     Screen.Sensors -> SensorsScreen(onOpenConnection = { screen = Screen.Connection })
+                    Screen.Diagnostics -> DiagnosticsScreen(onOpenConnection = { screen = Screen.Connection })
                     Screen.Connection -> ConnectionScreen(
                         onConnect = { needsBluetooth ->
                             val missing = if (needsBluetooth) missingPermissions(context, includeNotifications = false) else emptyArray<String>()

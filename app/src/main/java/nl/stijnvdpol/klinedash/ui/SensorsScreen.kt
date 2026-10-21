@@ -80,7 +80,7 @@ fun SensorsScreen(onOpenConnection: () -> Unit) {
 }
 
 @Composable
-private fun EmptyState(message: String, actionLabel: String? = null, onAction: () -> Unit = {}) {
+internal fun EmptyState(message: String, actionLabel: String? = null, onAction: () -> Unit = {}) {
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,

@@ -1,16 +1,23 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +46,8 @@ private val ButtonHorizontalPadding = 8.dp
 private val ToggleWidth = 64.dp
 private val ToggleHeight = 32.dp
 private val ToggleThumbInset = 5.dp
+private val DialogWidth = 720.dp
+private const val ScrimAlpha = 0.8f
 
 /** Section title on the Connection and Debug pages, aligned with the text of the rows below it. */
 @Composable
@@ -54,7 +64,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-private enum class ButtonKind { FILLED, OUTLINED, TEXT }
+private enum class ButtonKind { FILLED, OUTLINED, DANGER, TEXT }
 
 /** The one action a screen wants: white fill, black text. */
 @Composable
@@ -65,6 +75,11 @@ fun PrimaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modif
 @Composable
 fun SecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
     RaceButton(label, onClick, modifier, enabled, ButtonKind.OUTLINED)
+
+/** An action that erases something: 1 dp outline and text in the danger colour. */
+@Composable
+fun DangerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
+    RaceButton(label, onClick, modifier, enabled, ButtonKind.DANGER)
 
 /** Text only, for quiet actions and for cells in a grid of buttons. */
 @Composable
@@ -77,6 +92,7 @@ private fun RaceButton(label: String, onClick: () -> Unit, modifier: Modifier, e
     val textColor = when {
         !enabled -> colors.inkFaint
         kind == ButtonKind.FILLED -> colors.background
+        kind == ButtonKind.DANGER -> colors.danger
         else -> colors.ink
     }
     val fill = when {
@@ -84,10 +100,10 @@ private fun RaceButton(label: String, onClick: () -> Unit, modifier: Modifier, e
         enabled -> colors.ink
         else -> colors.surface
     }
-    val outline = if (kind == ButtonKind.OUTLINED) {
-        Modifier.border(Spacing.ruleThickness, if (enabled) colors.ink else colors.rule)
-    } else {
-        Modifier
+    val outline = when {
+        kind == ButtonKind.OUTLINED -> Modifier.border(Spacing.ruleThickness, if (enabled) colors.ink else colors.rule)
+        kind == ButtonKind.DANGER -> Modifier.border(Spacing.ruleThickness, if (enabled) colors.danger else colors.rule)
+        else -> Modifier
     }
     Box(
         modifier = modifier
@@ -202,4 +218,50 @@ fun FormTextField(
             cursorColor = colors.ink,
         ),
     )
+}
+
+/**
+ * A modal in the language of the display: black, square, a 1 dp outline and a 4 dp bar along the
+ * top edge in [accent] (ink; danger for a step that erases something). [content] sits between the
+ * title and the [actions], which are 72 dp buttons in one row. Back dismisses; a tap on the dimmed
+ * area does nothing, so a stray touch cannot answer a question.
+ *
+ * Drawn over the screen it is placed in, not in a window of its own: a second window makes some
+ * head units show their system bars. Place it last in a full-size Box.
+ */
+@Composable
+fun RaceDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Color = KLineTheme.colors.ink,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = KLineTheme.colors
+    BackHandler(onBack = onDismiss)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(colors.background.copy(alpha = ScrimAlpha))
+            .pointerInput(Unit) { detectTapGestures { } },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(modifier.width(DialogWidth).background(colors.background).border(Spacing.ruleThickness, colors.inkFaint)) {
+            Box(Modifier.fillMaxWidth().height(Spacing.markerThickness).background(accent))
+            Text(
+                title,
+                style = KLineType.title,
+                color = colors.ink,
+                modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingHorizontal),
+            )
+            content()
+            HorizontalRule()
+            Row(
+                Modifier.fillMaxWidth().padding(Spacing.fieldPaddingHorizontal),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
+                content = actions,
+            )
+        }
+    }
 }

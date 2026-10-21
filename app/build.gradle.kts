@@ -33,6 +33,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures { compose = true }
+
+    // The ViewModel tests run on the JVM, where android.util.Log has no implementation.
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 ksp {
@@ -61,4 +64,5 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

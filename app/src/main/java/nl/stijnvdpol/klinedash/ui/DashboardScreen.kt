@@ -138,7 +138,7 @@ private val FieldLabelRes = mapOf(
 
 /** Label or unit of a field: muted capitals, boxed to their cap height so they sit 12 dp from the rule. */
 @Composable
-private fun FieldCaption(text: String, modifier: Modifier = Modifier) {
+internal fun FieldCaption(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = KLineType.fieldLabel,

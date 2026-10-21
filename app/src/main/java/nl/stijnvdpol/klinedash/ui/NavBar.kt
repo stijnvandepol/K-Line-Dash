@@ -37,18 +37,19 @@ import nl.stijnvdpol.klinedash.ui.theme.accentColor
 internal enum class Screen(@StringRes val labelRes: Int) {
     Dashboard(R.string.nav_dashboard),
     Sensors(R.string.nav_sensors),
+    Diagnostics(R.string.nav_diagnostics),
     Connection(R.string.nav_connection),
     Debug(R.string.nav_debug),
 }
 
 private val NavBarHeight = 72.dp
-private const val BUTTONS_WEIGHT = 5f
+private const val BUTTONS_WEIGHT = 6f
 private const val STATUS_WEIGHT = 3f
 private const val RATE_SAMPLE = "88.8/s"
 private val StatusGap = 12.dp
 
 /**
- * Bottom bar: four text buttons separated by rules, the active one marked by a 4 dp white bar on
+ * Bottom bar: five text buttons separated by rules, the active one marked by a 4 dp white bar on
  * its top edge, and the link status at the right end. Same on every page, so the status is always
  * in the same place.
  */
