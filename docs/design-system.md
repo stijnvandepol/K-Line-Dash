@@ -319,15 +319,28 @@ Two columns, like before, but the left column is now the **session**:
   track to use (last used track, or "Choose a track"); the auto-record switch rows ("When the
   engine runs", "When the car moves (no OBD needed)").
 - **Recording a trip:** live statistics as a 2 x 3 grid of fields like the dashboard field row:
-  TIME, DISTANCE, AVG KM/H, MAX KM/H, MAX RPM, FUEL (estimate, `caption` "est."). Below: "Stop".
+  TIME, DISTANCE, AVG KM/H, MAX KM/H, MAX RPM, FUEL (estimate, `caption` "est."). Below, side by
+  side as 72 dp outline cells: "Stop" and "Start lap timing". The second turns the trip that is
+  already running (typically one the engine started) into a lap session, without a new file: the
+  panel switches to the lap session below, timed on the active track if one is set, otherwise
+  starting with "Set start/finish here".
 - **Lap session:** CURRENT LAP as the hero numeral (`primaryValue`, `m:ss.s`), under it LAST and
   BEST (`fieldValue`) and DELTA to best (`fieldValue`, `ok` when faster, `danger` when slower,
   with a sign), then the lap count and sector splits of the current lap in a row. While no
   start/finish line exists: "Set start/finish here" (white fill) with the hint "Drive across the
   line at a steady speed and tap when you pass it." It needs a GPS fix with accuracy ≤ 15 m;
-  otherwise the button explains why it is disabled.
+  otherwise the button explains why it is disabled. Once the line exists, "Add sector here" and
+  "Stop" sit side by side (72 dp outline cells), with the reason under them while the lines cannot
+  be set. A new sector line keeps the lap clock running; only a new start/finish line restarts lap
+  timing.
+- **Active track:** the track lap timing runs for. A lap session makes its track the active one
+  only while it runs: when its trip ends the track is released, so the next trip (also an automatic
+  one) is a plain trip, and the idle panel offers the track again as the last used one. USE under
+  GPS & Tracks makes a track active outside a session; ACTIVE there switches it off again.
 - The right column keeps the trip list (newest first): date, duration, distance, and for lap
-  sessions the track name, lap count and best lap. Tapping a row opens the trip detail.
+  sessions a second line in `caption` with the track name, lap count and best lap. The phase 4
+  max RPM column is gone: the list is narrower next to the session panel, and max rpm is in the
+  trip detail. Tapping a row opens the trip detail.
 
 ### Trip detail
 
@@ -339,11 +352,16 @@ A full page (back arrow cell top-left, 72 dp) with three parts:
 - **Left:** the route as a line (2 dp, `ink`) on `surface`, scaled to fit, north up, no map tiles
   (offline). Start/finish and sector gates as short `accent` bars; the selected lap's part in
   `accent`, the rest in `inkFaint`.
-- **Right:** a statistics table (TripStats) and, for lap sessions, the lap table: lap number,
-  lap time, delta to best, max speed, max RPM, full-throttle %, in tabular slots; the best lap
-  marked with `ok` text "BEST". Selecting a lap highlights it on the route and shows its sectors.
-  Under the tables one graph (speed and RPM over time or distance for the selected lap, the same
-  style as the dashboard Graph cell).
+- **Right** (scrolls on its own): a statistics table (TripStats) and, for lap sessions, the lap
+  table: lap number, lap time, delta to best, max speed, max RPM, full-throttle %, in tabular
+  slots; the best lap marked with `ok` text "BEST", a lap that cannot be trusted (GPS dropout or a
+  jump in the positions during the lap) with `inkMuted` "NO GPS"; such a lap is never the best.
+  The best lap is selected when the page opens (the first lap when none is valid). Selecting a lap
+  highlights it on the route and shows its sectors. Under the tables the graph of the selected
+  lap, in the style of the dashboard Graph cell: two plots stacked, KM/H above RPM, each with its
+  own axis labels and "MAX" value top-right, sharing one time axis from the start crossing to the
+  lap time, whose two ends are captioned under the plots. Two plots instead of one with two
+  scales: a single plot would need a second axis, which reads badly at this size.
 
 ### GPS & Tracks (SETUP > GPS & Tracks)
 

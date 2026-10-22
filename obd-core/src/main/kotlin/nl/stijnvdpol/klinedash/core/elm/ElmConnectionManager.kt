@@ -56,8 +56,10 @@ data class BackoffPolicy(
  * forever with [backoff], because the usual cause is the driver simply not having the ignition
  * on yet. A [SecurityException] (missing Bluetooth permission) is not retryable and ends in
  * [ConnectionState.Failed]. So does an [UnsupportedAdapterException] (an app-locked dongle that
- * never answers), but only until this manager has completed an init once: after that, silence is a
- * drop-out like any other and is retried. A fresh transport comes from [transportFactory] for
+ * never answers), but only for an adapter that never completed an init: not since this manager
+ * started, and without a saved protocol from an earlier run. For one that did, silence is a
+ * drop-out like any other (an adapter still booting, a head unit that woke before the car) and is
+ * retried. A fresh transport comes from [transportFactory] for
  * every attempt.
  *
  * [execute] rethrows the [TransportException] that killed the link, so a poller can stop its
@@ -189,7 +191,8 @@ class ElmConnectionManager(
             } catch (e: UnsupportedAdapterException) {
                 reason = e.message ?: "Adapter not supported"
                 log.record(LogKind.ERROR, "Unsupported adapter: $reason")
-                if (!hasConnectedBefore) {
+                // A saved protocol means this adapter completed an init in an earlier run of the app.
+                if (!hasConnectedBefore && loadSavedProtocol() == null) {
                     _state.value = ConnectionState.Failed(reason, FailureKind.UNSUPPORTED_ADAPTER)
                     return
                 }

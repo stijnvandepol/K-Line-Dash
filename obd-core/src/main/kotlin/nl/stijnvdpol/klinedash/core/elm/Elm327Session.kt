@@ -260,16 +260,16 @@ class Elm327Session(
 
     /** ATZ, retried once: many clones swallow the first one right after power-up. */
     private suspend fun resetAdapter() {
-        var last: ElmResult? = null
+        var hasAnswered = false
         repeat(RESET_ATTEMPTS) { attempt ->
             val r = execute("ATZ", RESET_TIMEOUT_MS)
-            last = r
             if (r is ElmResult.Data) return
+            if (r !is ElmResult.Timeout) hasAnswered = true
             log.record(LogKind.INFO, "ATZ attempt ${attempt + 1} failed (${describe(r)})")
             delay(RETRY_PAUSE_MS)
         }
-        if (last is ElmResult.Timeout) {
-            // No prompt at all, twice: the link is up but nothing ELM327-like is on the other end.
+        if (!hasAnswered) {
+            // No prompt at all on any attempt: the link is up but nothing ELM327-like is on the other end.
             throw UnsupportedAdapterException(LOCKED_ADAPTER_MESSAGE)
         }
         // Garbage/"?" on both tries: carry on, the next command tells whether the adapter is alive.

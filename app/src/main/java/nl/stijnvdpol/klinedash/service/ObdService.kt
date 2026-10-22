@@ -249,6 +249,8 @@ class ObdService : LifecycleService() {
         ) { isVisible, _, recording, _ -> isVisible to recording }
             .collectLatest { (isVisible, recording) ->
                 location.refresh()
+                // The hub may have moved running updates over to the device GPS (simulator switched off).
+                if (isVisible && location.isRunning && location.usesDeviceGps) addLocationForegroundType()
                 when (decideGpsAction(isVisible, location.canStart(), location.isRunning, recording)) {
                     GpsAction.START -> startLocation(location)
                     GpsAction.STOP -> location.stop()

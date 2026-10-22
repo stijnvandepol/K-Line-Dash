@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.service
 
+import android.database.SQLException
 import android.util.Log
 import java.io.File
 import java.io.IOException
@@ -58,12 +59,15 @@ private fun File.endsWithNewline(): Boolean = RandomAccessFile(this, "r").use { 
  * Finishes trips whose row still has no end time. With the app just started none of them can be
  * recording, so they were cut off by a power loss or a crash. The end time, sample count, distance
  * and maxima come from the CSV file (see [recoverTripSummary]); a trip whose file is missing or has
- * no complete row is removed, because there is nothing to export.
+ * no complete row is removed, because there is nothing to export. A trip with a track (a lap session
+ * cut off by the ignition, the usual end on a head unit) gets its lap count and best lap from
+ * [refreshSummary], like a trip that ended normally.
  */
 internal class TripRecovery(
     private val tripsDir: File,
     private val tripDao: TripDao,
     private val ioDispatcher: CoroutineDispatcher,
+    private val refreshSummary: suspend (tripId: Long) -> Unit = {},
 ) {
     /** Recovers every unfinished trip except [activeTripId] (the one being recorded right now). */
     suspend fun recover(activeTripId: Long?) {
@@ -97,8 +101,17 @@ internal class TripRecovery(
             maxSpeedKmh = stats.maxSpeedKmh,
             maxCoolantC = stats.maxCoolantC,
         )
-        // Laps (if the trip has a track) are filled in when the trip is analysed.
         tripDao.updateSummary(trip.id, tripSummaryCache(stats, laps = null, hasGps = recovered.hasGps))
+        if (trip.trackId != null) refreshLapSummary(trip.id)
+    }
+
+    /** The row is finished already; without the laps the list only lacks the lap count until the track changes. */
+    private suspend fun refreshLapSummary(tripId: Long) {
+        try {
+            refreshSummary(tripId)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Could not refresh the lap summary of recovered trip $tripId", e)
+        }
     }
 
     private fun readTrip(file: File): RecoveredTrip? =

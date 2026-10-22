@@ -167,6 +167,25 @@ class ElmConnectionManagerTest {
     }
 
     @Test
+    fun `an adapter with a saved protocol that is silent at start is retried`() = runTest {
+        var created = 0
+        val config = SimulatorConfig().apply { timeoutRate = 1.0 }
+        val manager = ElmConnectionManager(
+            { created++; SimulatorTransport(config) }, "sim", FakeProtocolStore(mapOf("sim" to "3")), backgroundScope,
+            random = Random(1),
+        )
+        manager.start()
+        val reconnecting = assertIs<ConnectionState.Reconnecting>(
+            withTimeout(60_000) { manager.state.first { it is ConnectionState.Reconnecting || it is ConnectionState.Failed } },
+        )
+        assertEquals(LOCKED_ADAPTER_MESSAGE, reconnecting.reason)
+
+        config.timeoutRate = 0.0
+        withTimeout(120_000) { manager.state.first { it is ConnectionState.Connected } }
+        assertTrue(created >= 2)
+    }
+
+    @Test
     fun `silence after an adapter has worked is retried like any drop`() = runTest {
         var created = 0
         val config = SimulatorConfig()

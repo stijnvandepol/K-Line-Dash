@@ -412,7 +412,8 @@ class ObdPollScheduler(
         val result = request(connection, batch.command)
         val now = clock()
         connection.window.recordRequest(now)
-        val blocks = (result as? ElmResult.Data)?.let { MultiPidResponse.split(it, pidDataLengths) }.orEmpty()
+        val requested = batch.members.mapNotNull { it.pid }.associateWith { pidDataLengths.getValue(it) }
+        val blocks = (result as? ElmResult.Data)?.let { MultiPidResponse.split(it, requested) }.orEmpty()
         if (batch.members.any { member -> member.pid !in blocks }) {
             link.log.record(LogKind.INFO, "Poller: multi-PID request ${batch.command} not answered in full")
             publishStats(connection)

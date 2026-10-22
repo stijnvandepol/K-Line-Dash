@@ -6,7 +6,8 @@ package nl.stijnvdpol.klinedash.core.diag
  *  - K-line / J1850: every line is one message ("430171134900 00").
  *  - CAN (ISO 15765) multi-frame, as the ELM prints it: a three-digit length line ("00A") followed
  *    by numbered frame lines ("0:43040171...", "1:..."). The frames are joined and cut to the
- *    announced length. A numbered "0:" line without a length line starts a message too.
+ *    announced length (padding); a message with fewer bytes than announced is dropped. A numbered
+ *    "0:" line without a length line starts a message too.
  *
  * Lines that are neither are skipped; the caller sees only complete, well-formed messages.
  */
@@ -28,7 +29,9 @@ internal object ObdMessages {
             val hex = pending?.toString().orEmpty()
             if (hex.isNotEmpty()) {
                 val bytes = toBytes(hex)
-                messages += announcedLength?.let { bytes.copyOf(minOf(it, bytes.size)) } ?: bytes
+                val length = announcedLength
+                // Fewer bytes than announced: frames went missing, so the message is not whole.
+                if (length == null) messages += bytes else if (bytes.size >= length) messages += bytes.copyOf(length)
             }
             pending = null
             announcedLength = null

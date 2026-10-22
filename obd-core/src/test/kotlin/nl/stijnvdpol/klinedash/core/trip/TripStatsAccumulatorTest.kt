@@ -202,6 +202,64 @@ class TripStatsAccumulatorTest {
     }
 
     @Test
+    fun oneFixFarOffTheRoadAddsNoDistance() {
+        val samples = (0..10).map { second ->
+            val gps = if (second == 5) TestWorld.fix(t0 + 5_000L, 400.0, 100.0, speedMps = 20.0) else fixAt(second, 20.0)
+            sample(second, gps = gps)
+        }
+        // Only the two segments to and from the bad fix are lost, nothing of the jump is added.
+        assertEquals(0.16, statsOf(*samples.toTypedArray()).gpsDistanceKm, 0.001)
+    }
+
+    @Test
+    fun switchingToAPositionThousandsOfKilometresAwayAddsNoDistance() {
+        val far = (5..10).map { second -> sample(second, gps = TestWorld.fix(t0 + second * 1_000L, 8_000_000.0, second * 20.0, 20.0)) }
+        val near = (0..4).map { sample(it, gps = fixAt(it, 20.0)) }
+        assertEquals("4 + 5 segments of 20 m", 0.18, statsOf(*(near + far).toTypedArray()).gpsDistanceKm, 0.001)
+    }
+
+    @Test
+    fun aStepFarFasterThanTheReportedSpeedAddsNoDistance() {
+        val stats = statsOf(
+            sample(0, speed = 36.0, gps = fixAt(0, northM = 0.0)),
+            sample(1, speed = 36.0, gps = fixAt(1, northM = 10.0)),
+            sample(2, speed = 36.0, gps = fixAt(2, northM = 70.0)),
+            sample(3, speed = 36.0, gps = fixAt(3, northM = 80.0)),
+        )
+        // 60 m in 1 s is 216 km/h: under 300 km/h, but more than 3 x the 36 km/h the car reported.
+        assertEquals(0.02, stats.gpsDistanceKm, 0.001)
+    }
+
+    @Test
+    fun inaccurateFixesAddNoGpsDistanceAndVehicleSpeedFillsIn() {
+        val samples = (0..10).map { second ->
+            val accuracy = if (second in 4..6) 60.0 else 5.0
+            sample(second, speed = 72.0, gps = TestWorld.fix(t0 + second * 1_000L, 0.0, second * 20.0, 20.0, accuracyM = accuracy))
+        }
+        val stats = statsOf(*samples.toTypedArray())
+        assertEquals("0-3 and 7-10 by GPS", 0.12, stats.gpsDistanceKm, 0.001)
+        assertEquals("3-7 from the vehicle speed", 0.2, stats.distanceKm, 0.001)
+    }
+
+    @Test
+    fun timeRunningBackwardsStartsANewSegmentInsteadOfStoppingTheCount() {
+        // The unit's clock is an hour behind GPS time; the next source stamps its fixes with the unit's clock.
+        val gpsClock = t0 + 3_600_000L
+        val before = (0..4).map { second -> sample(second, gps = TestWorld.fix(gpsClock + second * 1_000L, 0.0, second * 20.0, 20.0)) }
+        val after = (5..10).map { sample(it, gps = fixAt(it, 20.0)) }
+        assertEquals(0.18, statsOf(*(before + after).toTypedArray()).gpsDistanceKm, 0.001)
+    }
+
+    @Test
+    fun aNewGpsSegmentDoesNotJoinTheFixesAcrossIt() {
+        val accumulator = TripStatsAccumulator()
+        (0..4).forEach { accumulator.add(sample(it, gps = fixAt(it, 20.0))) }
+        accumulator.startNewGpsSegment()
+        (5..10).forEach { accumulator.add(sample(it, gps = fixAt(it, 20.0))) }
+        assertEquals(0.18, accumulator.stats()!!.gpsDistanceKm, 0.001)
+    }
+
+    @Test
     fun tripSampleOfDropsStaleAndNonFiniteReadings() {
         val readings = mapOf(
             "rpm" to nl.stijnvdpol.klinedash.core.obd.Reading("rpm", 2000.0, t0 - 1_000),

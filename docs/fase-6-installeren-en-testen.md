@@ -118,8 +118,8 @@ Daarna het rondeklokje:
   ronde op dezelfde plek, **groen** en met min als je voor ligt, **rood** en met plus als je achter ligt) en
   **LAPS** (voltooide ronden).
 - Eronder de **sectortijden** van de lopende ronde (**S1**, **S2**, ...). Een sectorlijn zet je met
-  **ADD SECTOR HERE**, op dezelfde manier als de startlijn. Na het zetten van een lijn begint de klok
-  opnieuw: het eerste passeren van de startlijn start ronde 1.
+  **ADD SECTOR HERE**, op dezelfde manier als de startlijn; de klok loopt daarbij gewoon door. Na het
+  zetten van een nieuwe startlijn begint de klok opnieuw: het eerste passeren ervan start ronde 1.
 - **STOP** beëindigt de rit en daarmee de sessie; het circuit blijft bewaard als "laatst gebruikt".
 
 Hoe de ronden geteld worden (zoals in de kern, zie `docs/research/gps-laps-export.md`): de lijn telt alleen in de
@@ -217,7 +217,8 @@ De emulator "headunit" (1280 x 720) en de simulator zijn genoeg voor bijna alles
    groen als je op dezelfde plek eerder bent dan je beste ronde, rood als je later bent. Laat minstens
    drie ronden lopen.
 6. **Sector.** Tik tijdens een ronde, terwijl de auto rijdt, **ADD SECTOR HERE**: "Sector line added." De klok
-   begint opnieuw en onder de cijfers staat **S1 --**; na de volgende passage verschijnt de sectortijd.
+   loopt door (hij begint niet opnieuw) en onder de cijfers staat **S1 --**; na de volgende passage verschijnt de
+   sectortijd.
 7. **Stop.** Tik **STOP**. In de lijst staat de rit met circuit, ronden en beste ronde. Onder **SETUP > GPS & Tracks**
    staat **USE** weer bij het circuit.
 8. **Hernoemen.** Wacht tot de auto stilstaat (de knop **RENAME** wordt wit), tik hem, typ een naam en
@@ -316,13 +317,16 @@ Neem bij elk probleem het debuglog mee (**SETUP > Debug > Export log**) en notee
 ## Bekende beperkingen fase 6
 
 - Een rit start zonder adapter alleen met een GPS-fix; zonder beide meldt de app waarom.
-- Een gewijzigde of toegevoegde lijn tijdens een rit zet de live rondeklok terug naar nul (de eerstvolgende passage
-  van de startlijn begint ronde 1). In het ritdetail zijn de ronden wel opnieuw uit het hele bestand berekend en staan
-  de eerdere ronden er dus bij.
+- Een nieuwe startlijn tijdens een rit zet de live rondeklok terug naar nul (de eerstvolgende passage van de startlijn
+  begint ronde 1); een toegevoegde sectorlijn niet. In het ritdetail zijn de ronden opnieuw uit het hele bestand
+  berekend en staan de eerdere ronden er dus bij.
 - Een circuit kiezen tijdens een gewone rit kan alleen via **USE** onder **SETUP > GPS & Tracks**; de rondeklok begint dan
   op dat moment. Bij het starten van een rondensessie gebruik je de keuze bij **TRACK**.
 - Een ritdetail toont de route en de grafiek van één ronde per keer; er is geen vergelijking van twee ronden.
 - De VBO is nog niet met Circuit Tools en RaceChrono gecontroleerd (zie de test hierboven). Het GPS-teken en de
   rondetijden hangen af van de GPS van de unit: bij 1 fix per seconde is een rondetijd ongeveer 0,2 seconde onnauwkeurig.
-- Gebruik je de simulator met de gesimuleerde ronde, schakel dan niet tijdens een rit tussen de gesimuleerde ronde en
-  de GPS van het apparaat: de sprong in positie telt als afstand mee (een rit van duizenden kilometers).
+- Schakel je tijdens een rit tussen de gesimuleerde ronde en de GPS van het apparaat, dan telt de sprong in positie
+  niet als afstand mee, en de ronde die op dat moment liep vervalt (de volgende passage van de startlijn begint een
+  nieuwe ronde). Een losse foute GPS-positie (een stap die meer dan 300 km/h, of meer dan drie keer de gemeten
+  snelheid, zou betekenen) of een positie met een nauwkeurigheid slechter dan 20 m telt ook niet mee als afstand; een
+  ronde waarin zo'n sprong zit staat in het ritdetail als **NO GPS**.

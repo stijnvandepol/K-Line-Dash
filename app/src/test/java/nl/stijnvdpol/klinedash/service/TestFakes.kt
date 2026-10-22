@@ -160,7 +160,7 @@ class FakeSettingsDao : SettingsDao {
 }
 
 /** A location source the test moves by hand; a fix is fresh until [isStale] is set. */
-class FakeLocationSource(override val usesDeviceGps: Boolean = true) : LocationSource {
+class FakeLocationSource(override var usesDeviceGps: Boolean = true) : LocationSource {
     override val fix = MutableStateFlow<GeoFix?>(null)
     override val status = MutableStateFlow<GpsStatus>(GpsStatus.Idle)
     override var isRunning = false

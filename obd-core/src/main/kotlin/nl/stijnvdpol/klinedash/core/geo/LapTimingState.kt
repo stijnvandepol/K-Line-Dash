@@ -3,7 +3,8 @@ package nl.stijnvdpol.klinedash.core.geo
 /**
  * What the lap timer shows right now.
  *
- * @property isTiming true between the first start/finish crossing and the end of the data.
+ * @property isTiming true from the first start/finish crossing on (again from the next crossing after
+ *   the location source changed, see [LapDetector.startNewSegment]).
  * @property currentLapElapsedMs time since the current lap started, up to the latest fix.
  * @property currentSplitsMs elapsed time at each sector gate already crossed in the current lap.
  * @property lapCount completed laps, valid or not.

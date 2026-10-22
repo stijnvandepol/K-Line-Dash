@@ -38,15 +38,40 @@ class MultiPidResponseTest {
     }
 
     @Test
-    fun `a truncated last block is dropped but the complete ones stay`() {
-        val blocks = MultiPidResponse.split(data("410C1AF80D"), lengths)
-        assertEquals(setOf(0x0C), blocks.keys)
+    fun `a message cut short is dropped whole`() {
+        assertTrue(MultiPidResponse.split(data("410C1AF80D"), lengths).isEmpty())
     }
 
     @Test
-    fun `a pid of unknown length ends the split`() {
-        val blocks = MultiPidResponse.split(data("410C1AF8FF123405" + "40"), lengths)
-        assertEquals(setOf(0x0C), blocks.keys)
+    fun `a pid that was not requested drops the whole message`() {
+        assertTrue(MultiPidResponse.split(data("410C1AF8FF123405" + "40"), lengths).isEmpty())
+    }
+
+    @Test
+    fun `an ecu sending another length than j1979 cannot shift values into the wrong pid`() {
+        // Speed (0D) with two bytes instead of one: read naively, "05" would become coolant = 5 - 40 °C.
+        val requested = mapOf(0x0C to 2, 0x0D to 1, 0x05 to 1)
+        assertTrue(MultiPidResponse.split(data("410C1AF80D3C05" + "0578"), requested).isEmpty())
+    }
+
+    @Test
+    fun `a pid that appears twice in one message drops it`() {
+        assertTrue(MultiPidResponse.split(data("410D3C0D3C"), lengths).isEmpty())
+    }
+
+    @Test
+    fun `two ecus each answering their own pids are both used`() {
+        val requested = mapOf(0x0C to 2, 0x0D to 1, 0x05 to 1)
+        val blocks = MultiPidResponse.split(data("410C1AF8057B", "410D3C"), requested)
+        assertEquals(setOf(0x0C, 0x05, 0x0D), blocks.keys)
+        assertArrayEquals(intArrayOf(0x3C), blocks.getValue(0x0D))
+    }
+
+    @Test
+    fun `interleaved multi frame answers of two ecus are not mixed into values`() {
+        // Without headers the ELM prints both first frames, then both second frames.
+        val blocks = MultiPidResponse.split(data("008", "0:410C1AF80D3C", "0:410C0BB80D10", "1:1180", "1:1120"), lengths)
+        assertTrue("got ${blocks.keys}", blocks.isEmpty())
     }
 
     @Test

@@ -60,13 +60,13 @@ private fun seriesOf(trace: LapTrace, valueOf: (TracePoint) -> Double?): TraceSe
 /**
  * Speed and rpm of one lap over its time, in the style of the dashboard graph cell: label top-left,
  * a 2 dp `ink` line between two rules, the ends of the value axis ([graphAxis]) at the left edge of
- * the plot. The time axis runs from 0 to the end of the lap; both plots share it.
+ * the plot. The time axis runs from the start to the end of the lap (its lap time); both plots share it.
  */
 @Composable
 internal fun LapTraceGraph(trace: LapTrace, modifier: Modifier = Modifier) {
     val speed = remember(trace) { seriesOf(trace) { it.speedKmh } }
     val rpm = remember(trace) { seriesOf(trace) { it.rpm } }
-    val durationMs = trace.points.lastOrNull()?.elapsedMs ?: 0L
+    val durationMs = trace.lapTimeMs
     Column(modifier) {
         TracePlot(SPEED_ID, speed, durationMs, Modifier.fillMaxWidth().height(PlotHeight + Spacing.touchMin / 2))
         TracePlot(RPM_ID, rpm, durationMs, Modifier.fillMaxWidth().height(PlotHeight + Spacing.touchMin / 2))

@@ -359,8 +359,8 @@
     <string name="session_laps">Laps</string>
     <string name="detail_back">&#8592; Back</string>
     <string name="detail_export">Export for PC</string>
-    <string name="detail_loading">Reading the trip...</string>
-    <string name="detail_exporting">Writing the files...</string>
+    <string name="detail_loading">Reading the trip&#8230;</string>
+    <string name="detail_exporting">Writing the files&#8230;</string>
     <string name="detail_export_hint">Choose a format. The files are made from the trip and its track as they are now.</string>
     <string name="detail_export_where">Get them off the head unit with the Wi-Fi export or Copy to USB on the Trips page.</string>
     <string name="detail_route_description">The driven route, north up</string>

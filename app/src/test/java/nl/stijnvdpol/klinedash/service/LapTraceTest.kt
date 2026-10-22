@@ -20,8 +20,10 @@ class LapTraceTest {
         val trace = lapTraceOf(readTripCsv(driven().reader()).samples, lap)
         // 100 s at 5 fixes a second; the lap contains its start, not its end.
         assertEquals(500, trace.points.size)
-        assertEquals(0, trace.points.first().elapsedMs)
-        assertEquals(99_800, trace.points.last().elapsedMs)
+        assertEquals(lap.lapTimeMs, trace.lapTimeMs)
+        assertTrue(trace.points.all { it.elapsedMs in 0 until lap.lapTimeMs })
+        assertTrue("the first fix comes within one fix interval of the start", trace.points.first().elapsedMs < 200)
+        assertTrue("the last fix within one interval of the end", lap.lapTimeMs - trace.points.last().elapsedMs <= 200)
     }
 
     @Test
@@ -47,7 +49,7 @@ class LapTraceTest {
         val lap = analyzeTrip(readTripCsv(csv.reader()).samples, gates).laps.first().lap
         val trace = lapTraceOf(readTripCsv(csv.reader()).samples, lap)
         assertTrue(trace.points.size <= MAX_TRACE_POINTS)
-        assertEquals(359_800, trace.points.last().elapsedMs)
+        assertTrue(lap.lapTimeMs - trace.points.last().elapsedMs <= 200)
         assertTrue(trace.points.zipWithNext().all { (a, b) -> a.elapsedMs < b.elapsedMs })
     }
 

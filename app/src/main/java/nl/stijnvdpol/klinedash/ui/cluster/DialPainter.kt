@@ -197,10 +197,12 @@ internal class NeedlePainter(private val diameter: Float, private val scale: Arc
         close()
     }
 
+    private val halo = Stroke(NEEDLE_HALO * unit)
+
     fun draw(scope: DrawScope, value: Float) = with(scope) {
         translate(center.x, center.y) {
             rotate(scale.angleDeg(value.toDouble()), Offset.Zero) {
-                drawPath(needle, colors.face, style = Stroke(NEEDLE_HALO * unit))
+                drawPath(needle, colors.face, style = halo)
                 drawPath(needle, colors.needle)
             }
         }

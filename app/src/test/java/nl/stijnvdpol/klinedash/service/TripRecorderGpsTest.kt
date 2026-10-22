@@ -13,9 +13,12 @@ import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
+import nl.stijnvdpol.klinedash.core.geo.Geodesy
+import nl.stijnvdpol.klinedash.core.geo.LatLon
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.trip.readTripCsv
+import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.TripSettings
 import org.junit.Assert.assertEquals
@@ -198,6 +201,83 @@ class TripRecorderGpsTest {
         assertEquals(StartResult.Started, recorder.start())
         assertEquals(1L, tripDao.rows.value.single().trackId)
         assertEquals(1L, recorder.live.value.trackId)
+        recorder.stop()
+    }
+
+    @Test
+    fun aLapSessionCutOffByThePowerGetsItsLapsWhenRecovered() = runTest {
+        trackDao.insert(circuitTrack(id = 0))
+        tripsDir.mkdirs()
+        val fileName = "trip-20261022-140307.csv"
+        // Three laps at 72 km/h, the last row cut off in the middle as a power loss leaves it.
+        File(tripsDir, fileName).writeText(tripCsvOf(circuitFixes(72.0, 320_000)).dropLast(5), Charsets.UTF_8)
+        tripDao.insert(
+            nl.stijnvdpol.klinedash.data.Trip(
+                startMs = TEST_BASE_MS, endMs = null, fileName = fileName, sampleCount = 0, distanceKm = 0.0,
+                maxRpm = null, maxSpeedKmh = null, maxCoolantC = null, trackId = 1,
+            ),
+        )
+
+        recorder(NoLocation).recoverUnfinished()
+
+        val trip = tripDao.rows.value.single()
+        assertNotNull(trip.endMs)
+        assertEquals(3, trip.lapCount)
+        assertEquals(100_000.0, checkNotNull(trip.bestLapMs).toDouble(), 500.0)
+    }
+
+    @Test
+    fun addingASectorLineWhileTimingKeepsTheLapClockRunning() = runTest {
+        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime })
+        trackDao.insert(circuitTrack(id = 0))
+        activeTrack.value = trackDao.get(1)
+        val recorder = recorder(source)
+        backgroundScope.launch { recorder.run() }
+        source.start()
+        driveAt(72.0)
+        runCurrent()
+        assertEquals(StartResult.Started, recorder.start())
+        repeat(30) {
+            driveAt(72.0)
+            advanceTimeBy(1_000)
+        }
+        val elapsedBefore = checkNotNull(recorder.live.value.lapTiming?.currentLapElapsedMs)
+        assertTrue(elapsedBefore > 20_000)
+
+        val sector = testCircuit.pointAt(1_000.0).let { (point, heading) -> GateSpec(point.lat, point.lon, heading) }
+        activeTrack.value = circuitTrack(id = 1, sectors = listOf(sector))
+        driveAt(72.0)
+        advanceTimeBy(1_000)
+
+        val timing = checkNotNull(recorder.live.value.lapTiming)
+        assertTrue("the lap clock went on: ${timing.currentLapElapsedMs}", checkNotNull(timing.currentLapElapsedMs) > elapsedBefore)
+        recorder.stop()
+    }
+
+    @Test
+    fun switchingTheLocationSourceAddsNoDistanceBetweenTheTwo() = runTest {
+        val location = FakeLocationSource(usesDeviceGps = true)
+        val recorder = recorder(location)
+        backgroundScope.launch { recorder.run() }
+        var northM = 0.0
+        fun moveTo(step: Int) {
+            val at = Geodesy.destination(LatLon(51.0, 5.0), 0.0, northM)
+            location.fix.value = GeoFix(TEST_BASE_MS + step * 1_000L, at.lat, at.lon, 25.0, 0.0, 4.0, 10)
+            driveAt(90.0)
+        }
+        moveTo(0)
+        assertEquals(StartResult.Started, recorder.start())
+        for (step in 1..11) {
+            advanceTimeBy(1_000)
+            // At step 6 the other source takes over 70 m on: a plausible step at 90 km/h, but not driven.
+            northM += if (step == 6) 70.0 else 25.0
+            if (step == 6) location.usesDeviceGps = false
+            moveTo(step)
+        }
+        advanceTimeBy(1_000)
+
+        val stats = checkNotNull(recorder.live.value.stats)
+        assertEquals(northM - 70.0, stats.gpsDistanceKm * 1_000.0, 1.0)
         recorder.stop()
     }
 }

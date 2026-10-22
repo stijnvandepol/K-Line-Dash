@@ -112,6 +112,7 @@ private class ArcStatic(
     private val layout = ArcLayout(size.width, size.height)
     private val strip = LightStrip(size.width, layout, margin)
     private val stroke = layout.radius * STROKE_SHARE
+    private val segments = ArcSegments(layout, stroke)
     private val numeralStyle = with(density) { numeralStyle(numerals, (layout.radius * NUMERAL_SIZE_SHARE).toSp()) }
     private val captionStyle = with(density) { numeralStyle(numerals, (layout.radius * CAPTION_SIZE_SHARE).toSp()) }
     private val numeralTexts = (0..RPM_BAR_SEGMENTS * SEGMENT_RPM / SCALE_STEP_RPM).map { thousand ->
@@ -134,22 +135,37 @@ private class ArcStatic(
             drawRect(colors.lightColour(i), topLeft, lightSize, UNLIT_ALPHA)
         }
         for (i in 0 until RPM_BAR_SEGMENTS) {
-            drawArcSegment(layout, stroke, i, colors.surface, 1f)
+            drawArcSegment(segments, i, colors.surface, 1f)
             val zone = rpmZone(i * SEGMENT_RPM)
-            if (zone != RpmZone.NORMAL) drawArcSegment(layout, stroke, i, colors.zoneColour(zone), UNLIT_ALPHA)
+            if (zone != RpmZone.NORMAL) drawArcSegment(segments, i, colors.zoneColour(zone), UNLIT_ALPHA)
         }
         numeralTexts.forEach { (text, at) -> drawText(text, colors.inkMuted, at) }
         captionTexts.forEach { (text, at) -> drawText(text, colors.inkMuted.copy(alpha = CAPTION_ALPHA), at) }
     }
 }
 
-private fun DrawScope.drawArcSegment(layout: ArcLayout, stroke: Float, index: Int, color: Color, alpha: Float) {
-    val (start, sweep) = segmentArc(ArcTach, index, RPM_BAR_SEGMENTS, SEGMENT_GAP_DEG)
-    val middle = layout.radius - stroke / 2f
+/** Where the tachometer segments go, worked out once per size so that drawing a frame allocates nothing. */
+private class ArcSegments(layout: ArcLayout, strokeWidth: Float) {
+    private val middle = layout.radius - strokeWidth / 2f
+    val topLeft = Offset(layout.centerX - middle, layout.centerY - middle)
+    val size = Size(middle * 2, middle * 2)
+    val stroke = Stroke(strokeWidth)
+    val startDeg = FloatArray(RPM_BAR_SEGMENTS)
+    val sweepDeg = FloatArray(RPM_BAR_SEGMENTS)
+
+    init {
+        for (i in 0 until RPM_BAR_SEGMENTS) {
+            val (start, sweep) = segmentArc(ArcTach, i, RPM_BAR_SEGMENTS, SEGMENT_GAP_DEG)
+            startDeg[i] = start
+            sweepDeg[i] = sweep
+        }
+    }
+}
+
+private fun DrawScope.drawArcSegment(segments: ArcSegments, index: Int, color: Color, alpha: Float) {
     drawArc(
-        color, start, sweep, false,
-        Offset(layout.centerX - middle, layout.centerY - middle), Size(middle * 2, middle * 2),
-        alpha = alpha, style = Stroke(stroke),
+        color, segments.startDeg[index], segments.sweepDeg[index], false, segments.topLeft, segments.size,
+        alpha = alpha, style = segments.stroke,
     )
 }
 
@@ -157,15 +173,16 @@ private fun DrawScope.drawArcSegment(layout: ArcLayout, stroke: Float, index: In
 private class ArcLit(size: Size, private val colors: KLineColors, private val shiftRpm: Int, margin: Float) {
     private val layout = ArcLayout(size.width, size.height)
     private val strip = LightStrip(size.width, layout, margin)
-    private val stroke = layout.radius * STROKE_SHARE
+    private val segments = ArcSegments(layout, layout.radius * STROKE_SHARE)
+    private val lightSize = Size(strip.lightWidth, strip.height)
 
     fun draw(scope: DrawScope, rpm: Float, isStale: Boolean) = with(scope) {
         for (i in 0 until shiftLightCount(rpm.toDouble(), shiftRpm)) {
-            drawRect(colors.lightColour(i), Offset(strip.left(i), strip.top), Size(strip.lightWidth, strip.height))
+            drawRect(colors.lightColour(i), Offset(strip.left(i), strip.top), lightSize)
         }
         for (i in 0 until litSegmentCount(rpm.toDouble())) {
             val color = if (isStale) colors.inkFaint else colors.zoneColour(rpmZone(i * SEGMENT_RPM))
-            drawArcSegment(layout, stroke, i, color, 1f)
+            drawArcSegment(segments, i, color, 1f)
         }
     }
 }

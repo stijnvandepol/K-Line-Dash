@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.core.trip
 
+import nl.stijnvdpol.klinedash.core.geo.Gate
 import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LapDetector
 import nl.stijnvdpol.klinedash.core.geo.LapDetectorConfig
@@ -57,6 +58,18 @@ class TripAnalyzer(
             currentLap = TripStatsAccumulator()
         }
         if (detector.state.isTiming) currentLap.add(sample)
+    }
+
+    /** The location source changed: the next fix starts a new GPS segment for the trip and the laps. */
+    fun startNewGpsSegment() {
+        tripStats.startNewGpsSegment()
+        currentLap.startNewGpsSegment()
+        detector?.startNewSegment()
+    }
+
+    /** Replaces the sector gates without restarting lap timing, see [LapDetector.updateSectors]. */
+    fun updateSectors(sectors: List<Gate>) {
+        detector?.updateSectors(sectors)
     }
 
     /** Null until the first sample has been added. */

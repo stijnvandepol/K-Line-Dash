@@ -138,6 +138,69 @@ class LapDetectorTest {
     }
 
     @Test
+    fun dropoutAcrossTheLineMergesTwoLapsIntoOneInvalidLap() {
+        // Lap 2 would start at 53.66 s; the GPS is silent from 52 to 56 s.
+        val withHole = loopAtSpeed.filterNot { it.timeMs in (t0 + 52_000)..(t0 + 56_000) }
+        val laps = detectLaps(withHole, gates)
+
+        assertEquals(2, laps.size)
+        assertFalse(laps[0].isValid)
+        assertEquals(2 * 48_780.0, laps[0].lapTimeMs.toDouble(), 40.0)
+        assertTrue(laps[1].isValid)
+        assertEquals(48_780.0, laps[1].lapTimeMs.toDouble(), 20.0)
+    }
+
+    @Test
+    fun aJumpToAFarFixAddsNoLapDistanceAndInvalidatesTheLap() {
+        val jumped = loopAtSpeed.map { if (it.timeMs == t0 + 30_000) fix(it.timeMs, 5_000.0, 5_000.0, accuracyM = 5.0) else it }
+        val laps = detectLaps(jumped, gates)
+
+        assertEquals(3, laps.size)
+        assertFalse(laps[0].isValid)
+        assertTrue("only the two segments around the jump are lost: ${laps[0].distanceM}", laps[0].distanceM in 940.0..1_000.0)
+        assertEquals(48_780.0, laps[0].lapTimeMs.toDouble(), 20.0)
+        assertTrue(laps[1].isValid && laps[2].isValid)
+    }
+
+    @Test
+    fun aSourceWithAnEarlierClockKeepsTimingAfterTheSwitch() {
+        val switched = loopAtSpeed.mapIndexed { index, it -> if (index >= 70) it.copy(timeMs = it.timeMs - 3_600_000L) else it }
+        val laps = detectLaps(switched, gates)
+
+        // Lap 2 (switch at 70 s) cannot be timed across two clocks and is dropped; the next crossing starts lap 2.
+        assertEquals(listOf(1, 2), laps.map { it.number })
+        assertTrue(laps.all { it.isValid })
+        assertEquals(48_780.0, laps[1].lapTimeMs.toDouble(), 20.0)
+    }
+
+    @Test
+    fun aNewSegmentDropsTheLapInProgress() {
+        val detector = LapDetector(gates)
+        loopAtSpeed.take(20).forEach(detector::add)
+        detector.startNewSegment()
+        assertFalse(detector.state.isTiming)
+        val laps = loopAtSpeed.drop(20).mapNotNull(detector::add)
+
+        assertEquals(2, laps.size)
+        assertEquals(t0 + 53_658.0, laps[0].startMs.toDouble(), 40.0)
+        assertTrue(laps.all { it.isValid })
+    }
+
+    @Test
+    fun addingASectorGateKeepsTheLapTimerRunning() {
+        val detector = LapDetector(gates)
+        // 13 fixes reach 246 m: lap 1 has started at 100 m, the sector gate (400 m) is still ahead.
+        loopAtSpeed.take(13).forEach(detector::add)
+        val elapsedBefore = detector.state.currentLapElapsedMs
+        detector.updateSectors(listOf(TestWorld.loopSectorGate))
+
+        assertEquals(elapsedBefore, detector.state.currentLapElapsedMs)
+        val laps = loopAtSpeed.drop(13).mapNotNull(detector::add)
+        assertEquals("the same laps as with the sector gate from the start", detectLaps(loopAtSpeed, sectorGates), laps)
+        assertEquals(2, laps[0].sectorTimesMs.size)
+    }
+
+    @Test
     fun inaccurateFixesAreIgnored() {
         val garbage = fix(t0 + 30_500, 5_000.0, 5_000.0, accuracyM = 50.0)
         val withGarbage = (loopAtSpeed + garbage).sortedBy { it.timeMs }

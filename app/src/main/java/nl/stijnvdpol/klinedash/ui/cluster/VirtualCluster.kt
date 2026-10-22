@@ -157,10 +157,11 @@ private class RingStatic(
     }
 
     private fun DrawScope.drawGauge(spec: RingSpec) {
-        drawRingArc(layout, unit, spec, spec.scale.min, spec.scale.max, colors.ring, GAUGE_WIDTH)
+        val stroke = Stroke(GAUGE_WIDTH * unit)
+        drawRingArc(layout, unit, spec, spec.scale.min, spec.scale.max, colors.ring, stroke)
         if (!spec.hasZones) return
-        drawRingArc(layout, unit, spec, CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution, GAUGE_WIDTH)
-        drawRingArc(layout, unit, spec, DANGER_RPM.toDouble(), spec.scale.max, colors.danger, GAUGE_WIDTH)
+        drawRingArc(layout, unit, spec, CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution, stroke)
+        drawRingArc(layout, unit, spec, DANGER_RPM.toDouble(), spec.scale.max, colors.danger, stroke)
     }
 
     private fun DrawScope.drawTicks(spec: RingSpec, ticks: List<Tick>) {
@@ -178,13 +179,13 @@ private class RingStatic(
     }
 }
 
-private fun DrawScope.drawRingArc(layout: RingLayout, unit: Float, spec: RingSpec, from: Double, to: Double, color: Color, width: Float) {
+private fun DrawScope.drawRingArc(layout: RingLayout, unit: Float, spec: RingSpec, from: Double, to: Double, color: Color, stroke: Stroke) {
     val start = spec.scale.angleDeg(from)
     val radius = layout.radius - TRACK_WIDTH * unit / 2f
     drawArc(
         color, start, spec.scale.angleDeg(to) - start, false,
         Offset(spec.centerX - radius, layout.centerY - radius), Size(radius * 2, radius * 2),
-        style = Stroke(width * unit),
+        style = stroke,
     )
 }
 
@@ -197,18 +198,24 @@ private class LitBand(val from: Double, val to: Double, val color: Color)
 private class RingLit(size: Size, private val colors: KLineColors, private val specs: List<RingSpec>) {
     private val layout = RingLayout(size.width, size.height)
     private val unit = layout.radius / RING_REF
+    private val litStroke = Stroke(LIT_WIDTH * unit)
     private val tachBands = listOf(
         LitBand(LeftRingTach.min, CAUTION_RPM.toDouble(), colors.needle),
         LitBand(CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution),
         LitBand(DANGER_RPM.toDouble(), LeftRingTach.max, colors.danger),
     )
 
+    /** Per ring, made once, so that drawing a frame allocates nothing. */
+    private val bandsByRing = specs.map { spec ->
+        if (spec.hasZones) tachBands else listOf(LitBand(spec.scale.min, spec.scale.max, colors.needle))
+    }
+
     fun draw(scope: DrawScope, index: Int, value: Float, isStale: Boolean) = with(scope) {
         val spec = specs[index]
         val v = value.toDouble()
-        val bands = if (spec.hasZones) tachBands else listOf(LitBand(spec.scale.min, spec.scale.max, colors.needle))
-        bands.filter { v > it.from }.forEach { band ->
-            drawRingArc(layout, unit, spec, band.from, v.coerceAtMost(band.to), if (isStale) colors.inkFaint else band.color, LIT_WIDTH)
+        for (band in bandsByRing[index]) {
+            if (v <= band.from) continue
+            drawRingArc(layout, unit, spec, band.from, v.coerceAtMost(band.to), if (isStale) colors.inkFaint else band.color, litStroke)
         }
         val angle = spec.scale.angleDeg(v)
         val radius = layout.radius - TRACK_WIDTH * unit / 2f

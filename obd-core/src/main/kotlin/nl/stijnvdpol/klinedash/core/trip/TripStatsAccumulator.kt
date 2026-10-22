@@ -2,13 +2,18 @@ package nl.stijnvdpol.klinedash.core.trip
 
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
+import nl.stijnvdpol.klinedash.core.geo.GpsSegment
 
-/** What one sample says about the car, with GPS speed preferred over vehicle speed. */
+/**
+ * What one sample says about the car, with GPS speed preferred over vehicle speed. Only a fix that
+ * is fresh and accurate enough ([GpsSegment.isAccurate]) is used; any other counts as no fix.
+ */
 private class SampleMetrics(sample: TripSample) {
     val timeMs = sample.timeMs
     val obdSpeedKmh: Double? = sample.values[TripSignalIds.SPEED]
-    val hasFreshFix: Boolean = sample.gps != null && sample.timeMs - sample.gps.timeMs <= FRESH_FIX_AGE_MS
-    val speedKmh: Double? = (if (hasFreshFix) sample.gps?.speedMps?.times(KMH_PER_MPS) else null) ?: obdSpeedKmh
+    val usableFix: GeoFix? = sample.gps?.takeIf { sample.timeMs - it.timeMs <= FRESH_FIX_AGE_MS && GpsSegment.isAccurate(it) }
+    val hasFreshFix: Boolean = usableFix != null
+    val speedKmh: Double? = usableFix?.speedMps?.times(KMH_PER_MPS) ?: obdSpeedKmh
     val rpm: Double? = sample.values[TripSignalIds.RPM]
     val throttlePercent: Double? = sample.values[TripSignalIds.THROTTLE]
     val airFlowGramsPerSecond: Double? = sample.values[TripSignalIds.MAF]
@@ -41,8 +46,14 @@ private const val FUEL_LITERS_PER_HOUR_PER_MAF = 3_600.0 / (14.7 * 745.0)
  * sample. An interval longer than [maxGapMs] adds nothing (a pause is not driving). Distance sums
  * GPS fix-to-fix distances, ignoring movement while the Doppler speed says standstill (GPS drifts
  * by metres when parked), and falls back to the trapezoid of vehicle speed for intervals without
- * a fix of at most 2 s old at both ends. The up to 2 s before a GPS dropout is therefore counted
- * by neither source, and a 1 Hz fix arriving late may be counted by both; both are small.
+ * a usable fix (at most 2 s old, accurate enough) at both ends. The up to 2 s before a GPS dropout
+ * is therefore counted by neither source, and a 1 Hz fix arriving late may be counted by both;
+ * both are small.
+ *
+ * A GPS segment ends, without adding distance, where the fixes are more than 3 s apart, where time
+ * runs backwards by more than that (another clock), where the step between two fixes is not
+ * plausible ([GpsSegment.isPlausible]: a jump) and at [startNewGpsSegment] (the location source
+ * changed). The next fix then starts a new segment, so one bad fix never adds distance.
  */
 class TripStatsAccumulator(private val maxGapMs: Long = DEFAULT_MAX_GAP_MS) {
     private var firstMs: Long? = null
@@ -64,13 +75,18 @@ class TripStatsAccumulator(private val maxGapMs: Long = DEFAULT_MAX_GAP_MS) {
         val metrics = SampleMetrics(sample)
         if (firstMs == null) firstMs = sample.timeMs
         previous?.let { addInterval(it, metrics) }
-        sample.gps?.let(::addFix)
+        metrics.usableFix?.let { addFix(it, metrics.obdSpeedKmh?.div(KMH_PER_MPS)) }
         previous = metrics
         sampleCount++
         maxSpeedKmh = maxOfNullable(maxSpeedKmh, metrics.speedKmh)
         minSpeedKmh = minOfNullable(minSpeedKmh, metrics.speedKmh)
         maxRpm = maxOfNullable(maxRpm, metrics.rpm)
         maxCoolantC = maxOfNullable(maxCoolantC, sample.values[TripSignalIds.COOLANT])
+    }
+
+    /** The next fix starts a new GPS segment: nothing is added between the last fix and it. */
+    fun startNewGpsSegment() {
+        lastFix = null
     }
 
     /** Null until the first sample has been added. */
@@ -127,13 +143,15 @@ class TripStatsAccumulator(private val maxGapMs: Long = DEFAULT_MAX_GAP_MS) {
         fuelLiters = (fuelLiters ?: 0.0) + litersPerHour * intervalMs / MS_PER_HOUR
     }
 
-    private fun addFix(fix: GeoFix) {
+    private fun addFix(fix: GeoFix, obdSpeedMps: Double?) {
         val last = lastFix
-        if (last != null && fix.timeMs <= last.timeMs) return
+        // The same fix repeats in consecutive samples; one slightly out of order is dropped.
+        if (last != null && fix.timeMs <= last.timeMs && last.timeMs - fix.timeMs <= MAX_FIX_GAP_MS) return
         lastFix = fix
-        if (last == null || fix.timeMs - last.timeMs > MAX_FIX_GAP_MS) return
+        if (last == null || fix.timeMs - last.timeMs !in 1..MAX_FIX_GAP_MS) return
         val isStandingStill = fix.speedMps != null && fix.speedMps < STANDSTILL_SPEED_MPS
-        if (!isStandingStill) gpsKm += Geodesy.distanceM(last.position, fix.position) / METRES_PER_KM
+        if (isStandingStill || !GpsSegment.isPlausible(last, fix, obdSpeedMps)) return
+        gpsKm += Geodesy.distanceM(last.position, fix.position) / METRES_PER_KM
     }
 
     private fun maxOfNullable(current: Double?, candidate: Double?): Double? =

@@ -11,7 +11,7 @@ private const val KMH_PER_MPS = 3.6
 /** A lap drawn on the trip detail graph is thinned to at most this many points. */
 const val MAX_TRACE_POINTS = 1_500
 
-/** One sample of a lap: [elapsedMs] since the first sample of the lap, null where the value is unknown. */
+/** One sample of a lap: [elapsedMs] since the lap's start crossing (GPS time), null where the value is unknown. */
 data class TracePoint(val elapsedMs: Long, val speedKmh: Double?, val rpm: Double?)
 
 /**
@@ -19,8 +19,9 @@ data class TracePoint(val elapsedMs: Long, val speedKmh: Double?, val rpm: Doubl
  *
  * @property route the driven line of the lap, at most [MAX_ROUTE_POINTS] points.
  * @property points speed and rpm over the lap, at most [MAX_TRACE_POINTS] points, in time order.
+ * @property lapTimeMs the lap time, which is where the time axis of [points] ends.
  */
-data class LapTrace(val route: List<LatLon>, val points: List<TracePoint>)
+data class LapTrace(val route: List<LatLon>, val points: List<TracePoint>, val lapTimeMs: Long)
 
 /**
  * The samples of [lap] out of a trip: those whose GPS fix lies between the lap's start and end
@@ -29,11 +30,11 @@ data class LapTrace(val route: List<LatLon>, val points: List<TracePoint>)
  */
 internal fun lapTraceOf(samples: Sequence<TripSample>, lap: Lap): LapTrace {
     val inLap = samples.filter { sample -> sample.gps?.timeMs?.let { it >= lap.startMs && it < lap.endMs } == true }.toList()
-    if (inLap.isEmpty()) return LapTrace(emptyList(), emptyList())
-    val firstMs = inLap.first().timeMs
+    if (inLap.isEmpty()) return LapTrace(emptyList(), emptyList(), lap.lapTimeMs)
     val points = inLap.map { sample ->
-        val speedKmh = sample.gps?.speedMps?.times(KMH_PER_MPS) ?: sample.values[SPEED_ID]
-        TracePoint(sample.timeMs - firstMs, speedKmh, sample.values[RPM_ID])
+        val fix = checkNotNull(sample.gps)
+        val speedKmh = fix.speedMps?.times(KMH_PER_MPS) ?: sample.values[SPEED_ID]
+        TracePoint(fix.timeMs - lap.startMs, speedKmh, sample.values[RPM_ID])
     }
     var lastFixMs = Long.MIN_VALUE
     val route = ArrayList<LatLon>()
@@ -43,7 +44,7 @@ internal fun lapTraceOf(samples: Sequence<TripSample>, lap: Lap): LapTrace {
         lastFixMs = fix.timeMs
         route += fix.position
     }
-    return LapTrace(decimateRoute(route), thinPoints(points))
+    return LapTrace(decimateRoute(route), thinPoints(points), lap.lapTimeMs)
 }
 
 /** Every n-th point so that at most [MAX_TRACE_POINTS] remain; the last point is always kept. */

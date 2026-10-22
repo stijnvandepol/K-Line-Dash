@@ -33,9 +33,10 @@ data class LiveTripState(
 /**
  * The statistics of the trip in progress: one analyzer for the whole trip and, once a track is set,
  * a second one with the gates for the laps. A track can be set or changed at any moment (the user
- * presses "set start/finish here" while driving); lap timing then starts from that moment, as a
- * recomputation from the CSV would see it, because nothing before it could cross a gate that did
- * not exist yet. Not thread-safe; [TripSession] calls it under the recorder's lock.
+ * presses "set start/finish here" while driving); lap timing then starts from that moment, because
+ * nothing before it could cross a gate that did not exist yet. Only sector lines added to or
+ * changed on the same track keep the lap timer and the laps so far (a sector line does not move
+ * the start of a lap). Not thread-safe; [TripSession] calls it under the recorder's lock.
  */
 internal class LiveTripAnalysis {
     private val overall = TripAnalyzer()
@@ -48,11 +49,26 @@ internal class LiveTripAnalysis {
     var gates: LapGates? = null
         private set
 
-    /** Starts lap timing for [gates] from now on, or ends it with null. Replaces the laps of a previous track. */
+    /**
+     * Starts lap timing for [gates] from now on, or ends it with null. Replaces the laps of a previous
+     * track or start/finish line; new sector lines on the same track and line are taken over in place.
+     */
     fun setTrack(trackId: Long?, gates: LapGates?) {
+        val current = lapped
+        if (current != null && gates != null && trackId == this.trackId && gates.startFinish == this.gates?.startFinish) {
+            this.gates = gates
+            current.updateSectors(gates.sectors)
+            return
+        }
         this.trackId = trackId.takeIf { gates != null }
         this.gates = gates
         lapped = gates?.let { TripAnalyzer(it) }
+    }
+
+    /** The location source changed: no distance between the old source's last fix and the new one's first. */
+    fun startNewGpsSegment() {
+        overall.startNewGpsSegment()
+        lapped?.startNewGpsSegment()
     }
 
     fun add(sample: TripSample) {

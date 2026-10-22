@@ -8,7 +8,8 @@ package nl.stijnvdpol.klinedash.core.geo
  * @property rearmDistanceM after a start/finish crossing the car must get this far from the gate
  *   before the next crossing counts.
  * @property maxFixGapMs a longer silence between two fixes is a GPS dropout: nothing is interpolated
- *   across it and the lap in progress becomes invalid.
+ *   across it and the lap in progress becomes invalid. So does a step between two fixes that is not
+ *   plausible ([GpsSegment.isPlausible]: a jump) and time running backwards by more than this.
  * @property maxAccuracyM fixes that are less accurate than this are ignored.
  */
 data class LapDetectorConfig(
@@ -16,7 +17,7 @@ data class LapDetectorConfig(
     val minLapBestFraction: Double = 0.5,
     val rearmDistanceM: Double = 50.0,
     val maxFixGapMs: Long = 3_000L,
-    val maxAccuracyM: Double = 20.0,
+    val maxAccuracyM: Double = GpsSegment.MAX_ACCURACY_M,
 )
 
 /**
@@ -28,10 +29,12 @@ data class LapDetectorConfig(
  * ignored when it goes the wrong way, comes before the minimum lap time, or happens before the car
  * has left the gate area since the last crossing. Sector gates only count in order within a lap.
  * Fixes that are inaccurate or not newer than the previous one are ignored. A standing start that
- * jitters over the line can begin lap 1 slightly early.
+ * jitters over the line can begin lap 1 slightly early. A break in the track (dropout or jump, see
+ * [LapDetectorConfig.maxFixGapMs]) adds no distance and makes the lap in progress invalid; the lap
+ * timer keeps running. Another location source or clock ([startNewSegment]) drops the lap in progress.
  */
 class LapDetector(
-    private val gates: LapGates,
+    private var gates: LapGates,
     private val config: LapDetectorConfig = LapDetectorConfig(),
 ) {
     private class ActiveLap(val startMs: Long) {
@@ -50,17 +53,44 @@ class LapDetector(
 
     /** Processes [fix]; returns the lap that ended with it, if any. */
     fun add(fix: GeoFix): Lap? {
-        if (fix.accuracyM != null && fix.accuracyM > config.maxAccuracyM) return null
+        if (!GpsSegment.isAccurate(fix, config.maxAccuracyM)) return null
         val from = previous
-        if (from != null && fix.timeMs <= from.timeMs) return null
+        if (from != null && fix.timeMs <= from.timeMs) {
+            if (from.timeMs - fix.timeMs <= config.maxFixGapMs) return null
+            // Another clock: the lap in progress cannot be timed across it.
+            startNewSegment()
+            previous = fix
+            return null
+        }
         previous = fix
         if (from == null) return null
-        if (Geodesy.distanceM(gates.startFinish.midpoint, fix.position) > config.rearmDistanceM) isGateArmed = true
-        if (fix.timeMs - from.timeMs > config.maxFixGapMs) {
+        if (fix.timeMs - from.timeMs !in 1..config.maxFixGapMs || !GpsSegment.isPlausible(from, fix)) {
             active?.isValid = false
             return null
         }
+        if (Geodesy.distanceM(gates.startFinish.midpoint, fix.position) > config.rearmDistanceM) isGateArmed = true
         return advance(from, fix)
+    }
+
+    /**
+     * The location source changed: the next fix starts a new piece of track, and the lap in progress
+     * is dropped (its start was measured by the other source); the next start/finish crossing starts
+     * the next lap.
+     */
+    fun startNewSegment() {
+        previous = null
+        active = null
+    }
+
+    /**
+     * Replaces the sector gates and keeps the lap timer running (only a new start/finish line restarts
+     * it). The lap in progress keeps its splits when [sectors] extends the old list, as "add sector
+     * here" does; otherwise its splits start over and it gets no sector times.
+     */
+    fun updateSectors(sectors: List<Gate>) {
+        val isExtension = sectors.size >= gates.sectors.size && sectors.subList(0, gates.sectors.size) == gates.sectors
+        gates = gates.copy(sectors = sectors)
+        if (!isExtension) active?.splitsMs?.clear()
     }
 
     val state: LapTimingState

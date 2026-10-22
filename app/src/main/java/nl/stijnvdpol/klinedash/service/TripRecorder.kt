@@ -80,8 +80,10 @@ sealed interface StartResult {
  * Lap timing: the track in [activeTrack] when the trip starts, and any track set while it runs, is
  * stored with the trip and timed live (see [live]). Ending the lap session (null track) does not
  * take the laps away from the trip that is running. A trip with a track gets its cached lap count
- * and best lap recomputed from the finished CSV by [refreshSummary], because gates set or edited
- * mid-trip restart the live lap timer and the file knows all fixes.
+ * and best lap recomputed from the finished CSV by [refreshSummary], because a start/finish line set
+ * mid-trip restarts the live lap timer (an added sector line does not) and the file knows all fixes.
+ * When the location source changes during a trip (simulated circuit on or off), the GPS distance
+ * starts a new segment, so the jump between the two sources is not driven distance.
  *
  * Demand on the poller, owner "trip": while recording rpm, speed and coolant (so the summary
  * means something); otherwise only rpm when auto-record is on (to notice the engine starting).
@@ -118,12 +120,15 @@ class TripRecorder internal constructor(
 
     private val lock = Mutex()
     private val policy = AutoRecordPolicy()
-    private val recovery = TripRecovery(tripsDir, tripDao, ioDispatcher)
+    private val recovery = TripRecovery(tripsDir, tripDao, ioDispatcher, refreshSummary)
     private val motion = MotionDetector()
     private var active: Active? = null
     private var latestTrack: Track? = null
     private var demandedOn: ObdPoller? = null
     private var demandedIds: Set<String> = emptySet()
+
+    /** [LocationSource.usesDeviceGps] at the previous sample: tells the device GPS from the simulated circuit. */
+    private var sampledFromDeviceGps: Boolean? = null
 
     private val _state = MutableStateFlow<RecordingState>(RecordingState.Idle)
     val state: StateFlow<RecordingState> = _state.asStateFlow()
@@ -294,6 +299,10 @@ class TripRecorder internal constructor(
 
     private suspend fun sample(nowMs: Long, readings: Map<String, Reading>, gps: GeoFix?) {
         val current = active ?: return
+        val fromDeviceGps = location.usesDeviceGps
+        // The other source's positions are elsewhere (and its clock may differ): never join them into distance.
+        if (sampledFromDeviceGps != null && sampledFromDeviceGps != fromDeviceGps) current.session.startNewGpsSegment()
+        sampledFromDeviceGps = fromDeviceGps
         try {
             withContext(ioDispatcher) { current.session.add(nowMs, readings, gps) }
         } catch (e: IOException) {
@@ -313,6 +322,7 @@ class TripRecorder internal constructor(
     private suspend fun finishLocked() {
         val finished = active ?: return
         active = null
+        sampledFromDeviceGps = null
         _state.value = RecordingState.Idle
         _live.value = LiveTripState.Idle
         withContext(NonCancellable + ioDispatcher) {
