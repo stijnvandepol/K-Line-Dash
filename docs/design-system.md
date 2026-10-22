@@ -210,6 +210,64 @@ Two columns, grouped by what they act on:
   Then "Command": the input field with Send, and the quick commands as a grid of 72 dp cells.
   A reply appears under the grid. Everything fits in 720 dp without scrolling.
 
+## Phase 5
+
+### Themes (SETUP > Display)
+
+A theme is a JSON file that sets the colour tokens above plus one more, `accent`: the colour of
+lit RPM segments below the caution zone and of the active-page marker (Race: `#FFFFFF`, so the
+accent is invisible as a "colour" there). Status colours (`ok`, `caution`, `danger`) keep their
+meaning in every theme; a theme may only adjust their shade for contrast. Built-in themes, each
+checked for 4.5:1 label contrast on its background:
+
+| Theme | Character | background / ink / accent |
+|---|---|---|
+| Race | the default described above | `#000000` / `#FFFFFF` / `#FFFFFF` |
+| Minimal | quieter night display, grey ink, less glare | `#000000` / `#C8C8C8` / `#7FA7C9` |
+| Retro | amber vacuum-fluorescent look of an 80s cluster | `#0A0603` / `#FFB54A` / `#FF8A1F` |
+| Day | light theme for bright sun | `#F2F2F2` / `#0A0A0A` / `#0A0A0A` |
+
+The user can override `accent` with a picker of 8 swatches (no free colour wheel while driving).
+User themes are extra `*.json` files in the app's `themes` folder; invalid files are listed with
+the reason and ignored. Day/night switching: **Manual**, **Schedule** (day theme from / to a set
+time) or **Follow head unit** (Android night mode, which many head units drive from the headlight
+input). One day theme and one night theme are chosen for the automatic modes.
+
+### Dashboard pages (SETUP > Dashboard)
+
+The dashboard becomes a set of pages, swiped horizontally. There are no page dots; after a swipe
+the page name shows for 1 s at the top in `fieldLabel`. Page templates:
+
+- **Main:** the layout above; the user picks the three primary signals and the six field-row
+  signals.
+- **Grid:** 2 x 2, 3 x 2 or 3 x 3 cells; each cell is a **Number** (label, unit, big value) or a
+  **Graph** (last 60 s as a 2 dp line in `ink`, min/max labels, current value top-right).
+- **Track:** see below.
+
+The editor shows the page as a scaled preview; tapping a cell opens a list of supported signals
+(72 dp rows) and the widget type. Add page, delete page (confirm), move page left/right. Changes
+apply immediately; pages are stored as JSON in settings.
+
+### Track page
+
+For track days. RPM as the full-height numeral on the left two thirds, the RPM bar across the top,
+coolant (`primaryValue`) and speed on the right, and **peak hold** below them: max RPM and max
+speed since the last reset, with a 72 dp "Reset peaks" cell. **Shift light:** from the shift
+point (default 7 800 rpm, set in SETUP > Dashboard) the whole RPM bar and a 12 dp frame around
+the screen flash `danger` at 4 Hz. This is the one place the app flashes: on a track it is the
+convention and the point, and it only happens above the user's own shift point.
+
+### Startup (SETUP > Startup)
+
+Rows: **Start with the head unit** (boot), **Reconnect when the unit wakes up** (ACC/screen-on
+broadcasts while the service runs), **Open the dashboard on start** (needs "display over other
+apps"; the row explains and links to the permission screen when it is missing). Below that the
+ACC broadcast list (action strings in `mono`, one per 72 dp row, remove cell; "Add action" opens a
+text field) with the defaults from docs/research/headunit-autostart.md, and per action the last
+time it was received ("never" until it fires) so the user can see which one their unit sends.
+Then **Keep the app alive**: platform-specific instructions (FYT/UIS: factory settings > sleep
+whitelist; MTCD/MTCE; other) and a button to the battery-optimisation exemption.
+
 ## Writing
 
 English, plain verbs. Buttons say what happens ("Connect", "Export log"). Errors say what went
