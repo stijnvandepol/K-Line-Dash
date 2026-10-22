@@ -124,6 +124,5 @@ laps, export formats, the Wi-Fi export server and a simulator) and `:app` is the
 
 ## License
 
-**License: to be decided by the author.** Until a `LICENSE` file is added, no licence is granted
-to copy, modify or redistribute this code. The app includes open-source libraries under the
-Apache License 2.0; see SETUP > About.
+K-Line Dash is released under the [MIT License](LICENSE). The app includes open-source libraries
+under the Apache License 2.0; see SETUP > About.

@@ -599,7 +599,7 @@
     <string name="about_perm_options_h">Only if you turn them on</string>
     <string name="about_perm_options_b">Start with the head unit, display over other apps and the battery optimization exemption, all under Setup, Startup.</string>
     <string name="about_licenses_title">Open-source licenses</string>
-    <string name="about_licenses_intro">K-Line Dash is built with these open-source libraries. Test-only tools such as JUnit are not part of the app.</string>
+    <string name="about_licenses_intro">K-Line Dash itself is open source under the MIT License. It is built with these open-source libraries. Test-only tools such as JUnit are not part of the app.</string>
     <string name="about_license_show">Show the Apache License 2.0</string>
     <string name="about_license_hide">Hide the Apache License 2.0</string>
     <string name="about_crash_title">Crash reports</string>
