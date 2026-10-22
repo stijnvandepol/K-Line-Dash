@@ -15,20 +15,26 @@ import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.elm.ProtocolStore
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.AppDatabase
+import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
 import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
 import nl.stijnvdpol.klinedash.data.RoomProtocolStore
 import nl.stijnvdpol.klinedash.data.SettingsRepository
+import nl.stijnvdpol.klinedash.data.StartupSettingsRepository
+import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
 import nl.stijnvdpol.klinedash.data.TripSettingsRepository
 import nl.stijnvdpol.klinedash.service.ExportController
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.service.TripLibrary
 import nl.stijnvdpol.klinedash.service.TripRecorder
 import nl.stijnvdpol.klinedash.service.listTripFiles
+import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalogSource
+import nl.stijnvdpol.klinedash.ui.theme.ThemeLoader
 import nl.stijnvdpol.klinedash.core.export.TripFileSource
 import java.io.File
 
 private const val TAG = "AppGraph"
 private const val TRIPS_DIR_NAME = "trips"
+private const val THEMES_DIR_NAME = "themes"
 
 /** Stands in when the bundled database cannot be read: codes are then shown without text. */
 private object NoDtcDescriptions : DtcDescriptions {
@@ -49,6 +55,8 @@ class AppGraph(val appContext: Context) {
 
     val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(database.settingsDao()) }
     val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(database.settingsDao()) }
+    val dashboardLayoutRepository: DashboardLayoutRepository by lazy { DashboardLayoutRepository(database.settingsDao()) }
+    val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(database.settingsDao()) }
 
     /**
      * App-specific external storage: no permission needed, removed with the app. Null only when that
@@ -90,6 +98,21 @@ class AppGraph(val appContext: Context) {
     }
 
     suspend fun awaitDtcDescriptions(): DtcDescriptions = dtcDescriptions.await()
+
+    val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(database.settingsDao()) }
+
+    /** Where users put their own theme files; created on first use. Internal storage when no external storage exists. */
+    val themesDir: File by lazy {
+        val dir = appContext.getExternalFilesDir(THEMES_DIR_NAME) ?: File(appContext.filesDir, THEMES_DIR_NAME)
+        if (!dir.isDirectory && !dir.mkdirs()) Log.w(TAG, "Could not create the themes folder")
+        dir
+    }
+
+    /** Built-in themes (assets) and the user's files, loaded off the main thread right away. */
+    val themeCatalog: ThemeCatalogSource by lazy {
+        val loader = ThemeLoader({ id -> appContext.assets.open("$THEMES_DIR_NAME/$id.json").bufferedReader().use { it.readText() } }, themesDir)
+        ThemeCatalogSource(loader, loadScope).also { it.reload() }
+    }
 }
 
 val Context.appGraph: AppGraph

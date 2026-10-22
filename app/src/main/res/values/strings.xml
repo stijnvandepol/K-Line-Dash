@@ -115,6 +115,9 @@
     <!-- Setup -->
     <string name="setup_connection">Connection</string>
     <string name="setup_warnings">Warnings</string>
+    <string name="setup_dashboard">Dashboard</string>
+    <string name="setup_display">Display</string>
+    <string name="setup_startup">Startup</string>
     <string name="setup_debug">Debug</string>
 
     <!-- Setup: warnings -->
@@ -219,4 +222,100 @@
     <string name="value_yes">Yes</string>
     <string name="value_no">No</string>
     <string name="value_none">None</string>
+
+    <!-- Display section (themes) -->
+    <string name="display_theme_title">Theme</string>
+    <string name="display_day_theme">Day theme</string>
+    <string name="display_night_theme">Night theme</string>
+    <string name="display_your_themes">Your themes</string>
+    <string name="display_folder_hint">Copy theme files (.json) into this folder. They load when this page opens or when you reload.</string>
+    <string name="display_reload">Reload themes</string>
+    <string name="display_no_user_themes">No theme files in the folder yet.</string>
+    <string name="display_invalid_header">Ignored files</string>
+    <string name="display_mode_title">Day and night</string>
+    <string name="display_mode_manual">Manual</string>
+    <string name="display_mode_manual_hint">One theme, always</string>
+    <string name="display_mode_schedule">Schedule</string>
+    <string name="display_mode_schedule_hint">Day theme between two times</string>
+    <string name="display_mode_follow">Follow head unit</string>
+    <string name="display_mode_follow_hint">Android night mode, often set by the headlights</string>
+    <string name="display_day_starts">Day starts</string>
+    <string name="display_night_starts">Night starts</string>
+    <string name="display_now_showing">Now showing</string>
+    <string name="display_accent_title">Accent colour</string>
+    <string name="display_accent_default">Theme default</string>
+    <string name="display_earlier">Earlier</string>
+    <string name="display_later">Later</string>
+    <string name="display_swatch_description">Accent %1$s</string>
+
+    <!-- Setup: startup -->
+    <string name="startup_boot">Start with the head unit</string>
+    <string name="startup_wake">Reconnect when the unit wakes up</string>
+    <string name="startup_open_dashboard">Open the dashboard on start</string>
+    <string name="startup_overlay_needed">Opening the dashboard on its own needs \"Display over other apps\", which is not allowed yet.</string>
+    <string name="startup_allow">Allow</string>
+    <string name="startup_signals_title">Wake and sleep signals</string>
+    <string name="startup_signals_hint">The head unit announces ignition on and off with a broadcast. The time shows when each one last reached the app, so you can see which one your unit sends.</string>
+    <string name="startup_wake_group">Wake (ignition on)</string>
+    <string name="startup_sleep_group">Sleep (ignition off)</string>
+    <string name="startup_last_received">Last received</string>
+    <string name="startup_never">never</string>
+    <string name="startup_remove">Remove</string>
+    <string name="startup_action_hint">Action, e.g. com.vendor.ACCON</string>
+    <string name="startup_add_wake">Add as wake</string>
+    <string name="startup_add_sleep">Add as sleep</string>
+    <string name="startup_problem_empty">Type the action of the broadcast first.</string>
+    <string name="startup_problem_long">That action is too long (maximum length %1$d).</string>
+    <string name="startup_problem_chars">Use letters, digits, dots and underscores only.</string>
+    <string name="startup_problem_duplicate">That action is already in the list.</string>
+    <string name="startup_reset">Reset to defaults</string>
+    <string name="startup_alive_title">Keep the app alive</string>
+    <string name="startup_platform_label">Detected: %1$s</string>
+    <string name="platform_fyt">FYT / UIS head unit</string>
+    <string name="platform_mtc">MTCD / MTCE (Microntek) head unit</string>
+    <string name="platform_generic">Other Android head unit</string>
+    <string name="startup_alive_fyt">Many units force-stop apps about 20 to 30 seconds after the ignition goes off, and a stopped app gets no broadcasts until you open it by hand. Add K-Line Dash to the sleep whitelist in the factory settings (Settings, then the factory menu; the code 8888 is common but differs per firmware). Newer firmware has no list there: use the FYT Factory tool instead. Open the app once after changing the list.</string>
+    <string name="startup_alive_mtc">Add K-Line Dash to the list of programs that may run after sleep: \"Whitelist of programs to run after sleep\" in the Malaysk ROM, or the BootControl app on Microntek firmware. Open the app once by hand afterwards.</string>
+    <string name="startup_alive_generic">Look in the settings of the unit itself for autostart, a sleep whitelist or a do-not-kill list and add K-Line Dash. Many units stop the app when the ignition goes off, and it only comes back when you open it by hand. Then allow background running with the buttons below.</string>
+    <string name="startup_battery_off">Battery optimization is off for this app.</string>
+    <string name="startup_battery_on">Battery optimization is on for this app. Allow background running below.</string>
+    <string name="btn_battery_optimization">Battery optimization</string>
+    <string name="btn_overlay_permission">Display over other apps</string>
+    <string name="startup_settings_unavailable">This head unit has no screen for that setting. Use the settings of the unit itself instead.</string>
+    <string name="state_suspended">Car off. Waiting for the unit to wake up.</string>
+
+    <!-- Dashboard pages and their editor (SETUP > Dashboard) -->
+    <string name="page_main">Main</string>
+    <string name="page_grid">Grid</string>
+    <string name="page_track">Track</string>
+    <string name="track_max_rpm">Max RPM</string>
+    <string name="track_max_speed">Max km/h</string>
+    <string name="track_reset_peaks">Reset peaks</string>
+    <string name="graph_description">%1$s, graph of the last 60 seconds</string>
+    <string name="dash_pages_title">Pages</string>
+    <string name="dash_page_row">%1$d  %2$s</string>
+    <string name="dash_move_left">Move left</string>
+    <string name="dash_move_right">Move right</string>
+    <string name="dash_add_page">Add page</string>
+    <string name="dash_delete_page">Delete page</string>
+    <string name="dash_add_title">Add a page</string>
+    <string name="dash_template_main">RPM bar, three big fields, six small ones</string>
+    <string name="dash_template_grid">2 to 9 cells, each a number or a graph</string>
+    <string name="dash_template_track">Big RPM, shift light, peak hold</string>
+    <string name="dash_delete_title">Delete this page?</string>
+    <string name="dash_delete_body">%1$s is removed from the dashboard.</string>
+    <string name="dash_hint_main">Tap a field to choose its signal.</string>
+    <string name="dash_hint_grid">Tap a cell to choose its signal and whether it shows a number or a graph.</string>
+    <string name="dash_hint_track">The RPM bar and the frame of the page flash from the shift point.</string>
+    <string name="dash_grid_size">%1$d x %2$d</string>
+    <string name="dash_shift_point">Shift point</string>
+    <string name="dash_pick_title">Choose a signal</string>
+    <string name="dash_pick_not_connected">Not connected, so every signal is listed. The ones the car does not report stay empty.</string>
+    <string name="widget_number">Number</string>
+    <string name="widget_graph">Graph</string>
+    <string name="preview_rpm_bar">RPM bar</string>
+    <string name="preview_not_reported">car does not report</string>
+    <string name="track_preview_rpm">RPM</string>
+    <string name="track_preview_coolant_speed">Water and speed</string>
+    <string name="track_preview_peaks">Peak hold</string>
 </resources>

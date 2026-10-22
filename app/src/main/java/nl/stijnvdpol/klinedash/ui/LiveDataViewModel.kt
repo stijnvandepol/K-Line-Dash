@@ -19,12 +19,16 @@ import nl.stijnvdpol.klinedash.service.ObdServiceState
 
 private const val STOP_TIMEOUT_MS = 5_000L
 
+/** [select] of the poller of the current link, following link rebuilds; [whenNone] while there is no poller. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun <T> pollerFlow(whenNone: T, select: (ObdPoller) -> Flow<T>): Flow<T> =
+    ObdServiceState.poller.flatMapLatest { current -> if (current == null) flowOf(whenNone) else select(current) }
+
 /**
  * Live values for the dashboard and the sensor list: the poller of the current link, flattened so
  * the screens do not care when the link is rebuilt. WhileSubscribed: nothing is collected while no
  * screen is visible.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LiveDataViewModel(alertSettings: Flow<AlertSettings>) : ViewModel() {
     val poller: StateFlow<ObdPoller?> = ObdServiceState.poller
 
@@ -46,8 +50,7 @@ class LiveDataViewModel(alertSettings: Flow<AlertSettings>) : ViewModel() {
         alertSettings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AlertSettings())
 
     private fun <T> fromPoller(whenNone: T, select: (ObdPoller) -> Flow<T>): StateFlow<T> =
-        poller.flatMapLatest { current -> if (current == null) flowOf(whenNone) else select(current) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), whenNone)
+        pollerFlow(whenNone, select).stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), whenNone)
 
     companion object {
         fun forGraph(graph: AppGraph) = LiveDataViewModel(graph.alertSettingsRepository.settings)

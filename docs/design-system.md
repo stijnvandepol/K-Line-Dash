@@ -36,6 +36,7 @@ and the meaning of colour stay fixed.
 | `ok` | `#2ED47A` | Connected dot only |
 | `caution` | `#FFB000` | VVTL-i zone segments (from 6 200 rpm), reconnecting, values nearing a limit |
 | `danger` | `#FF2D2D` | Redline segments (from 7 800 rpm), failed, over-limit values |
+| `accent` | `#FFFFFF` | Lit RPM segments below the caution zone, the active-page marker (phase 5; follows `ink` in themes that do not set it) |
 
 ## Typography
 
@@ -233,6 +234,9 @@ the reason and ignored. Day/night switching: **Manual**, **Schedule** (day theme
 time) or **Follow head unit** (Android night mode, which many head units drive from the headlight
 input). One day theme and one night theme are chosen for the automatic modes.
 
+File format and validation rules: `docs/themes.md`. The token values of the built-in themes are the
+files in `app/src/main/assets/themes/`.
+
 ### Dashboard pages (SETUP > Dashboard)
 
 The dashboard becomes a set of pages, swiped horizontally. There are no page dots; after a swipe
@@ -248,6 +252,16 @@ The editor shows the page as a scaled preview; tapping a cell opens a list of su
 (72 dp rows) and the widget type. Add page, delete page (confirm), move page left/right. Changes
 apply immediately; pages are stored as JSON in settings.
 
+As built: the editor has the page list on the left (320 dp, 72 dp rows, move left/right and
+add/delete cells under it) and the sketch on the right, sized to the room that is left. A page has
+no name of its own: it is called after its template ("Main", "Grid", "Track"), numbered when the
+template occurs more than once ("Grid 2"). Up to 12 pages; the last page cannot be deleted. A grid
+page has a size choice above the sketch, the track page a shift point stepper (100 rpm steps,
+4 000 to 9 000). The signal list shows what the car supports, or everything with a note while not
+connected. A stored signal this version does not know shows "--" until the user picks another. All
+numbers of one grid page share one size, so "0.0" and "13.9" read at the same height. Peak hold is
+kept per session only.
+
 ### Track page
 
 For track days. RPM as the full-height numeral on the left two thirds, the RPM bar across the top,
@@ -262,11 +276,16 @@ convention and the point, and it only happens above the user's own shift point.
 Rows: **Start with the head unit** (boot), **Reconnect when the unit wakes up** (ACC/screen-on
 broadcasts while the service runs), **Open the dashboard on start** (needs "display over other
 apps"; the row explains and links to the permission screen when it is missing). Below that the
-ACC broadcast list (action strings in `mono`, one per 72 dp row, remove cell; "Add action" opens a
-text field) with the defaults from docs/research/headunit-autostart.md, and per action the last
-time it was received ("never" until it fires) so the user can see which one their unit sends.
-Then **Keep the app alive**: platform-specific instructions (FYT/UIS: factory settings > sleep
-whitelist; MTCD/MTCE; other) and a button to the battery-optimisation exemption.
+ACC broadcast lists, one for **Wake (ignition on)** and one for **Sleep (ignition off)** (action
+strings in `mono`, one per 72 dp row, remove cell) with the defaults from
+docs/research/headunit-autostart.md, and per action the last time it was received ("never" until it
+fires) so the user can see which one their unit sends. Under the lists one text field with **Add as
+wake** and **Add as sleep** (the direction is not in the action's name); a problem with the text
+(empty, too long, characters other than letters, digits, dots and underscores, duplicate) shows as
+a `danger` line above the field, because below it is off screen while the keyboard is open. Then
+**Reset to defaults**. Then **Keep the app alive**: the detected platform and its instructions
+(FYT/UIS: factory settings > sleep whitelist; MTCD/MTCE; other) and two buttons, the battery
+optimization exemption and "display over other apps".
 
 ## Writing
 

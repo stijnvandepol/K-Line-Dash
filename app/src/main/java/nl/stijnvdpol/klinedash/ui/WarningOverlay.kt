@@ -23,6 +23,7 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
+import nl.stijnvdpol.klinedash.ui.theme.readableOn
 
 private val FrameThickness = 6.dp
 private val BannerHeight = 56.dp
@@ -47,18 +48,23 @@ internal fun WarningFrame(severity: AlertSeverity?, content: @Composable ColumnS
 }
 
 /**
- * Names the leading warning on a full-width bar of its severity colour, black text on amber and
- * white on red, with "+N" for the others. A tap hides it (the frame stays). It never blinks.
+ * Names the leading warning on a full-width bar of its severity colour, background-coloured text on
+ * amber and ink-coloured on red (swapped when the theme makes that hard to read), with "+N" for the others. A tap hides it (the frame stays). It never blinks.
  */
 @Composable
 internal fun WarningBanner(banner: Banner, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val colors = KLineTheme.colors
-    val textColor = if (banner.alert.severity == AlertSeverity.DANGER) colors.ink else colors.background
+    val fill = colors.fillFor(banner.alert.severity)
+    val textColor = if (banner.alert.severity == AlertSeverity.DANGER) {
+        readableOn(fill, preferred = colors.ink, alternative = colors.background)
+    } else {
+        readableOn(fill, preferred = colors.background, alternative = colors.ink)
+    }
     Row(
         modifier
             .fillMaxWidth()
             .height(BannerHeight)
-            .background(colors.fillFor(banner.alert.severity))
+            .background(fill)
             .clickable(role = Role.Button, onClick = onDismiss)
             .padding(horizontal = Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,

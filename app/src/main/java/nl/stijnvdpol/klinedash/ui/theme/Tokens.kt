@@ -7,7 +7,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * The colour tokens of docs/design-system.md. A theme is only a different set of these values;
- * grid, type scale and the meaning of each colour never change (phase 5 adds themes this way).
+ * grid, type scale and the meaning of each colour never change (see docs/themes.md).
+ * [accent] colours the lit RPM segments below the caution zone and the active-page marker.
  */
 @Immutable
 data class KLineColors(
@@ -20,9 +21,13 @@ data class KLineColors(
     val ok: Color,
     val caution: Color,
     val danger: Color,
+    val accent: Color,
 )
 
-/** Default theme "Race". Keep the background in sync with res/values/colors.xml (window_background). */
+/**
+ * Default theme "Race", also the fallback while no theme is loaded. A test keeps it identical to
+ * assets/themes/race.json; keep the background in sync with res/values/colors.xml (window_background).
+ */
 val RaceColors = KLineColors(
     background = Color(0xFF000000),
     surface = Color(0xFF1C1C1C),
@@ -33,6 +38,7 @@ val RaceColors = KLineColors(
     ok = Color(0xFF2ED47A),
     caution = Color(0xFFFFB000),
     danger = Color(0xFFFF2D2D),
+    accent = Color(0xFFFFFFFF),
 )
 
 val LocalKLineColors = staticCompositionLocalOf { RaceColors }

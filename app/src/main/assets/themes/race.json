@@ -1,0 +1,15 @@
+{
+  "name": "Race",
+  "colors": {
+    "background": "#000000",
+    "surface": "#1C1C1C",
+    "rule": "#2A2A2A",
+    "ink": "#FFFFFF",
+    "inkMuted": "#8C8C8C",
+    "inkFaint": "#4D4D4D",
+    "ok": "#2ED47A",
+    "caution": "#FFB000",
+    "danger": "#FF2D2D",
+    "accent": "#FFFFFF"
+  }
+}

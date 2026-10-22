@@ -21,7 +21,8 @@ object KLineTheme {
 
 /**
  * Material only supplies behaviour (ripples, text field); every colour it draws comes from the
- * tokens. No accent colour exists, so the "primary" role is plain ink.
+ * tokens. The "primary" role is plain ink: the accent token is only for the RPM bar and the
+ * active-page marker, never for Material controls.
  */
 private fun KLineColors.toMaterialScheme() = darkColorScheme(
     primary = ink,

@@ -33,9 +33,11 @@ import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.appGraph
 import nl.stijnvdpol.klinedash.core.alert.AlertEvaluator
+import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmConnectionManager
 import nl.stijnvdpol.klinedash.core.obd.ObdPollScheduler
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
+import nl.stijnvdpol.klinedash.data.StartupSettings
 import nl.stijnvdpol.klinedash.ui.MainActivity
 
 /**
@@ -52,6 +54,13 @@ class ObdService : LifecycleService() {
 
     /** Bumped by ACTION_CONNECT to rebuild the link even though the settings did not change. */
     private val restartTicks = MutableStateFlow(0)
+
+    /** True while the link is closed because the car went off (ACC-off broadcast); the service stays. */
+    private val linkSuspended = MutableStateFlow(false)
+    private var wakeSignals: WakeSignalReceivers? = null
+
+    @Volatile
+    private var startupSettings = StartupSettings()
     private var linkJob: Job? = null
     private var recorderJob: Job? = null
     private var foregroundStarted = false
@@ -74,8 +83,12 @@ class ObdService : LifecycleService() {
             // drop a running connection or abort one that is being set up.
             val settings = appGraph.settingsRepository.connectionSettings
                 .distinctUntilChangedBy { TransportFactory.adapterKey(it) }
-            combine(settings, restartTicks) { s, _ -> s }.collectLatest { runLink(it) }
+            // Suspended: no settings, so the running link is cancelled (and closed) and none is built.
+            combine(settings, restartTicks, linkSuspended) { s, _, isSuspended -> s.takeUnless { isSuspended } }
+                .collectLatest { if (it != null) runLink(it) }
         }
+        wakeSignals = WakeSignalReceivers(this, ::onWakeSignal)
+        lifecycleScope.launch { appGraph.startupSettingsRepository.settings.collect(::applyStartupSettings) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,14 +98,18 @@ class ObdService : LifecycleService() {
         enterForeground(buildNotification(lastText))
         return when (intent?.action) {
             ACTION_CONNECT -> {
-                restartTicks.update { it + 1 }
+                rebuildLink()
                 START_STICKY
             }
             ACTION_STOP -> {
                 shutdown()
                 START_NOT_STICKY
             }
-            else -> START_STICKY
+            else -> {
+                // Plain start (the app was opened): someone is here, so a link closed for ACC off returns.
+                if (linkSuspended.value) rebuildLink()
+                START_STICKY
+            }
         }
     }
 
@@ -138,7 +155,42 @@ class ObdService : LifecycleService() {
         }
     }
 
+    /** The user's settings changed (or arrived): listen for the listed vendor broadcasts. */
+    private fun applyStartupSettings(settings: StartupSettings) {
+        startupSettings = settings
+        wakeSignals?.setVendorActions(settings.allActions)
+        // Without wake handling nothing would ever end a suspension, so it ends with the option.
+        if (!settings.reconnectOnWake && linkSuspended.value) rebuildLink()
+    }
+
+    private fun onWakeSignal(action: String) {
+        val settings = startupSettings
+        val event = classifyBroadcast(action, settings) ?: return
+        if (event == PowerEvent.ACC_ON || event == PowerEvent.ACC_OFF) {
+            // This is how the user learns which action their unit sends.
+            lifecycleScope.launch { appGraph.startupSettingsRepository.recordReceived(action, System.currentTimeMillis()) }
+        }
+        val state = ObdServiceState.link.value?.state?.value ?: ConnectionState.Idle
+        val decision = decideWakeAction(event, linkPhaseOf(state, linkSuspended.value), settings.reconnectOnWake)
+        Log.i(TAG, "Signal $action ($event) while ${state::class.simpleName}: $decision")
+        when (decision) {
+            WakeAction.NONE -> Unit
+            WakeAction.RECONNECT -> rebuildLink()
+            WakeAction.SUSPEND -> {
+                linkSuspended.value = true
+                updateNotification(getString(R.string.state_suspended))
+            }
+        }
+    }
+
+    /** Builds the link anew, which skips any backoff wait; ends a suspension (one rebuild, not two). */
+    private fun rebuildLink() {
+        if (linkSuspended.value) linkSuspended.value = false else restartTicks.update { it + 1 }
+    }
+
     override fun onDestroy() {
+        wakeSignals?.close()
+        wakeSignals = null
         appGraph.exportController.stop()
         super.onDestroy()
     }

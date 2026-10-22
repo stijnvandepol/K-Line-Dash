@@ -1,194 +1,114 @@
 package nl.stijnvdpol.klinedash.ui
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import nl.stijnvdpol.klinedash.R
-import nl.stijnvdpol.klinedash.core.obd.PollStats
-import nl.stijnvdpol.klinedash.core.obd.Reading
-import nl.stijnvdpol.klinedash.core.obd.Signals
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import nl.stijnvdpol.klinedash.data.DashboardLayout
+import nl.stijnvdpol.klinedash.data.GridPage
+import nl.stijnvdpol.klinedash.data.MainPage
+import nl.stijnvdpol.klinedash.data.TrackPage
+import nl.stijnvdpol.klinedash.ui.pages.GridPageContent
+import nl.stijnvdpol.klinedash.ui.pages.MainPageContent
+import nl.stijnvdpol.klinedash.ui.pages.TrackPageContent
+import nl.stijnvdpol.klinedash.ui.pages.rememberPageTitles
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private const val DEMAND_OWNER = "dashboard"
-private const val SMALL_FIELD_COUNT = 6
-private const val RPM_FIELD_WEIGHT = 2f
-private const val SPEED_FIELD_WEIGHT = 1.4f
-private const val COOLANT_FIELD_WEIGHT = 1f
-private val SmallFieldRowHeight = 104.dp
+
+/** How long the page name stays on screen after a swipe. */
+private const val PAGE_NAME_MS = 1_000L
 
 /**
- * The big fields may grow past their design size to fill the field; the small ones only shrink.
- * RPM grows a little more than speed and water so it stays the one dominant number.
- */
-private const val RPM_MAX_GROWTH = 1.75f
-private const val PRIMARY_MAX_GROWTH = 1.6f
-private val LabelToValueGap = 8.dp
-
-/**
- * Dashboard: the RPM bar on top, three primary fields (RPM, speed, coolant) and a row of six small
- * ones, all separated by rules. Asks the poller for exactly what it shows, while visible.
+ * The dashboard: the pages of the layout side by side, swiped horizontally. Asks the poller for
+ * exactly what the current page shows, while the dashboard is visible, and names the page for a
+ * second after each swipe.
  */
 @Composable
 fun DashboardScreen() {
-    val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
-    val poller by vm.poller.collectAsStateWithLifecycle()
-    val supportedPids by vm.supportedPids.collectAsStateWithLifecycle()
-    val fieldIds = remember(supportedPids) { dashboardFieldIds(supportedPids) }
-    DemandWhileVisible(poller, DEMAND_OWNER, remember(fieldIds) { dashboardDemandIds(fieldIds) })
+    val live = graphViewModel { LiveDataViewModel.forGraph(it) }
+    val dashboard = graphViewModel { DashboardViewModel.forGraph(it) }
+    val layout by dashboard.layout.collectAsStateWithLifecycle()
+    layout?.let { DashboardPager(it, live, dashboard) }
+}
+
+@Composable
+private fun DashboardPager(layout: DashboardLayout, live: LiveDataViewModel, dashboard: DashboardViewModel) {
+    val pages = layout.pages
+    val pagerState = rememberPagerState(initialPage = dashboard.currentPage.coerceIn(pages.indices)) { pages.size }
+    LaunchedEffect(pagerState) { snapshotFlow { pagerState.settledPage }.collect { dashboard.currentPage = it } }
+
+    val poller by live.poller.collectAsStateWithLifecycle()
+    val supportedPids by live.supportedPids.collectAsStateWithLifecycle()
+    val currentPage = pages[pagerState.currentPage.coerceIn(pages.indices)]
+    DemandWhileVisible(poller, DEMAND_OWNER, remember(currentPage, supportedPids) { pageDemandIds(currentPage, supportedPids) })
 
     // States, not values: only the small composables below read them, so this one never recomposes
     // for a new reading.
-    val readings = vm.readings.collectAsStateWithLifecycle()
-    val stats = vm.stats.collectAsStateWithLifecycle()
+    val readings = live.readings.collectAsStateWithLifecycle()
+    val stats = live.stats.collectAsStateWithLifecycle()
     val nowMs = rememberNowMs()
-    val toneContext = rememberToneContext(readings, vm.limits.collectAsStateWithLifecycle())
+    val toneContext = rememberToneContext(readings, live.limits.collectAsStateWithLifecycle())
+    val liveState = remember(readings, stats, nowMs, toneContext) { LiveState(readings, stats, nowMs, toneContext) }
+    val peaks = dashboard.peaks.collectAsStateWithLifecycle()
+    val graphRevision = dashboard.graphRevision.collectAsStateWithLifecycle()
 
-    Column(Modifier.fillMaxSize()) {
-        RpmBarRow(readings, stats, nowMs)
-        HorizontalRule()
-        PrimaryRow(readings, nowMs, toneContext, Modifier.weight(1f).fillMaxWidth())
-        HorizontalRule()
-        SmallFieldRow(fieldIds, readings, nowMs, toneContext, Modifier.height(SmallFieldRowHeight).fillMaxWidth())
-    }
-}
-
-@Composable
-private fun RpmBarRow(readings: State<Map<String, Reading>>, stats: State<PollStats>, nowMs: State<Long>) {
-    val rpmSignal = remember { checkNotNull(Signals.byId(RPM_ID)) }
-    val rpm = rememberReading(readings, RPM_ID)
-    val stale = rememberIsStale(rpm, nowMs, rpmSignal)
-    val sweepMs = remember(stats) { derivedStateOf { sweepDurationMs(stats.value.signalHz[RPM_ID]) } }
-    RpmBar(rpm, stale, sweepMs, Modifier.fillMaxWidth())
-}
-
-@Composable
-private fun PrimaryRow(
-    readings: State<Map<String, Reading>>,
-    nowMs: State<Long>,
-    toneContext: State<ToneContext>,
-    modifier: Modifier,
-) {
-    Row(modifier) {
-        DataField(RPM_ID, KLineType.heroValue, RPM_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(RPM_FIELD_WEIGHT).fillMaxHeight())
-        VerticalRule()
-        DataField(SPEED_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(SPEED_FIELD_WEIGHT).fillMaxHeight())
-        VerticalRule()
-        DataField(COOLANT_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(COOLANT_FIELD_WEIGHT).fillMaxHeight())
-    }
-}
-
-@Composable
-private fun SmallFieldRow(
-    fieldIds: List<String>,
-    readings: State<Map<String, Reading>>,
-    nowMs: State<Long>,
-    toneContext: State<ToneContext>,
-    modifier: Modifier,
-) {
-    Row(modifier) {
-        for (index in 0 until SMALL_FIELD_COUNT) {
-            if (index > 0) VerticalRule()
-            val id = fieldIds.getOrNull(index)
-            if (id == null) {
-                Spacer(Modifier.weight(1f))
-            } else {
-                DataField(id, KLineType.fieldValue, 1f, readings, nowMs, toneContext, Modifier.weight(1f).fillMaxHeight())
+    Box(Modifier.fillMaxSize()) {
+        HorizontalPager(pagerState, Modifier.fillMaxSize()) { index ->
+            when (val page = pages[index]) {
+                is MainPage -> MainPageContent(page, liveState)
+                is GridPage -> GridPageContent(page, liveState, dashboard.history, graphRevision)
+                is TrackPage -> TrackPageContent(page, liveState, peaks, dashboard::resetPeaks)
             }
         }
+        PageNameTag(pagerState, rememberPageTitles(pages), Modifier.align(Alignment.TopCenter))
     }
 }
 
-/** The labels of the short race-display vocabulary; signals without one use their short name. */
-private val FieldLabelRes = mapOf(
-    RPM_ID to R.string.field_rpm,
-    SPEED_ID to R.string.field_speed,
-    COOLANT_ID to R.string.field_coolant,
-    INTAKE_ID to R.string.field_intake,
-    THROTTLE_ID to R.string.field_throttle,
-    LOAD_ID to R.string.field_load,
-    TIMING_ID to R.string.field_timing,
-    BATTERY_ID to R.string.field_battery,
-    MAF_ID to R.string.field_maf,
-)
-
-/** Label or unit of a field: muted capitals, boxed to their cap height so they sit 12 dp from the rule. */
+/** The page name appears when a swipe has settled and goes away after [PAGE_NAME_MS]. */
 @Composable
-internal fun FieldCaption(text: String, modifier: Modifier = Modifier) {
+private fun PageNameTag(pagerState: PagerState, titles: List<String>, modifier: Modifier) {
+    var shown by remember { mutableStateOf<String?>(null) }
+    val currentTitles by rememberUpdatedState(titles)
+    LaunchedEffect(pagerState) {
+        // The first settled page is where the dashboard opened, not a swipe.
+        snapshotFlow { pagerState.settledPage }.drop(1).collectLatest { index ->
+            shown = currentTitles.getOrNull(index)
+            delay(PAGE_NAME_MS)
+            shown = null
+        }
+    }
+    val name = shown ?: return
+    val colors = KLineTheme.colors
     Text(
-        text,
+        name.uppercase(),
         style = KLineType.fieldLabel,
-        color = KLineTheme.colors.inkMuted,
+        color = colors.ink,
         maxLines = 1,
-        modifier = modifier.capHeightBox(KLineType.fieldLabel.fontSize),
+        modifier = modifier
+            .background(colors.background)
+            .border(Spacing.ruleThickness, colors.inkFaint)
+            .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
     )
-}
-
-/**
- * One field: label top-left, unit top-right, the value right-aligned at the bottom in a slot of
- * fixed width. The value shrinks with the field (never wraps), so the layout also holds on a
- * head unit narrower than 1280 dp; [maxGrowth] above 1 lets it grow to fill a big field.
- */
-@Composable
-private fun DataField(
-    id: String,
-    valueStyle: TextStyle,
-    maxGrowth: Float,
-    readings: State<Map<String, Reading>>,
-    nowMs: State<Long>,
-    toneContext: State<ToneContext>,
-    modifier: Modifier,
-) {
-    val signal = remember(id) { checkNotNull(Signals.byId(id)) }
-    val reading = rememberReading(readings, id)
-    val stale = rememberIsStale(reading, nowMs, signal)
-    val tone = rememberValueTone(signal, reading, toneContext)
-    val label = FieldLabelRes[id]?.let { stringResource(it) } ?: signal.shortName
-    val noReading = stringResource(R.string.field_no_reading)
-    val words = rememberOnOffWords()
-    BoxWithConstraints(
-        modifier
-            .semantics(mergeDescendants = true) {
-                contentDescription = reading.value?.let { "${signal.name}: ${formatReading(signal, it.value, words)} ${signal.unit}" }
-                    ?: "${signal.name}: $noReading"
-            }
-            .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
-    ) {
-        val labelHeight = with(LocalDensity.current) { KLineType.fieldLabel.fontSize.toDp() } * CAP_HEIGHT_EM
-        val style = rememberFittedStyle(valueStyle, slotSample(signal), maxWidth, maxHeight - labelHeight - LabelToValueGap, maxGrowth)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                FieldCaption(label.uppercase())
-                Spacer(Modifier.weight(1f))
-                if (!labelIsUnit(id)) FieldCaption(signal.unit, Modifier.padding(start = Spacing.grid))
-            }
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
-                ValueText(signal, reading, stale, tone, style)
-            }
-        }
-    }
 }

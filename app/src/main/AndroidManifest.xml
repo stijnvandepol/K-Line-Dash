@@ -32,8 +32,27 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Start the service after a boot or an app update (BootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Only to open the dashboard after a boot, and only when the user allows "display over other apps". -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!--
+        Lets SETUP > Startup ask for the battery optimisation exemption. Sideload-only app, so the
+        Play Store policy that the BatteryLife check guards does not apply.
+    -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <!-- Package visibility for the head-unit detection in HeadUnitPlatform.kt (keep the lists in sync). -->
+    <queries>
+        <package android:name="com.syu.ms" />
+        <package android:name="com.syu.bt" />
+        <package android:name="com.microntek.bootcontrol" />
+    </queries>
 
     <application
         android:name=".KLineDashApp"
@@ -57,6 +76,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Not directBootAware on purpose: the settings database is credential-encrypted, so the
+            receiver only runs from BOOT_COMPLETED (after the first unlock) and not from LOCKED_BOOT_COMPLETED.
+        -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".service.ObdService"

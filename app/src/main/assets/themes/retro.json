@@ -1,0 +1,15 @@
+{
+  "name": "Retro",
+  "colors": {
+    "background": "#0A0603",
+    "surface": "#1F1409",
+    "rule": "#34220F",
+    "ink": "#FFB54A",
+    "inkMuted": "#B87A2E",
+    "inkFaint": "#5C3F1A",
+    "ok": "#6FCB4B",
+    "caution": "#FFD60A",
+    "danger": "#FF3B2F",
+    "accent": "#FF8A1F"
+  }
+}

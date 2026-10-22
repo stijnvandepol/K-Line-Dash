@@ -48,8 +48,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val SoundCellWidth = 176.dp
-private val StepButtonWidth = 72.dp
-private val StepValueWidth = 104.dp
+internal val StepButtonWidth = 72.dp
+internal val StepValueWidth = 104.dp
 private val HeaderHeight = 56.dp
 
 /** Two buttons and the value between them, with the rules that separate the three cells. */
@@ -63,8 +63,8 @@ private const val SLOTS_PER_ROW = 2
 /** The plus and minus are the touch targets of the page, so they are larger than a table value. */
 private val StepGlyphSize = 40.sp
 
-private const val MINUS = "−"
-private const val PLUS = "+"
+internal const val MINUS = "−"
+internal const val PLUS = "+"
 
 private class WarningRow(
     @StringRes val nameRes: Int,
@@ -185,7 +185,7 @@ private fun Stepper(limit: AlertLimit, label: String, settings: AlertSettings, i
  * faint at the end of the range. A custom gesture, so the click action for accessibility is set by hand.
  */
 @Composable
-private fun StepButton(glyph: String, description: String, enabled: Boolean, onStep: () -> Unit) {
+internal fun StepButton(glyph: String, description: String, enabled: Boolean, onStep: () -> Unit) {
     val colors = KLineTheme.colors
     val currentStep by rememberUpdatedState(onStep)
     var isPressed by remember { mutableStateOf(false) }

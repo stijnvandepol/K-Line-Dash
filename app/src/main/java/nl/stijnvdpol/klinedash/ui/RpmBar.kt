@@ -10,9 +10,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
@@ -26,8 +31,11 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.ui.pages.isFlashLit
+import nl.stijnvdpol.klinedash.ui.pages.isShiftLightOn
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -80,7 +88,7 @@ internal fun sweepDurationMs(updatesPerSecond: Double?): Int {
 }
 
 private fun KLineColors.zoneColor(zone: RpmZone): Color = when (zone) {
-    RpmZone.NORMAL -> ink
+    RpmZone.NORMAL -> accent
     RpmZone.CAUTION -> caution
     RpmZone.DANGER -> danger
 }
@@ -98,6 +106,15 @@ private class SegmentGeometry(widthPx: Float, gapPx: Float) {
 }
 
 /**
+ * The shift light of the track page: the bar and the frame around the page flash while [isLit].
+ * The bar decides when (it knows the rpm it shows), the page only draws the frame from this.
+ */
+@Stable
+internal class ShiftLight(val shiftRpm: Int) {
+    var isLit by mutableStateOf(false)
+}
+
+/**
  * The segmented RPM bar with its scale. The unlit bar and the scale are drawn once into their own
  * layer; the lit segments are an [Animatable] that travels to each new reading in about the time
  * between two readings and is read in the draw phase only, so a frame of movement redraws at most
@@ -109,12 +126,16 @@ internal fun RpmBar(
     stale: State<Boolean>,
     sweepMs: State<Int>,
     modifier: Modifier = Modifier,
+    shiftLight: ShiftLight? = null,
 ) {
     val lit = remember { Animatable(0f) }
     LaunchedEffect(lit) {
         snapshotFlow { reading.value?.value ?: 0.0 }.collectLatest { target ->
             lit.animateTo(target.toFloat(), tween(sweepMs.value, easing = LinearEasing))
         }
+    }
+    if (shiftLight != null) {
+        LaunchedEffect(shiftLight) { runShiftLight(shiftLight, lit, reading, stale) }
     }
     val colors = KLineTheme.colors
     val measurer = rememberTextMeasurer()
@@ -166,14 +187,43 @@ internal fun RpmBar(
                     val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat())
                     val barHeight = BarHeight.toPx()
                     onDrawBehind {
-                        val count = litSegmentCount(lit.value.toDouble())
+                        // Flashing: every segment in danger, so the whole bar blinks, not just its lit part.
+                        val isFlashing = shiftLight?.isLit == true
+                        val count = if (isFlashing) RPM_BAR_SEGMENTS else litSegmentCount(lit.value.toDouble())
                         val dimmed = stale.value
                         for (i in 0 until count) {
-                            val color = if (dimmed) colors.inkFaint else colors.zoneColor(rpmZone(i * SEGMENT_RPM))
+                            val color = when {
+                                isFlashing -> colors.danger
+                                dimmed -> colors.inkFaint
+                                else -> colors.zoneColor(rpmZone(i * SEGMENT_RPM))
+                            }
                             drawRect(color, Offset(geometry.left(i), 0f), Size(geometry.width(i), barHeight))
                         }
                     }
                 },
         )
     }
+}
+
+/**
+ * Flashes [shiftLight] at 4 Hz for as long as [isShiftLightOn] holds. It is evaluated on the value
+ * the bar shows, so the flash starts when the bar reaches the shift point, and on the measured
+ * reading, so it ends in the frame the rpm falls below it, not when the bar has travelled down.
+ */
+private suspend fun runShiftLight(
+    shiftLight: ShiftLight,
+    bar: Animatable<Float, *>,
+    reading: State<Reading?>,
+    stale: State<Boolean>,
+) {
+    snapshotFlow { isShiftLightOn(bar.value.toDouble(), reading.value?.value, stale.value, shiftLight.shiftRpm) }
+        .distinctUntilChanged()
+        .collectLatest { isOn ->
+            if (!isOn) {
+                shiftLight.isLit = false
+                return@collectLatest
+            }
+            val startMs = withFrameMillis { it }
+            while (true) withFrameMillis { frameMs -> shiftLight.isLit = isFlashLit(frameMs - startMs) }
+        }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "Minimal",
+  "colors": {
+    "background": "#000000",
+    "surface": "#161616",
+    "rule": "#262626",
+    "ink": "#C8C8C8",
+    "inkMuted": "#8A8A8A",
+    "inkFaint": "#4A4A4A",
+    "ok": "#2BB872",
+    "caution": "#E0A100",
+    "danger": "#E5383B",
+    "accent": "#7FA7C9"
+  }
+}

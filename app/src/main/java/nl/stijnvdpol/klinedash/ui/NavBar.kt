@@ -49,7 +49,7 @@ private const val RATE_SAMPLE = "88.8/s"
 private val StatusGap = 12.dp
 
 /**
- * Bottom bar: five text buttons separated by rules, the active one marked by a 4 dp white bar on
+ * Bottom bar: five text buttons separated by rules, the active one marked by a 4 dp bar in the accent colour on
  * its top edge, and the link status at the right end. Same on every page, so the status is always
  * in the same place.
  */
@@ -78,7 +78,7 @@ private fun NavButton(screen: Screen, isSelected: Boolean, onClick: () -> Unit, 
     Box(
         modifier = modifier
             .drawBehind {
-                if (isSelected) drawRect(colors.ink, size = Size(size.width, Spacing.markerThickness.toPx()))
+                if (isSelected) drawRect(colors.accent, size = Size(size.width, Spacing.markerThickness.toPx()))
             }
             .selectable(selected = isSelected, role = Role.Tab, onClick = onClick),
         contentAlignment = Alignment.Center,

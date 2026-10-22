@@ -9,3 +9,5 @@ build/
 .cxx
 *.apk
 *.aab
+# Kotlin 2.x compiler session data
+.kotlin/

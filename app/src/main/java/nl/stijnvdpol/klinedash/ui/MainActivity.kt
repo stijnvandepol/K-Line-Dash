@@ -1,13 +1,17 @@
 package nl.stijnvdpol.klinedash.ui
 
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import nl.stijnvdpol.klinedash.ui.theme.KLineDashTheme
+import nl.stijnvdpol.klinedash.ui.theme.ActiveThemeHost
+import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,7 +19,10 @@ class MainActivity : ComponentActivity() {
         // Dashboard on a car head unit: the screen must never dim while the app is in front.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
-            KLineDashTheme {
+            ActiveThemeHost {
+                // Behind the first frame and during resizes the window shows this, so it must match the theme.
+                val background = KLineTheme.colors.background
+                SideEffect { window.setBackgroundDrawable(ColorDrawable(background.toArgb())) }
                 AppRoot()
             }
         }

@@ -21,6 +21,9 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 internal enum class SetupSection(@StringRes val labelRes: Int) {
     Connection(R.string.setup_connection),
     Warnings(R.string.setup_warnings),
+    Dashboard(R.string.setup_dashboard),
+    Display(R.string.setup_display),
+    Startup(R.string.setup_startup),
     Debug(R.string.setup_debug),
 }
 
@@ -45,6 +48,9 @@ internal fun SetupScreen(section: SetupSection, onSelect: (SetupSection) -> Unit
             when (section) {
                 SetupSection.Connection -> connection()
                 SetupSection.Warnings -> WarningsScreen()
+                SetupSection.Dashboard -> DashboardSetupScreen()
+                SetupSection.Display -> DisplayScreen()
+                SetupSection.Startup -> StartupSettingsScreen()
                 SetupSection.Debug -> DebugScreen()
             }
         }

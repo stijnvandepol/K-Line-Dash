@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,9 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = StatusDotS
  * values sit exactly [Spacing.fieldPaddingVertical] from the rules, whatever the font line gap is.
  */
 fun Modifier.capHeightBox(fontSize: TextUnit): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints)
+    // The line is taller than its capitals (line gap above and below): measured without a height limit,
+    // so a field only as tall as the capitals needs does not clip the text.
+    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
     val capHeight = (fontSize.toPx() * CAP_HEIGHT_EM).roundToInt()
     val baseline = placeable[FirstBaseline]
     layout(placeable.width, capHeight, mapOf(FirstBaseline to capHeight)) {

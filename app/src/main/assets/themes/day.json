@@ -1,0 +1,15 @@
+{
+  "name": "Day",
+  "colors": {
+    "background": "#F2F2F2",
+    "surface": "#D2D2D2",
+    "rule": "#BDBDBD",
+    "ink": "#0A0A0A",
+    "inkMuted": "#5C5C5C",
+    "inkFaint": "#A0A0A0",
+    "ok": "#12873F",
+    "caution": "#B36B00",
+    "danger": "#A81414",
+    "accent": "#0A0A0A"
+  }
+}
