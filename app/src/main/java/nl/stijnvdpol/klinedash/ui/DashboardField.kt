@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -60,6 +61,31 @@ internal class LiveState(
  * may grow to fill the field (1 = it only shrinks, so a smaller head unit scales it down).
  */
 internal class ValueLook(val style: TextStyle, val maxGrowth: Float = 1f)
+
+/**
+ * One look for the numbers of several fields, so that they read at the same height: the largest
+ * size at which the widest value of every signal in [signalIds] still fits its cell ([cellWidths]
+ * is each cell's width, [cellHeight] the height they share), within [base]'s growth limit. Signals
+ * this version does not know have no slot to fit and are left out.
+ */
+@Composable
+internal fun rememberSharedValueLook(signalIds: List<String>, cellWidths: List<Dp>, cellHeight: Dp, base: ValueLook): ValueLook {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val units = LocalUnitSystem.current
+    return remember(signalIds, cellWidths, cellHeight, base, density, units) {
+        val roomHeight = cellHeight - Spacing.fieldPaddingVertical * 2 - density.labelAndGapHeight()
+        val digitHeight = with(density) { base.style.fontSize.toDp() } * CAP_HEIGHT_EM
+        val scale = signalIds.mapIndexedNotNull { index, id ->
+            Signals.byId(id)?.let { signal ->
+                val slotWidth = with(density) { measurer.measure(slotSample(signal, units), base.style).size.width.toDp() }
+                val roomWidth = cellWidths[index] - Spacing.fieldPaddingHorizontal * 2
+                valueScale(slotWidth.value, roomWidth.value, digitHeight.value, roomHeight.value, base.maxGrowth)
+            }
+        }.minOrNull() ?: base.maxGrowth
+        ValueLook(base.style, scale)
+    }
+}
 
 /** The labels of the short race-display vocabulary; signals without one use their short name. */
 private val FieldLabelRes = mapOf(

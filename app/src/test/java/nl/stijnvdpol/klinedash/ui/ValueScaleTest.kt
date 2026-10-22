@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ValueScaleTest {
@@ -28,5 +29,13 @@ class ValueScaleTest {
     @Test
     fun `growth stops at the field even below the limit`() {
         assertEquals(1.25f, valueScale(slotWidth = 400f, availableWidth = 500f, digitHeight = 100f, availableHeight = 900f, maxGrowth = 1.5f), 0f)
+    }
+
+    @Test
+    fun `a field with no room left gives a tiny positive size, never a negative one`() {
+        // A phone with a short screen can leave no height above the baseline; a negative scale made the line height negative and crashed.
+        val scale = valueScale(slotWidth = 100f, availableWidth = 500f, digitHeight = 100f, availableHeight = -30f, maxGrowth = 1f)
+        assertTrue(scale > 0f)
+        assertTrue(scale < 0.1f)
     }
 }

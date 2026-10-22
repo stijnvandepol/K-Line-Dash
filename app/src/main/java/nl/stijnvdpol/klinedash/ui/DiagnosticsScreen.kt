@@ -27,6 +27,7 @@ import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticReport
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private const val DEMAND_OWNER = "diagnostics"
@@ -34,6 +35,7 @@ private const val DEMAND_OWNER = "diagnostics"
 /** The clear flow checks the engine against this: keep rpm fresh while the page is open. */
 private val RpmDemand = setOf(RPM_ID)
 private val StripHeight = 96.dp
+private val CompactStripHeight = 72.dp
 private val StateTextMaxWidth = 560.dp
 private const val MIL_WEIGHT = 1f
 private const val STORED_WEIGHT = 1f
@@ -67,7 +69,10 @@ fun DiagnosticsScreen(onOpenConnection: () -> Unit) {
 @Composable
 private fun DiagnosticsContent(ui: DiagnosticsUiState, vm: DiagnosticsViewModel, onOpenConnection: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        TopStrip(ui, onRead = vm::read, onClear = vm::requestClear, modifier = Modifier.fillMaxWidth().height(StripHeight))
+        TopStrip(
+            ui, onRead = vm::read, onClear = vm::requestClear,
+            modifier = Modifier.fillMaxWidth().height(if (LocalScreenProfile.current.isCompact) CompactStripHeight else StripHeight),
+        )
         HorizontalRule()
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val report = ui.report
@@ -93,10 +98,15 @@ private fun DiagnosticsContent(ui: DiagnosticsUiState, vm: DiagnosticsViewModel,
 
 @Composable
 private fun ReportBody(ui: DiagnosticsUiState, report: DiagnosticReport, lists: CodeLists, vm: DiagnosticsViewModel) {
+    // A short screen scrolls the vehicle with the codes instead of pinning it under them, which would leave one row of codes.
+    val isVehicleScrolling = LocalScreenProfile.current.isCompact
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            CodeListsColumn(ui, lists, onSelect = vm::select, modifier = Modifier.weight(1f).fillMaxWidth())
-            VehiclePanel(report.vehicleInfo)
+            CodeListsColumn(
+                ui, lists, onSelect = vm::select, modifier = Modifier.weight(1f).fillMaxWidth(),
+                scrollingVehicle = report.vehicleInfo.takeIf { isVehicleScrolling },
+            )
+            if (!isVehicleScrolling) VehiclePanel(report.vehicleInfo)
         }
         VerticalRule()
         ReportSidePanels(report, ui.selected, Modifier.weight(1f).fillMaxHeight())

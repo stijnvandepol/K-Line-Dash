@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.ui.help
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -30,7 +32,9 @@ import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.SecondaryButton
 import nl.stijnvdpol.klinedash.ui.SectionTitle
 import nl.stijnvdpol.klinedash.ui.SelectableRow
+import nl.stijnvdpol.klinedash.ui.ReadingMaxWidth
 import nl.stijnvdpol.klinedash.ui.SetupSection
+import nl.stijnvdpol.klinedash.ui.sideColumnWidth
 import nl.stijnvdpol.klinedash.ui.SupportedAdaptersList
 import nl.stijnvdpol.klinedash.ui.TextActionButton
 import nl.stijnvdpol.klinedash.ui.VerticalRule
@@ -39,6 +43,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val TopicColumnWidth = 280.dp
+private val TopicColumnMinWidth = 210.dp
+private const val TOPIC_COLUMN_SHARE = 0.34f
 private val LinkButtonWidth = 280.dp
 private const val EXPANDED_MARK = "−"
 private const val COLLAPSED_MARK = "+"
@@ -55,26 +61,29 @@ internal fun HelpScreen(onOpenSection: (SetupSection) -> Unit, onRunSetupAgain: 
     // Survives leaving SETUP for another page and coming back, like the section of the menu does.
     var topicIndex by rememberSaveable { mutableIntStateOf(0) }
     val topic = HelpTopic.entries[topicIndex]
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(TopicColumnWidth).fillMaxHeight()) {
-            SectionTitle(stringResource(R.string.setup_help), Modifier.height(Spacing.sectionHeaderHeight))
-            HorizontalRule()
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                HelpTopic.entries.forEachIndexed { index, entry ->
-                    SelectableRow(selected = entry == topic, onClick = { topicIndex = index }) {
-                        Text(
-                            stringResource(entry.titleRes),
-                            style = KLineType.body,
-                            color = if (entry == topic) KLineTheme.colors.ink else KLineTheme.colors.inkMuted,
-                        )
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val topicWidth = sideColumnWidth(maxWidth, TOPIC_COLUMN_SHARE, TopicColumnMinWidth, TopicColumnWidth)
+        Row(Modifier.fillMaxSize()) {
+            Column(Modifier.width(topicWidth).fillMaxHeight()) {
+                SectionTitle(stringResource(R.string.setup_help), Modifier.height(Spacing.sectionHeaderHeight))
+                HorizontalRule()
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    HelpTopic.entries.forEachIndexed { index, entry ->
+                        SelectableRow(selected = entry == topic, onClick = { topicIndex = index }) {
+                            Text(
+                                stringResource(entry.titleRes),
+                                style = KLineType.body,
+                                color = if (entry == topic) KLineTheme.colors.ink else KLineTheme.colors.inkMuted,
+                            )
+                        }
                     }
                 }
+                HorizontalRule()
+                TextActionButton(stringResource(R.string.help_run_setup), onRunSetupAgain, Modifier.fillMaxWidth().height(Spacing.touchMin))
             }
-            HorizontalRule()
-            TextActionButton(stringResource(R.string.help_run_setup), onRunSetupAgain, Modifier.fillMaxWidth().height(Spacing.touchMin))
+            VerticalRule()
+            TopicDetail(topic, onOpenSection, Modifier.weight(1f).fillMaxHeight())
         }
-        VerticalRule()
-        TopicDetail(topic, onOpenSection, Modifier.weight(1f).fillMaxHeight())
     }
 }
 
@@ -98,7 +107,7 @@ private fun TopicDetail(topic: HelpTopic, onOpenSection: (SetupSection) -> Unit,
 @Composable
 private fun ReadingItem(item: HelpItem, onOpenSection: (SetupSection) -> Unit) {
     val colors = KLineTheme.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
+    Column(Modifier.widthIn(max = ReadingMaxWidth).padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
         item.heading?.let {
             Text(stringResource(it).uppercase(), style = KLineType.fieldLabel, color = colors.inkMuted, modifier = Modifier.padding(bottom = Spacing.grid / 2))
         }
@@ -126,7 +135,7 @@ private fun CollapsibleItem(topic: HelpTopic, item: HelpItem, onOpenSection: (Se
         Text(if (isOpen) EXPANDED_MARK else COLLAPSED_MARK, style = KLineType.rowValue, color = colors.inkMuted)
     }
     if (isOpen) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal).padding(bottom = Spacing.fieldPaddingVertical)) {
+        Column(Modifier.widthIn(max = ReadingMaxWidth).padding(horizontal = Spacing.fieldPaddingHorizontal).padding(bottom = Spacing.fieldPaddingVertical)) {
             Text(stringResource(item.body), style = KLineType.body, color = colors.inkMuted)
             item.link?.let { OpenSectionButton(it, onOpenSection) }
         }

@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui.pages
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -10,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.FIELD_SLOT_COUNT
@@ -25,6 +25,7 @@ import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.rememberIsStale
 import nl.stijnvdpol.klinedash.ui.rememberReading
+import nl.stijnvdpol.klinedash.ui.rememberSharedValueLook
 import nl.stijnvdpol.klinedash.ui.cluster.ArcCluster
 import nl.stijnvdpol.klinedash.ui.cluster.CenterCluster
 import nl.stijnvdpol.klinedash.ui.cluster.TwinCluster
@@ -32,11 +33,13 @@ import nl.stijnvdpol.klinedash.ui.cluster.VirtualCluster
 import nl.stijnvdpol.klinedash.ui.sweepDurationMs
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
+import nl.stijnvdpol.klinedash.ui.dashMetricsOf
+import nl.stijnvdpol.klinedash.ui.smallFieldColumns
 
 private const val RPM_FIELD_WEIGHT = 2f
 private const val SPEED_FIELD_WEIGHT = 1.4f
 private const val COOLANT_FIELD_WEIGHT = 1f
-private val SmallFieldRowHeight = 104.dp
 
 /**
  * The big fields may grow past their design size to fill the field; the small ones only shrink.
@@ -47,11 +50,8 @@ private const val PRIMARY_MAX_GROWTH = 1.6f
 
 /** The widths of the three primary fields, also used by the editor's sketch of the page. */
 internal val PrimaryFieldWeights = listOf(RPM_FIELD_WEIGHT, SPEED_FIELD_WEIGHT, COOLANT_FIELD_WEIGHT)
-private val PrimaryLooks = listOf(
-    ValueLook(KLineType.heroValue, RPM_MAX_GROWTH),
-    ValueLook(KLineType.primaryValue, PRIMARY_MAX_GROWTH),
-    ValueLook(KLineType.primaryValue, PRIMARY_MAX_GROWTH),
-)
+private val RpmLook = ValueLook(KLineType.heroValue, RPM_MAX_GROWTH)
+private val SidePrimaryLook = ValueLook(KLineType.primaryValue, PRIMARY_MAX_GROWTH)
 private val SmallLook = ValueLook(KLineType.fieldValue)
 
 /**
@@ -71,10 +71,27 @@ internal fun MainPageContent(page: MainPage, live: LiveState, shiftRpm: Int) {
             ClusterStyle.VIRTUAL -> VirtualCluster(page, live, clusterModifier)
         }
         HorizontalRule()
-        Row(Modifier.height(SmallFieldRowHeight).fillMaxWidth()) {
-            for (slot in 0 until FIELD_SLOT_COUNT) {
-                if (slot > 0) VerticalRule()
-                DataField(page.fields[slot], SmallLook, live, Modifier.weight(1f).fillMaxHeight())
+        SmallFieldRows(page, live)
+    }
+}
+
+/**
+ * The six small fields: one row, or two rows of three where one row would squeeze them (see
+ * [smallFieldColumns]); a row is as high as the tier's `smallFieldRowHeight`.
+ */
+@Composable
+private fun SmallFieldRows(page: MainPage, live: LiveState) {
+    val profile = LocalScreenProfile.current
+    val rowHeight = dashMetricsOf(profile.tier).smallFieldRowHeight
+    val columns = smallFieldColumns(profile, FIELD_SLOT_COUNT)
+    Column(Modifier.fillMaxWidth()) {
+        page.fields.chunked(columns).forEachIndexed { row, fields ->
+            if (row > 0) HorizontalRule()
+            Row(Modifier.height(rowHeight).fillMaxWidth()) {
+                fields.forEachIndexed { column, id ->
+                    if (column > 0) VerticalRule()
+                    DataField(id, SmallLook, live, Modifier.weight(1f).fillMaxHeight())
+                }
             }
         }
     }
@@ -86,10 +103,15 @@ private fun BarCluster(page: MainPage, live: LiveState, modifier: Modifier) {
     Column(modifier) {
         RpmBarRow(live)
         HorizontalRule()
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            page.primary.forEachIndexed { slot, id ->
-                if (slot > 0) VerticalRule()
-                DataField(id, PrimaryLooks[slot], live, Modifier.weight(PrimaryFieldWeights[slot]).fillMaxHeight())
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            // Speed and coolant read at one height, whichever of them is the narrower field.
+            val widths = PrimaryFieldWeights.map { maxWidth * it / PrimaryFieldWeights.sum() }
+            val sideLook = rememberSharedValueLook(page.primary.drop(1), widths.drop(1), maxHeight, SidePrimaryLook)
+            Row(Modifier.fillMaxSize()) {
+                page.primary.forEachIndexed { slot, id ->
+                    if (slot > 0) VerticalRule()
+                    DataField(id, if (slot == 0) RpmLook else sideLook, live, Modifier.weight(PrimaryFieldWeights[slot]).fillMaxHeight())
+                }
             }
         }
     }

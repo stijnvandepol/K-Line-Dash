@@ -3,6 +3,7 @@ package nl.stijnvdpol.klinedash.ui.trips
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -37,6 +38,7 @@ import nl.stijnvdpol.klinedash.ui.TextActionButton
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.formatTripStart
 import nl.stijnvdpol.klinedash.ui.graphViewModel
+import nl.stijnvdpol.klinedash.ui.sideColumnWidth
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -45,6 +47,8 @@ private val BackCellWidth = 120.dp
 private val ExportCellWidth = 200.dp
 private val DeleteCellWidth = 140.dp
 private val RouteWidth = 500.dp
+private val RouteMinWidth = 260.dp
+private const val ROUTE_SHARE = 0.4f
 
 /**
  * The trip detail page: a strip with the way back, the date and track, "Export for PC" and "Delete";
@@ -153,20 +157,23 @@ private fun DetailBody(vm: TripDetailViewModel, detail: TripDetail) {
     val selected by vm.selectedLap.collectAsStateWithLifecycle()
     val trace by vm.lapTrace.collectAsStateWithLifecycle()
     val lapRoute = (trace as? LapTraceState.Ready)?.takeIf { it.lapNumber == selected }?.trace?.route
-    Row(Modifier.fillMaxSize()) {
-        if (detail.hasGps) {
-            RouteView(
-                route = detail.route, lap = lapRoute, track = detail.track,
-                description = stringResource(R.string.detail_route_description),
-                modifier = Modifier.width(RouteWidth).fillMaxHeight(),
-            )
-        } else {
-            Column(Modifier.width(RouteWidth).fillMaxHeight()) { EmptyState(stringResource(R.string.detail_no_gps)) }
-        }
-        VerticalRule()
-        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            StatsTable(statCells(detail.stats, LocalUnitSystem.current))
-            LapSection(detail, selected, trace, vm::selectLap)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val routeWidth = sideColumnWidth(maxWidth, ROUTE_SHARE, RouteMinWidth, RouteWidth)
+        Row(Modifier.fillMaxSize()) {
+            if (detail.hasGps) {
+                RouteView(
+                    route = detail.route, lap = lapRoute, track = detail.track,
+                    description = stringResource(R.string.detail_route_description),
+                    modifier = Modifier.width(routeWidth).fillMaxHeight(),
+                )
+            } else {
+                Column(Modifier.width(routeWidth).fillMaxHeight()) { EmptyState(stringResource(R.string.detail_no_gps)) }
+            }
+            VerticalRule()
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                StatsTable(statCells(detail.stats, LocalUnitSystem.current))
+                LapSection(detail, selected, trace, vm::selectLap)
+            }
         }
     }
 }

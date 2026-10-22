@@ -47,6 +47,10 @@ private val BarBlockHeight = 48.dp
 /** The small fields of the sketch are cells to tap, so they keep the full touch height. */
 private val SmallRowHeight = Spacing.touchMin
 
+/** A cell narrower than this (the six small fields on a narrow screen) writes its label smaller, so "THROTTLE" is not cut off. */
+private val SmallLabelBelow = 100.dp
+private const val SMALL_LABEL_SCALE = 0.75f
+
 /**
  * A scaled sketch of [page] in the layout of the real one, each editable cell showing the signal it
  * holds. Tapping a cell calls [onEditSlot] with its slot (Main: 0-2 primary, 3-8 small; Grid: cell
@@ -140,19 +144,21 @@ private fun SignalCell(signalId: String, detail: String?, supportedPids: Set<Int
     val colors = KLineTheme.colors
     val signal = Signals.byId(signalId)
     val isUnsupported = !isKnownAndSupported(signalId, supportedPids)
-    Column(
-        modifier.clickable(role = Role.Button, onClick = onClick).padding(Spacing.grid),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            signal?.let { fieldLabel(it) } ?: signalId.uppercase(),
-            style = KLineType.fieldLabel,
-            color = if (isUnsupported) colors.inkFaint else colors.ink,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
-        val second = if (isUnsupported) stringResource(R.string.preview_not_reported) else detail
-        if (second != null) Text(second, style = KLineType.caption, color = colors.inkMuted, textAlign = TextAlign.Center, maxLines = 1)
+    BoxWithConstraints(modifier.clickable(role = Role.Button, onClick = onClick).padding(Spacing.grid), contentAlignment = Alignment.Center) {
+        val labelStyle = KLineType.fieldLabel.let { style ->
+            if (maxWidth < SmallLabelBelow) style.copy(fontSize = style.fontSize * SMALL_LABEL_SCALE, lineHeight = style.lineHeight * SMALL_LABEL_SCALE) else style
+        }
+        Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                signal?.let { fieldLabel(it) } ?: signalId.uppercase(),
+                style = labelStyle,
+                color = if (isUnsupported) colors.inkFaint else colors.ink,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+            )
+            val second = if (isUnsupported) stringResource(R.string.preview_not_reported) else detail
+            if (second != null) Text(second, style = KLineType.caption, color = colors.inkMuted, textAlign = TextAlign.Center, maxLines = 1)
+        }
     }
 }

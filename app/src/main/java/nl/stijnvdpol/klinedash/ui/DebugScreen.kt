@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.ui.text.style.TextAlign
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,6 +50,12 @@ private val QuickCommands = listOf("ATZ", "ATI", "ATRV", "ATDP", "ATDPN", "0100"
 private const val QUICK_COMMANDS_PER_ROW = 4
 private const val LOG_WEIGHT = 2f
 private const val CONTROLS_WEIGHT = 1f
+
+/** The auto-scroll switch gets the room of this many buttons for its label; a narrow log needs a third one. */
+private const val AUTO_SCROLL_WEIGHT = 2f
+private const val NARROW_AUTO_SCROLL_WEIGHT = 3f
+private const val NARROW_LOG_WEIGHT = 3f
+private const val NARROW_CONTROLS_WEIGHT = 2f
 private val LogTimeWidth = 120.dp
 private val SendButtonWidth = 120.dp
 
@@ -70,7 +78,8 @@ fun DebugScreen() {
 
     Row(Modifier.fillMaxSize()) {
         // Left: the log with its own controls underneath. Right: the adapter, what it is and what to send it.
-        Column(Modifier.weight(LOG_WEIGHT).fillMaxHeight()) {
+        val isNarrow = LocalScreenProfile.current.widthDp < NARROW_BELOW_DP
+        Column(Modifier.weight(if (isNarrow) NARROW_LOG_WEIGHT else LOG_WEIGHT).fillMaxHeight()) {
             LogPanel(lines, autoScroll, Modifier.weight(1f).fillMaxWidth())
             // The result of an export, for a few seconds just above the toolbar.
             notice?.let { NoticeLine(it, KLineTheme.colors.inkMuted) }
@@ -80,6 +89,7 @@ fun DebugScreen() {
                 paused = paused,
                 autoScroll = autoScroll,
                 canExport = link != null,
+                autoScrollWeight = if (isNarrow) NARROW_AUTO_SCROLL_WEIGHT else AUTO_SCROLL_WEIGHT,
                 onExport = {
                     val name = vm.exportFileName()
                     try {
@@ -94,7 +104,7 @@ fun DebugScreen() {
         VerticalRule()
         Column(
             modifier = Modifier
-                .weight(CONTROLS_WEIGHT)
+                .weight(if (isNarrow) NARROW_CONTROLS_WEIGHT else CONTROLS_WEIGHT)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
         ) {
@@ -137,8 +147,15 @@ internal fun InfoRow(label: String, value: String?) {
         Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
         horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
     ) {
-        Text(label, style = KLineType.body, color = colors.inkMuted, modifier = Modifier.weight(1f))
-        Text(value ?: MISSING_VALUE, style = KLineType.body, color = if (value == null) colors.inkFaint else colors.ink)
+        // The label keeps its words whole; a long value wraps at its own spaces instead.
+        Text(label, style = KLineType.body, color = colors.inkMuted, softWrap = false)
+        Text(
+            value ?: MISSING_VALUE,
+            style = KLineType.body,
+            color = if (value == null) colors.inkFaint else colors.ink,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
     }
     HorizontalRule()
 }
@@ -163,7 +180,14 @@ private fun QuickCommandGrid(enabled: Boolean, onCommand: (String) -> Unit) {
  * switch, which gets the room of two cells for its label.
  */
 @Composable
-private fun LogToolbar(vm: DebugViewModel, paused: Boolean, autoScroll: Boolean, canExport: Boolean, onExport: () -> Unit) {
+private fun LogToolbar(
+    vm: DebugViewModel,
+    paused: Boolean,
+    autoScroll: Boolean,
+    canExport: Boolean,
+    autoScrollWeight: Float,
+    onExport: () -> Unit,
+) {
     Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
         TextActionButton(
             stringResource(if (paused) R.string.debug_resume else R.string.debug_pause),
@@ -175,7 +199,7 @@ private fun LogToolbar(vm: DebugViewModel, paused: Boolean, autoScroll: Boolean,
         VerticalRule()
         TextActionButton(stringResource(R.string.debug_export), onExport, Modifier.weight(1f).fillMaxHeight(), canExport)
         VerticalRule()
-        SwitchRow(stringResource(R.string.debug_auto_scroll), autoScroll, vm::setAutoScroll, Modifier.weight(2f).fillMaxHeight())
+        SwitchRow(stringResource(R.string.debug_auto_scroll), autoScroll, vm::setAutoScroll, Modifier.weight(autoScrollWeight).fillMaxHeight())
     }
 }
 

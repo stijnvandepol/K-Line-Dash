@@ -2,6 +2,8 @@ package nl.stijnvdpol.klinedash.ui.trips
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +32,8 @@ import nl.stijnvdpol.klinedash.ui.SelectableRow
 import nl.stijnvdpol.klinedash.ui.ValueField
 import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
+import nl.stijnvdpol.klinedash.ui.lapTableShowsAllColumns
+import nl.stijnvdpol.klinedash.ui.statColumnsFor
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -38,7 +42,6 @@ private val StatCellHeight = 64.dp
 private val LapHeaderHeight = 48.dp
 private val SectorsHeight = 56.dp
 private val LapCaptionWidth = 64.dp
-private const val STAT_COLUMNS = 3
 
 /** Weights of the lap table columns: the numerals are right-aligned in their slot, the lap number and the mark are not. */
 private const val LAP_WEIGHT = 0.6f
@@ -52,22 +55,27 @@ private const val MARK_WEIGHT = 0.9f
 /** Label and unit on top, the value right-aligned below: a dashboard field in the size of a table cell. */
 private val StatLook = ValueLook(KLineType.rowValue)
 
-/** The statistics as a grid of fields, [STAT_COLUMNS] to a row; a short last row keeps empty cells. */
+/** The statistics as a grid of fields, as many to a row as the width allows (see statColumnsFor); a short last row keeps empty cells. */
 @Composable
 internal fun StatsTable(cells: List<StatCell>) {
-    cells.chunked(STAT_COLUMNS).forEach { rowCells ->
-        Row(Modifier.fillMaxWidth().height(StatCellHeight)) {
-            repeat(STAT_COLUMNS) { column ->
-                if (column > 0) VerticalRule()
-                val cell = rowCells.getOrNull(column)
-                if (cell == null) {
-                    Spacer(Modifier.weight(1f))
-                } else {
-                    ValueField(cell.label, cell.unit, cell.value, StatLook, slotSample = cell.value, Modifier.weight(1f).fillMaxHeight())
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = statColumnsFor(maxWidth.value)
+        Column {
+            cells.chunked(columns).forEach { rowCells ->
+                Row(Modifier.fillMaxWidth().height(StatCellHeight)) {
+                    repeat(columns) { column ->
+                        if (column > 0) VerticalRule()
+                        val cell = rowCells.getOrNull(column)
+                        if (cell == null) {
+                            Spacer(Modifier.weight(1f))
+                        } else {
+                            ValueField(cell.label, cell.unit, cell.value, StatLook, slotSample = cell.value, Modifier.weight(1f).fillMaxHeight())
+                        }
+                    }
                 }
+                HorizontalRule()
             }
         }
-        HorizontalRule()
     }
 }
 
@@ -78,24 +86,32 @@ internal fun StatsTable(cells: List<StatCell>) {
  */
 @Composable
 internal fun LapTable(rows: List<LapRow>, selectedNumber: Int?, onSelect: (Int) -> Unit) {
-    LapHeader()
-    HorizontalRule()
-    rows.forEach { row ->
-        SelectableRow(selected = row.number == selectedNumber, onClick = { onSelect(row.number) }) {
-            LapRowCells(row)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // A narrow table drops the two columns that matter least (see lapTableShowsAllColumns).
+        val showsAll = lapTableShowsAllColumns(maxWidth.value)
+        Column {
+            LapHeader(showsAll)
+            HorizontalRule()
+            rows.forEach { row ->
+                SelectableRow(selected = row.number == selectedNumber, onClick = { onSelect(row.number) }) {
+                    LapRowCells(row, showsAll)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun LapHeader() {
+private fun LapHeader(showsAll: Boolean) {
     Row(Modifier.fillMaxWidth().height(LapHeaderHeight).padding(horizontal = Spacing.fieldPaddingHorizontal), verticalAlignment = Alignment.CenterVertically) {
         LapHeaderCell(stringResource(R.string.lap_column_lap), LAP_WEIGHT, TextAlign.Start)
         LapHeaderCell(stringResource(R.string.lap_column_time), TIME_WEIGHT, TextAlign.End)
         LapHeaderCell(stringResource(R.string.lap_column_delta), DELTA_WEIGHT, TextAlign.End)
         LapHeaderCell(stringResource(R.string.lap_column_max_speed, LocalUnitSystem.current.label(Quantity.SPEED)), SPEED_WEIGHT, TextAlign.End)
-        LapHeaderCell(stringResource(R.string.lap_column_max_rpm), RPM_WEIGHT, TextAlign.End)
-        LapHeaderCell(stringResource(R.string.lap_column_full_throttle), THROTTLE_WEIGHT, TextAlign.End)
+        if (showsAll) {
+            LapHeaderCell(stringResource(R.string.lap_column_max_rpm), RPM_WEIGHT, TextAlign.End)
+            LapHeaderCell(stringResource(R.string.lap_column_full_throttle), THROTTLE_WEIGHT, TextAlign.End)
+        }
         LapHeaderCell("", MARK_WEIGHT, TextAlign.End)
     }
 }
@@ -114,15 +130,17 @@ private fun RowScope.LapHeaderCell(label: String, weight: Float, align: TextAlig
 }
 
 @Composable
-private fun RowScope.LapRowCells(row: LapRow) {
+private fun RowScope.LapRowCells(row: LapRow, showsAll: Boolean) {
     val colors = KLineTheme.colors
     val timeColor = if (row.mark == LapMark.INVALID) colors.inkFaint else colors.ink
     NumberCell("${row.number}", LAP_WEIGHT, colors.inkMuted, TextAlign.Start)
     NumberCell(row.time, TIME_WEIGHT, timeColor, TextAlign.End)
     NumberCell(row.delta, DELTA_WEIGHT, colors.ink, TextAlign.End)
     NumberCell(row.maxSpeed, SPEED_WEIGHT, colors.ink, TextAlign.End)
-    NumberCell(row.maxRpm, RPM_WEIGHT, colors.ink, TextAlign.End)
-    NumberCell(row.fullThrottle, THROTTLE_WEIGHT, colors.ink, TextAlign.End)
+    if (showsAll) {
+        NumberCell(row.maxRpm, RPM_WEIGHT, colors.ink, TextAlign.End)
+        NumberCell(row.fullThrottle, THROTTLE_WEIGHT, colors.ink, TextAlign.End)
+    }
     Box(Modifier.weight(MARK_WEIGHT), contentAlignment = Alignment.CenterEnd) {
         when (row.mark) {
             LapMark.BEST -> Text(stringResource(R.string.lap_mark_best).uppercase(), style = KLineType.fieldLabel, color = colors.ok, maxLines = 1)

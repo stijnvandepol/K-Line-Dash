@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
@@ -43,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
@@ -54,10 +59,8 @@ private val ToggleWidth = 64.dp
 private val ToggleHeight = 32.dp
 private val ToggleThumbInset = 5.dp
 private val DialogWidth = 720.dp
+private val DialogScreenMargin = 8.dp
 private const val ScrimAlpha = 0.8f
-
-/** A list in a dialog is never taller than this (about five rows); it scrolls. */
-internal val DialogListMaxHeight = 360.dp
 
 /** The title of a section or a column, in `title`, aligned with the text of the rows below it. */
 @Composable
@@ -182,13 +185,14 @@ fun SelectableRow(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    minHeight: Dp = Spacing.touchMin,
     content: @Composable RowScope.() -> Unit,
 ) {
     val colors = KLineTheme.colors
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = Spacing.touchMin)
+            .heightIn(min = minHeight)
             .drawBehind {
                 val rule = Spacing.ruleThickness.toPx()
                 drawRect(colors.rule, Offset(0f, size.height - rule), Size(size.width, rule))
@@ -302,14 +306,22 @@ fun RaceDialog(
 ) {
     val colors = KLineTheme.colors
     BackHandler(onBack = onDismiss)
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(colors.background.copy(alpha = ScrimAlpha))
             .pointerInput(Unit) { detectTapGestures { } },
         contentAlignment = Alignment.Center,
     ) {
-        Column(modifier.width(DialogWidth).background(colors.background).border(Spacing.ruleThickness, colors.inkFaint)) {
+        // Never wider or taller than the screen: the title and the actions stay, the content between scrolls.
+        Column(
+            modifier
+                .widthIn(max = DialogWidth)
+                .fillMaxWidth()
+                .heightIn(max = maxHeight - DialogScreenMargin * 2)
+                .background(colors.background)
+                .border(Spacing.ruleThickness, colors.inkFaint),
+        ) {
             Box(Modifier.fillMaxWidth().height(Spacing.markerThickness).background(accent))
             Text(
                 title,
@@ -317,7 +329,7 @@ fun RaceDialog(
                 color = colors.ink,
                 modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingHorizontal),
             )
-            content()
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), content = content)
             HorizontalRule()
             Row(
                 Modifier.fillMaxWidth().padding(Spacing.fieldPaddingHorizontal),

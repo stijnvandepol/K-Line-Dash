@@ -38,17 +38,21 @@ import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.ValueTone
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.VerticalRule
+import nl.stijnvdpol.klinedash.ui.dashMetricsOf
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.slotSample
 import nl.stijnvdpol.klinedash.ui.unitOf
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 /** The rpm takes two thirds of the width, also in the editor's sketch of the page. */
 internal const val TRACK_RPM_COLUMN_WEIGHT = 2f
 private const val SIDE_COLUMN_WEIGHT = 1f
-private val PeakRowHeight = 104.dp
+
+/** A short screen gives the side column more width, because coolant and speed sit side by side there (see [SideColumn]). */
+private const val COMPACT_RPM_COLUMN_WEIGHT = 1.5f
 private val ShiftFrameThickness = 12.dp
 
 /** The rpm numeral fills the left two thirds as far as its width allows: the tallest it can be on 720 dp. */
@@ -79,7 +83,8 @@ internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Pea
             RpmBarRow(live, shiftLight)
             HorizontalRule()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                DataField(RPM_ID, RpmLook, live, Modifier.weight(TRACK_RPM_COLUMN_WEIGHT).fillMaxHeight())
+                val rpmWeight = if (LocalScreenProfile.current.isCompact) COMPACT_RPM_COLUMN_WEIGHT else TRACK_RPM_COLUMN_WEIGHT
+                DataField(RPM_ID, RpmLook, live, Modifier.weight(rpmWeight).fillMaxHeight())
                 VerticalRule()
                 SideColumn(live, peaks, onResetPeaks, Modifier.weight(SIDE_COLUMN_WEIGHT).fillMaxHeight())
             }
@@ -91,11 +96,20 @@ internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Pea
 private fun SideColumn(live: LiveState, peaks: State<Peaks>, onResetPeaks: () -> Unit, modifier: Modifier) {
     val speedUnit = unitOf(checkNotNull(Signals.byId(SPEED_ID)), LocalUnitSystem.current)
     Column(modifier) {
-        DataField(COOLANT_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
+        if (LocalScreenProfile.current.isCompact) {
+            // Height is the scarce thing on a phone: coolant and speed share one row and so get all of it.
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                DataField(COOLANT_ID, SideLook, live, Modifier.weight(1f).fillMaxHeight())
+                VerticalRule()
+                DataField(SPEED_ID, SideLook, live, Modifier.weight(1f).fillMaxHeight())
+            }
+        } else {
+            DataField(COOLANT_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
+            HorizontalRule()
+            DataField(SPEED_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
+        }
         HorizontalRule()
-        DataField(SPEED_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
-        HorizontalRule()
-        Row(Modifier.height(PeakRowHeight).fillMaxWidth()) {
+        Row(Modifier.height(dashMetricsOf(LocalScreenProfile.current.tier).smallFieldRowHeight).fillMaxWidth()) {
             PeakField(stringResource(R.string.track_max_rpm), RPM_ID, peaks, { it.maxRpm }, Modifier.weight(1f).fillMaxHeight())
             VerticalRule()
             PeakField(stringResource(R.string.track_max_speed, speedUnit), SPEED_ID, peaks, { it.maxSpeed }, Modifier.weight(1f).fillMaxHeight())

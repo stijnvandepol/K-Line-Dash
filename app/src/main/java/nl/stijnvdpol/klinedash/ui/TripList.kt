@@ -31,6 +31,7 @@ import nl.stijnvdpol.klinedash.service.Quantity
 import nl.stijnvdpol.klinedash.service.label
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 /** The widest text each column shows with every digit as "8": the slots of the numbers never change size. */
@@ -39,19 +40,31 @@ private const val DISTANCE_SAMPLE = "8888.8"
 
 private val UnitWidth = 40.dp
 private val UnitGap = 6.dp
-private val ColumnGap = 28.dp
 private val DeleteCellWidth = 120.dp
 
-/** Widths of the two number columns: a slot for the value and, for distance, room for the unit. */
-private class TripColumns(val duration: Dp, val distance: Dp) {
-    val totalWidth: Dp = duration + ColumnGap + distance + UnitGap + UnitWidth
+/** Under this canvas width the list is squeezed next to the session panel, so its gaps and the delete cell shrink. */
+private val TightColumnGap = 16.dp
+private val TightDeleteCellWidth = 116.dp
+private val ColumnGap = 28.dp
+
+/**
+ * Widths of the two number columns: a slot for the value and, for distance, room for the unit. A
+ * tight list writes the unit once in the header ("DIST KM") instead of in every row, which
+ * leaves the date and time their room.
+ */
+private class TripColumns(val duration: Dp, val distance: Dp, val gap: Dp, val deleteWidth: Dp, val isTight: Boolean) {
+    val unitRoom: Dp = if (isTight) 0.dp else UnitGap + UnitWidth
+    val totalWidth: Dp = duration + gap + distance + unitRoom
 }
 
 @Composable
 private fun rememberTripColumns(): TripColumns {
     val duration = rememberTextWidth(DURATION_SAMPLE, KLineType.rowValue)
     val distance = rememberTextWidth(DISTANCE_SAMPLE, KLineType.rowValue)
-    return remember(duration, distance) { TripColumns(duration, distance) }
+    val isTight = LocalScreenProfile.current.widthDp < NARROW_BELOW_DP
+    return remember(duration, distance, isTight) {
+        TripColumns(duration, distance, if (isTight) TightColumnGap else ColumnGap, if (isTight) TightDeleteCellWidth else DeleteCellWidth, isTight)
+    }
 }
 
 /**
@@ -84,12 +97,12 @@ private fun TripTable(rows: List<TripRow>, onOpen: (Long) -> Unit, onDelete: (Tr
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HeaderLabel(R.string.trips_column_duration, Modifier.width(columns.duration), TextAlign.End)
-                    Spacer(Modifier.width(ColumnGap))
-                    HeaderLabel(R.string.trips_column_distance, Modifier.width(columns.distance), TextAlign.End)
-                    Spacer(Modifier.width(UnitGap + UnitWidth))
+                    Spacer(Modifier.width(columns.gap))
+                    HeaderLabel(distanceHeader(columns.isTight), Modifier.width(columns.distance), TextAlign.End)
+                    Spacer(Modifier.width(columns.unitRoom))
                 }
             }
-            Spacer(Modifier.width(DeleteCellWidth + Spacing.ruleThickness))
+            Spacer(Modifier.width(columns.deleteWidth + Spacing.ruleThickness))
         }
         HorizontalRule()
         val listState = rememberLazyListState()
@@ -108,9 +121,18 @@ private fun TripTable(rows: List<TripRow>, onOpen: (Long) -> Unit, onDelete: (Tr
 }
 
 @Composable
-private fun HeaderLabel(labelRes: Int, modifier: Modifier, align: TextAlign) {
+private fun distanceHeader(isTight: Boolean): String {
+    if (!isTight) return stringResource(R.string.trips_column_distance)
+    return "${stringResource(R.string.trips_column_distance_short)} ${LocalUnitSystem.current.label(Quantity.DISTANCE)}"
+}
+
+@Composable
+private fun HeaderLabel(labelRes: Int, modifier: Modifier, align: TextAlign) = HeaderLabel(stringResource(labelRes), modifier, align)
+
+@Composable
+private fun HeaderLabel(label: String, modifier: Modifier, align: TextAlign) {
     Text(
-        stringResource(labelRes).uppercase(),
+        label.uppercase(),
         style = KLineType.fieldLabel,
         color = KLineTheme.colors.inkMuted,
         textAlign = align,
@@ -137,12 +159,12 @@ private fun TripRowView(row: TripRow, columns: TripColumns, onOpen: (Long) -> Un
                 row.lapSummary?.let { Text(it, style = KLineType.caption, color = colors.inkMuted, maxLines = 1) }
             }
             NumberText(row.duration, columns.duration)
-            Spacer(Modifier.width(ColumnGap))
+            Spacer(Modifier.width(columns.gap))
             NumberText(row.distance, columns.distance)
-            UnitText(LocalUnitSystem.current.label(Quantity.DISTANCE))
+            if (!columns.isTight) UnitText(LocalUnitSystem.current.label(Quantity.DISTANCE))
         }
         VerticalRule()
-        Box(Modifier.width(DeleteCellWidth).fillMaxHeight(), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(columns.deleteWidth).fillMaxHeight(), contentAlignment = Alignment.Center) {
             if (row.isRecording) {
                 Text(stringResource(R.string.trips_state_recording).uppercase(), style = KLineType.fieldLabel, color = colors.danger, maxLines = 1)
             } else {

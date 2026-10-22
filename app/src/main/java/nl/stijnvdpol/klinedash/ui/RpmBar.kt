@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -10,9 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -36,6 +36,7 @@ import nl.stijnvdpol.klinedash.ui.pages.isShiftLightOn
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import java.util.Locale
 import kotlin.math.ceil
@@ -56,11 +57,9 @@ private const val DEFAULT_SWEEP_MS = 500
 private const val MIN_SWEEP_MS = 100
 private const val MAX_SWEEP_MS = 1_000
 
-private val BarHeight = 96.dp
 private val SegmentGap = 2.dp
 private val ScaleGap = 4.dp
 private val ScaleHeight = 20.dp
-private val BarPaddingTop = 12.dp
 private val BarPaddingBottom = Spacing.grid
 
 internal enum class RpmZone { NORMAL, CAUTION, DANGER }
@@ -132,15 +131,17 @@ internal fun RpmBar(
     val colors = KLineTheme.colors
     val measurer = rememberTextMeasurer()
     val description = stringResource(R.string.rpm_bar_description)
+    val metrics = dashMetricsOf(LocalScreenProfile.current.tier)
+    val barHeight = metrics.barHeight
     Box(
         modifier
             .padding(
                 start = Spacing.fieldPaddingHorizontal,
                 end = Spacing.fieldPaddingHorizontal,
-                top = BarPaddingTop,
+                top = metrics.barPaddingTop,
                 bottom = BarPaddingBottom,
             )
-            .height(BarHeight + ScaleGap + ScaleHeight)
+            .height(barHeight + ScaleGap + ScaleHeight)
             .semantics { contentDescription = description.format(Locale.US, reading.value?.value?.roundToInt() ?: 0) },
     ) {
         // Static layer: its own render node, so the moving bar never makes it redraw.
@@ -150,19 +151,19 @@ internal fun RpmBar(
                 .graphicsLayer()
                 .drawWithCache {
                     val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat())
-                    val barHeight = BarHeight.toPx()
+                    val barPx = barHeight.toPx()
                     val scale = (0..RPM_BAR_SEGMENTS step SEGMENTS_PER_SCALE_STEP).map { index ->
                         measurer.measure((index / SEGMENTS_PER_SCALE_STEP).toString(), KLineType.fieldLabel)
                     }
                     onDrawBehind {
                         for (i in 0 until RPM_BAR_SEGMENTS) {
                             val topLeft = Offset(geometry.left(i), 0f)
-                            val segment = Size(geometry.width(i), barHeight)
+                            val segment = Size(geometry.width(i), barPx)
                             drawRect(colors.surface, topLeft, segment)
                             val zone = rpmZone(i * SEGMENT_RPM)
                             if (zone != RpmZone.NORMAL) drawRect(colors.zoneColor(zone), topLeft, segment, UNLIT_ZONE_ALPHA)
                         }
-                        val labelTop = barHeight + ScaleGap.toPx()
+                        val labelTop = barPx + ScaleGap.toPx()
                         scale.forEachIndexed { step, label ->
                             // The last label (9 000) has no segment of its own: it ends where the bar ends.
                             val x = if (step == scale.lastIndex) size.width - label.size.width
@@ -177,7 +178,7 @@ internal fun RpmBar(
                 .fillMaxSize()
                 .drawWithCache {
                     val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat())
-                    val barHeight = BarHeight.toPx()
+                    val barPx = barHeight.toPx()
                     onDrawBehind {
                         // Flashing: every segment in danger, so the whole bar blinks, not just its lit part.
                         val isFlashing = shiftLight?.isLit == true
@@ -189,7 +190,7 @@ internal fun RpmBar(
                                 dimmed -> colors.inkFaint
                                 else -> colors.zoneColor(rpmZone(i * SEGMENT_RPM))
                             }
-                            drawRect(color, Offset(geometry.left(i), 0f), Size(geometry.width(i), barHeight))
+                            drawRect(color, Offset(geometry.left(i), 0f), Size(geometry.width(i), barPx))
                         }
                     }
                 },

@@ -1,11 +1,6 @@
 package nl.stijnvdpol.klinedash.ui.pages
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,7 +11,6 @@ import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.WidgetType
 import nl.stijnvdpol.klinedash.ui.ChoiceCells
-import nl.stijnvdpol.klinedash.ui.DialogListMaxHeight
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RaceDialog
@@ -74,13 +68,10 @@ internal fun SignalPickerDialog(
             )
             HorizontalRule()
         }
-        // Takes what the buttons and the choice above leave, so a short screen scrolls the list, not the dialog.
-        Column(Modifier.weight(1f, fill = false).fillMaxWidth().heightIn(max = DialogListMaxHeight).verticalScroll(rememberScrollState())) {
-            signals.forEach { signal ->
-                SelectableRow(selected = signal.id == currentSignalId, onClick = { onPick(signal.id) }) {
-                    Text(signal.name, style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.weight(1f))
-                    Text(unitOf(signal, LocalUnitSystem.current), style = KLineType.caption, color = KLineTheme.colors.inkMuted)
-                }
+        signals.forEach { signal ->
+            SelectableRow(selected = signal.id == currentSignalId, onClick = { onPick(signal.id) }) {
+                Text(signal.name, style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.weight(1f))
+                Text(unitOf(signal, LocalUnitSystem.current), style = KLineType.caption, color = KLineTheme.colors.inkMuted)
             }
         }
     }

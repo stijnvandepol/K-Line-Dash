@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
@@ -10,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
@@ -100,13 +100,16 @@ private fun KLineColors.valueColor(stale: Boolean, tone: ValueTone, ink: Color =
     else -> ink
 }
 
+/** A field with no room left (a phone's short screen) still gets a valid, tiny style: a negative line height throws. */
+private const val MIN_VALUE_SCALE = 0.05f
+
 /**
  * Factor by which a value's font size is scaled to fit its field: never wider than the field, never
  * taller than the room above the baseline, and at most [maxGrowth] times the design size (1 = the
  * value only shrinks, so a head unit narrower than 1280 dp scales it down instead of wrapping).
  */
 internal fun valueScale(slotWidth: Float, availableWidth: Float, digitHeight: Float, availableHeight: Float, maxGrowth: Float): Float =
-    minOf(maxGrowth, availableWidth / slotWidth, availableHeight / digitHeight)
+    minOf(maxGrowth, availableWidth / slotWidth, availableHeight / digitHeight).coerceAtLeast(MIN_VALUE_SCALE)
 
 @Composable
 internal fun rememberFittedStyle(

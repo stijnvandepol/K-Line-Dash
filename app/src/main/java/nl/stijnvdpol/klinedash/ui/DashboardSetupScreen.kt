@@ -1,6 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -44,6 +44,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val PageListWidth = 320.dp
+private val PageListMinWidth = 220.dp
+private const val PAGE_LIST_SHARE = 0.32f
 
 /** The template names of the add dialog share one column, so their descriptions start at one x. */
 private val TemplateLabelWidth = 120.dp
@@ -70,9 +72,10 @@ internal fun DashboardSetupScreen() {
     val titles = rememberPageTitles(layout.pages)
     var dialog by remember { mutableStateOf<EditorDialog?>(null) }
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val listWidth = sideColumnWidth(maxWidth, PAGE_LIST_SHARE, PageListMinWidth, PageListWidth)
         Row(Modifier.fillMaxSize()) {
-            PageListColumn(layout, titles, index, vm, { dialog = it }, Modifier.width(PageListWidth).fillMaxHeight())
+            PageListColumn(layout, titles, index, vm, { dialog = it }, Modifier.width(listWidth).fillMaxHeight())
             VerticalRule()
             PageEditorColumn(layout.pages[index], titles[index], supportedPids, vm, { dialog = EditorDialog.PickSignal(it) }, Modifier.weight(1f).fillMaxHeight())
         }

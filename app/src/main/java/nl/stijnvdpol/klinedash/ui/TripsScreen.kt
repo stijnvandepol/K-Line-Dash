@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,6 +47,8 @@ import nl.stijnvdpol.klinedash.ui.trips.TripDetailScreen
 
 private const val TAG = "TripsScreen"
 private val SessionColumnWidth = 480.dp
+private val SessionColumnMinWidth = 340.dp
+private const val SESSION_COLUMN_SHARE = 0.42f
 
 /**
  * TRIPS: the session (start a trip or a lap session, live statistics and lap timer), the automatic
@@ -83,10 +86,14 @@ private fun TripsOverview(onOpenTrip: (Long) -> Unit) {
     DisposableEffect(vm) { onDispose(vm::clearCopyResult) }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            SessionColumn(vm, session, settings, { isChoosingTrack = true }, Modifier.width(SessionColumnWidth).fillMaxHeight())
-            VerticalRule()
-            TripList(rows, settings?.autoRecord != false, onOpen = onOpenTrip, onDelete = { pendingDelete = it }, modifier = Modifier.weight(1f).fillMaxHeight())
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            // 480 dp from a 1140 dp canvas up; a narrower one gives the list more than half.
+            val sessionWidth = sideColumnWidth(maxWidth, SESSION_COLUMN_SHARE, SessionColumnMinWidth, SessionColumnWidth)
+            Row(Modifier.fillMaxSize()) {
+                SessionColumn(vm, session, settings, { isChoosingTrack = true }, Modifier.width(sessionWidth).fillMaxHeight())
+                VerticalRule()
+                TripList(rows, settings?.autoRecord != false, onOpen = onOpenTrip, onDelete = { pendingDelete = it }, modifier = Modifier.weight(1f).fillMaxHeight())
+            }
         }
         notice?.let { NoticeLine(it, KLineTheme.colors.ink) }
     }

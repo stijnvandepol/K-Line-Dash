@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.ui.theme.ActiveThemeHost
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
+import nl.stijnvdpol.klinedash.ui.theme.ScreenSizeHost
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,7 +25,7 @@ class MainActivity : ComponentActivity() {
                 // Behind the first frame and during resizes the window shows this, so it must match the theme.
                 val background = KLineTheme.colors.background
                 SideEffect { window.setBackgroundDrawable(ColorDrawable(background.toArgb())) }
-                AppRoot()
+                ScreenSizeHost { AppRoot() }
             }
         }
     }

@@ -10,28 +10,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
-import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.GridCell
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.WidgetType
-import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
 import nl.stijnvdpol.klinedash.ui.DataField
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.LiveState
 import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
-import nl.stijnvdpol.klinedash.ui.labelAndGapHeight
-import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
-import nl.stijnvdpol.klinedash.ui.slotSample
+import nl.stijnvdpol.klinedash.ui.rememberSharedValueLook
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
-import nl.stijnvdpol.klinedash.ui.theme.Spacing
-import nl.stijnvdpol.klinedash.ui.valueScale
 
 /** A number fills its cell like the primary fields do: as big as the cell allows, within this factor. */
 private const val NUMBER_MAX_GROWTH = 3f
+private val NumberLook = ValueLook(KLineType.primaryValue, NUMBER_MAX_GROWTH)
 
 /**
  * A grid of equal cells separated by rules; each cell is a number or a graph of the last 60 s.
@@ -77,20 +70,7 @@ private fun GridCellContent(
  */
 @Composable
 private fun rememberNumberLook(cells: List<GridCell>, cellWidth: Dp, cellHeight: Dp): ValueLook {
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val units = LocalUnitSystem.current
-    return remember(cells, cellWidth, cellHeight, density, units) {
-        val style = KLineType.primaryValue
-        val roomWidth = cellWidth - Spacing.fieldPaddingHorizontal * 2
-        val roomHeight = cellHeight - Spacing.fieldPaddingVertical * 2 - density.labelAndGapHeight()
-        val digitHeight = with(density) { style.fontSize.toDp() } * CAP_HEIGHT_EM
-        val scale = cells.filter { it.widget == WidgetType.NUMBER }
-            .mapNotNull { Signals.byId(it.signalId) }
-            .minOfOrNull { signal ->
-                val slotWidth = with(density) { measurer.measure(slotSample(signal, units), style).size.width.toDp() }
-                valueScale(slotWidth.value, roomWidth.value, digitHeight.value, roomHeight.value, NUMBER_MAX_GROWTH)
-            } ?: NUMBER_MAX_GROWTH
-        ValueLook(style, scale)
-    }
+    val numberIds = remember(cells) { cells.filter { it.widget == WidgetType.NUMBER }.map { it.signalId } }
+    val widths = remember(numberIds, cellWidth) { numberIds.map { cellWidth } }
+    return rememberSharedValueLook(numberIds, widths, cellHeight, NumberLook)
 }

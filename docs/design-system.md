@@ -20,8 +20,8 @@ and the meaning of colour stay fixed.
    slot. A stale value is dimmed, a missing one shows "--" in the same slot. No thousands
    separator: "8175", not "8,175" or "8 175" (a gap reads as two numbers at a glance). Decimal
    point always, whatever the system locale. Flags (the MIL) read "On"/"Off", not 1/0.
-5. **Big, forgiving targets.** Every control is at least 72 dp high; no precision needed while
-   the car moves.
+5. **Big, forgiving targets.** Every control is at least 72 dp high on a head unit (never below
+   48 dp on a phone, see Screen sizes); no precision needed while the car moves.
 
 ## Colour tokens (default theme "Race")
 
@@ -427,6 +427,93 @@ consumption as L/100 km or mpg. RPM, %, V, g/s and degrees never change. Imperia
 get one more decimal. The speedometers run 0 to 260 km/h or 0 to 160 mph (ticks every 10, numerals
 every 40); the coolant dial 40 to 130 °C or 100 to 270 °F. Warning limits are stored in °C and
 stepped in 1 °F or 1 °C. Stored values and every export (VBO, GPX, CSV) stay metric.
+
+## Screen sizes
+
+The app runs on head units from 1024 x 600 dp up to 1920 x 720 dp, on tablets, and on phones held
+in landscape (640 x 360 dp and up) in a car mount. Everything above is the design for the reference
+unit, 1280 x 720 dp. The other screens are the same design, scaled, with a few layouts that change.
+
+### Tiers
+
+There are three **size tiers**, chosen once from the real height of the window (the system bars are
+hidden, so it is the whole display; the keyboard cannot change it). The selection is
+`sizeTierOf` in `ui/theme/ScreenSize.kt`; the one place that applies it is `ScreenSizeHost`.
+
+The whole UI is laid out on a canvas as tall as the reference unit, and a smaller screen draws that
+canvas at the tier's **scale**: touch targets, bars, padding, column widths and type shrink by the
+same factor, so the proportions, the grid and the look stay exactly as designed. The type is then
+enlarged by the tier's **text boost**, because text cannot shrink as far as the controls and stay
+readable at arm's length. The user's own font scale is kept on top. A layout that needs to know the
+width asks for the canvas width (real width divided by the scale), so a 640 dp phone is an 853 dp
+canvas and a 914 dp phone a 1 219 dp one.
+
+| Tier | Real height | Scale | Text boost | Typical screens |
+|---|---|---|---|---|
+| COMPACT | under 480 dp | 0.75 | 1.12 | phones in landscape: 640 x 360, 914 x 411 |
+| MEDIUM | 480 to 659 dp | 0.85 | 1.0 | small head unit 1024 x 600 |
+| EXPANDED | 660 dp and up | 1.0 | 1.0 | 1280 x 720, 1920 x 720, tablets 1333 x 800 |
+
+The edge between MEDIUM and EXPANDED sits below 720 so a 1280 x 720 unit with a thin permanent
+system bar is still the reference design.
+
+What the tokens come to on the screen (token value times scale; text times scale and boost):
+
+| Token | COMPACT | MEDIUM | EXPANDED |
+|---|---|---|---|
+| Touch target, bottom bar (`touchMin`) | 54 dp | 61 dp | 72 dp |
+| List row, table header (`listRowMin`, `tableHeaderHeight`) | 42 dp | 48 dp | 56 dp |
+| Section header (`sectionHeaderHeight`) | 66 dp | 75 dp | 88 dp |
+| Field padding, horizontal / vertical | 12 / 9 dp | 13.6 / 10.2 dp | 16 / 12 dp |
+| `body` / `caption` / `fieldLabel` | 16.8 / 13.4 / 13.4 sp | 17 / 13.6 / 13.6 sp | 20 / 16 / 16 sp |
+| `title` / `rowValue` | 20.2 / 23.5 sp | 20.4 / 23.8 sp | 24 / 28 sp |
+| Dashboard RPM bar, block with its scale | 48 dp, 78 dp | 82 dp, 119 dp | 96 dp, 140 dp |
+| Dashboard row of small fields | 66 dp | 88 dp | 104 dp |
+
+A touch target never drops below 48 dp, and body text never below 16 sp (both are tested). The
+big numerals (`heroValue`, `primaryValue`, `fieldValue`) are not in the table: they fit their
+field, as before, and on a short screen they simply have the room the other tokens leave them.
+The RPM bar and the field row are the two sizes chosen per tier on top of the scale (`dashMetricsOf`
+in `ui/ScreenLayout.kt`): on a phone the bar is 64 canvas dp instead of 96 and the field row 88
+instead of 104, which gives the three big numerals about a third more height. Speed and coolant
+share one text size on every screen.
+
+### What changes with the width
+
+The rules are pure functions in `ui/ScreenLayout.kt` (tested), in canvas dp:
+
+| Rule | Below | From |
+|---|---|---|
+| SETUP: menu beside the section | the menu and one section take turns (below 1 000) | 240 dp menu beside the section |
+| Sensors table | one column | two halves (1 000) |
+| Link status in the bottom bar | lamp, GPS and request rate only | protocol name too (1 000) |
+| Dashboard small fields | two rows of three if a field would be under 130 dp wide | one row of six |
+| Two-page text (wizard, About) | stacked | two halves (840) |
+| Warnings row | the steppers get their own line (section under 960) | one line |
+| Lap table in trip detail | five columns, no max rpm or full-throttle share (table under 680) | seven |
+| Diagnostics readiness and freeze frame | one cell per row (panel under 520) | two |
+| Side columns (adapter list, themes, pages, help topics, session, route) | take 32 to 50 % of the width, never under a minimum | the design width (400, 440, 320, 280, 480, 500 dp) |
+| Running text | | never wider than 800 dp (one column wizard steps 960 dp, centred) |
+
+On the smallest phone SETUP is a menu of two columns of rows; a section opens with a back strip
+(a full-height 72 dp cell with an arrow) along its left edge, and the back key or tapping SETUP in
+the bottom bar returns to the menu. The wizard has no header on a phone: "Step n of m" and "Skip
+setup" join the footer row. The Trips list writes the distance unit once in the header ("DIST KM")
+instead of in every row. On the Track page coolant and speed sit side by side, not stacked.
+Dialogs never exceed the screen: title and buttons stay, the text between them scrolls.
+
+### Safe areas and the keyboard
+
+The app hides the system bars. The root keeps clear of a display cutout (`WindowInsets.displayCutout`),
+so nothing is drawn under a notch in landscape. On a phone the keyboard covers most of a 360 dp
+screen; while it is open the bottom bar, the warning banner, the wizard footer and the status above
+the Connection fields are hidden (`LocalIsKeyboardCrowding`), so the field being edited stays in view.
+
+### Checked sizes
+
+Every screen was checked on the emulator at 640 x 360 (1920 x 1080 at 480 dpi), 914 x 411
+(2400 x 1080 at 420), 1024 x 600, 1280 x 720, 1333 x 800 (2000 x 1200 at 240) and 1920 x 720.
+Screenshots: `docs/screenshots/sizes/<screen>-<size>.png`.
 
 ## Writing
 

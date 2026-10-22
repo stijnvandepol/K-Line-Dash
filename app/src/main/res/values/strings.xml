@@ -113,6 +113,7 @@
     <string name="clear_final_body">This erases the codes, the freeze frame and the readiness monitors, and it cannot be undone. Only continue if you are sure.</string>
 
     <!-- Setup -->
+    <string name="setup_back_description">Back to the setup menu</string>
     <string name="setup_connection">Connection</string>
     <string name="setup_warnings">Warnings</string>
     <string name="setup_dashboard">Dashboard</string>
@@ -157,6 +158,7 @@
     <string name="trips_column_start">Started</string>
     <string name="trips_column_duration">Duration</string>
     <string name="trips_column_distance">Distance</string>
+    <string name="trips_column_distance_short">Dist</string>
     <string name="trips_empty_auto">No trips yet. Recording starts when the engine runs.</string>
     <string name="trips_empty_manual">No trips yet. Start a trip to record one.</string>
     <string name="trips_delete">Delete</string>

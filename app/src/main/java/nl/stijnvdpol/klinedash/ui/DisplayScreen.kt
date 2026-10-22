@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +44,8 @@ import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalog
 import nl.stijnvdpol.klinedash.ui.theme.formatMinuteOfDay
 
 private val ThemeColumnWidth = 440.dp
+private val ThemeColumnMinWidth = 340.dp
+private const val THEME_COLUMN_SHARE = 0.5f
 private val SwatchStripCell = 20.dp
 private val SwatchStripGap = 4.dp
 private val PreviewGap = 12.dp
@@ -68,10 +71,13 @@ internal fun DisplayScreen() {
     val settings = loadedSettings ?: return
     val catalog = loadedCatalog ?: return
     var slot by remember { mutableStateOf(ThemeSlot.DAY) }
-    Row(Modifier.fillMaxSize()) {
-        ThemeColumn(settings, catalog, slot, { slot = it }, vm, Modifier.width(ThemeColumnWidth).fillMaxHeight())
-        VerticalRule()
-        OptionsColumn(settings, vm, Modifier.weight(1f).fillMaxHeight())
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val themeWidth = sideColumnWidth(maxWidth, THEME_COLUMN_SHARE, ThemeColumnMinWidth, ThemeColumnWidth)
+        Row(Modifier.fillMaxSize()) {
+            ThemeColumn(settings, catalog, slot, { slot = it }, vm, Modifier.width(themeWidth).fillMaxHeight())
+            VerticalRule()
+            OptionsColumn(settings, vm, Modifier.weight(1f).fillMaxHeight())
+        }
     }
 }
 

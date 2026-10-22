@@ -26,7 +26,7 @@ Play Services.
 
 | Part | Notes |
 |---|---|
-| Head unit | Android 12/13, landscape (1280 x 720 and up). Bluetooth Classic, BLE or Wi-Fi to the adapter. |
+| Head unit or phone | Android 12/13, landscape only. Designed for 1280 x 720 dp head units; works from a phone in landscape (640 x 360 dp) up to 1920 x 720 dp units and tablets (see "Screen sizes" in docs/design-system.md). Bluetooth Classic, BLE or Wi-Fi to the adapter. |
 | Adapter | ELM327 or clone. Verified: Konnwei KW905 over BLE (service `FFF0`). Classic SPP and Wi-Fi (`192.168.0.10:35000`) are supported too. |
 | Car | Any OBD2 car; tuned for K-line (ISO 9141-2 / KWP2000), where a request takes about 0.5 s. |
 

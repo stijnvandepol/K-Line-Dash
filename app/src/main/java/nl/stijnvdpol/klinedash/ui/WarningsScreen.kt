@@ -3,6 +3,7 @@ package nl.stijnvdpol.klinedash.ui
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -69,32 +70,38 @@ fun WarningsScreen() {
     val loaded by vm.settings.collectAsStateWithLifecycle()
     val settings = loaded ?: return
     val units = LocalUnitSystem.current
-    Column(Modifier.fillMaxSize()) {
-        WarningsHeader()
-        HorizontalRule()
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            WarningRows.forEach { row -> WarningRowView(row, settings, units, vm) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Too narrow for the name, the sound switch and two steppers on one line: the steppers get a line of their own.
+        val isStacked = isWarningsStacked(maxWidth.value)
+        Column(Modifier.fillMaxSize()) {
+            WarningsHeader(isStacked)
+            HorizontalRule()
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                WarningRows.forEach { row -> WarningRowView(row, settings, units, vm, isStacked) }
+            }
+            TextActionButton(
+                stringResource(R.string.warnings_reset), vm::resetToDefaults,
+                Modifier.fillMaxWidth().height(Spacing.touchMin),
+            )
         }
-        TextActionButton(
-            stringResource(R.string.warnings_reset), vm::resetToDefaults,
-            Modifier.fillMaxWidth().height(Spacing.touchMin),
-        )
     }
 }
 
 @Composable
-private fun WarningsHeader() {
+private fun WarningsHeader(isStacked: Boolean) {
     Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight)) {
         HeaderCell(stringResource(R.string.warnings_column_warning), Modifier.weight(1f).fillMaxHeight())
         VerticalRule()
         HeaderCell(stringResource(R.string.warnings_column_sound), Modifier.width(SoundCellWidth).fillMaxHeight())
-        VerticalRule()
-        HeaderCell(stringResource(R.string.warnings_column_limits), Modifier.width(StepperWidth * SLOTS_PER_ROW + Spacing.ruleThickness).fillMaxHeight())
+        if (!isStacked) {
+            VerticalRule()
+            HeaderCell(stringResource(R.string.warnings_column_limits), Modifier.width(StepperWidth * SLOTS_PER_ROW + Spacing.ruleThickness).fillMaxHeight())
+        }
     }
 }
 
 @Composable
-private fun WarningRowView(row: WarningRow, settings: AlertSettings, units: UnitSystem, vm: WarningsViewModel) {
+private fun WarningRowView(row: WarningRow, settings: AlertSettings, units: UnitSystem, vm: WarningsViewModel, isStacked: Boolean) {
     val isOn = row.kind in settings.enabled
     Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
         SwitchRow(stringResource(row.nameRes), isOn, { vm.setEnabled(row.kind, it) }, Modifier.weight(1f).fillMaxHeight())
@@ -104,27 +111,49 @@ private fun WarningRowView(row: WarningRow, settings: AlertSettings, units: Unit
             stringResource(R.string.warnings_sound), row.kind in settings.withSound, { vm.setSound(row.kind, it) },
             Modifier.width(SoundCellWidth).fillMaxHeight(), enabled = isOn,
         )
-        repeat(SLOTS_PER_ROW) { slot ->
-            VerticalRule()
-            Box(Modifier.width(StepperWidth).fillMaxHeight()) {
-                row.limits.getOrNull(slot)?.let { (limit, labelRes) ->
-                    Stepper(limit, stringResource(labelRes), settings, units, isOn) { direction -> vm.step(limit, direction, units) }
-                }
+        if (!isStacked) {
+            repeat(SLOTS_PER_ROW) { slot ->
+                VerticalRule()
+                Box(Modifier.width(StepperWidth).fillMaxHeight()) { LimitStepper(row, slot, settings, units, isOn, vm, isFlexible = false) }
+            }
+        }
+    }
+    if (isStacked && row.limits.isNotEmpty()) {
+        HorizontalRule()
+        Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
+            repeat(SLOTS_PER_ROW) { slot ->
+                if (slot > 0) VerticalRule()
+                Box(Modifier.weight(1f).fillMaxHeight()) { LimitStepper(row, slot, settings, units, isOn, vm, isFlexible = true) }
             }
         }
     }
     HorizontalRule()
 }
 
+@Composable
+private fun LimitStepper(row: WarningRow, slot: Int, settings: AlertSettings, units: UnitSystem, isOn: Boolean, vm: WarningsViewModel, isFlexible: Boolean) {
+    row.limits.getOrNull(slot)?.let { (limit, labelRes) ->
+        Stepper(limit, stringResource(labelRes), settings, units, isOn, isFlexible) { direction -> vm.step(limit, direction, units) }
+    }
+}
+
 /** [-] value [+]: the word for the limit in small capitals over the value and its unit. */
 @Composable
-private fun Stepper(limit: AlertLimit, label: String, settings: AlertSettings, units: UnitSystem, isOn: Boolean, onStep: (direction: Int) -> Unit) {
+private fun Stepper(
+    limit: AlertLimit,
+    label: String,
+    settings: AlertSettings,
+    units: UnitSystem,
+    isOn: Boolean,
+    isFlexible: Boolean,
+    onStep: (direction: Int) -> Unit,
+) {
     val colors = KLineTheme.colors
     Row(Modifier.fillMaxSize()) {
         StepButton(MINUS, "$label, ${stringResource(R.string.step_lower)}", isOn && settings.canStep(limit, -1, units)) { onStep(-1) }
         VerticalRule()
         Column(
-            Modifier.width(StepValueWidth).fillMaxHeight(),
+            (if (isFlexible) Modifier.weight(1f) else Modifier.width(StepValueWidth)).fillMaxHeight(),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

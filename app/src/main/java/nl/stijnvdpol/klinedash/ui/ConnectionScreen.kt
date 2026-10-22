@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -45,11 +46,14 @@ import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
 import nl.stijnvdpol.klinedash.transport.needsBluetoothPermissions
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalIsKeyboardCrowding
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.accentColor
 
 private const val TAG = "ConnectionScreen"
 private val AdapterColumnWidth = 400.dp
+private val AdapterColumnMinWidth = 260.dp
+private const val ADAPTER_COLUMN_SHARE = 0.38f
 private val FieldLabelWidth = 264.dp
 private const val UNSUPPORTED_REASON_MAX_LINES = 3
 
@@ -75,22 +79,31 @@ fun ConnectionScreen(
         if (s.kind == TransportKind.BT_CLASSIC) vm.refreshBonded()
     }
 
-    Row(Modifier.fillMaxSize()) {
-        AdapterColumn(vm, s, Modifier.width(AdapterColumnWidth).fillMaxHeight())
-        VerticalRule()
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            StatusBlock(state, Modifier.fillMaxWidth().heightIn(min = Spacing.sectionHeaderHeight))
-            HorizontalRule()
-            // Right under the status, level with the first adapter row: the state and what to do
-            // about it read as one block. Only the unsupported-adapter help makes the status taller.
-            Actions(
-                vm = vm,
-                state = state,
-                onConnect = { onConnect(s.kind.needsBluetoothPermissions()) },
-                modifier = Modifier.fillMaxWidth().height(Spacing.touchMin),
-            )
-            HorizontalRule()
-            TransportDetails(vm, s, onScanRequested, Modifier.weight(1f).fillMaxWidth())
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val adapterWidth = sideColumnWidth(maxWidth, ADAPTER_COLUMN_SHARE, AdapterColumnMinWidth, AdapterColumnWidth)
+        // While the keyboard covers a phone, only the fields stay (the same composables, so typing is not interrupted).
+        val isKeyboardCrowding = LocalIsKeyboardCrowding.current
+        Row(Modifier.fillMaxSize()) {
+            if (!isKeyboardCrowding) {
+                AdapterColumn(vm, s, Modifier.width(adapterWidth).fillMaxHeight())
+                VerticalRule()
+            }
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                if (!isKeyboardCrowding) {
+                    StatusBlock(state, Modifier.fillMaxWidth().heightIn(min = Spacing.sectionHeaderHeight))
+                    HorizontalRule()
+                    // Right under the status, level with the first adapter row: the state and what to do
+                    // about it read as one block. Only the unsupported-adapter help makes the status taller.
+                    Actions(
+                        vm = vm,
+                        state = state,
+                        onConnect = { onConnect(s.kind.needsBluetoothPermissions()) },
+                        modifier = Modifier.fillMaxWidth().height(Spacing.touchMin),
+                    )
+                    HorizontalRule()
+                }
+                TransportDetails(vm, s, onScanRequested, Modifier.weight(1f).fillMaxWidth())
+            }
         }
     }
 }

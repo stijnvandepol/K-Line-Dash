@@ -1,11 +1,13 @@
 package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -41,18 +43,24 @@ private val InfoRowHeight = 40.dp
 private val UnitSlotWidth = 48.dp
 private const val CODE_SLOT_SAMPLE = "P8888"
 private const val FREEZE_VALUE_SAMPLE = "-88.8"
-private const val GRID_COLUMNS = 2
 
 // --- Left: the code lists -------------------------------------------------------------------
 
 /** Stored, pending and permanent codes, each a section of rows on rules; only stored codes can be selected. */
 @Composable
-internal fun CodeListsColumn(ui: DiagnosticsUiState, lists: CodeLists, onSelect: (Dtc) -> Unit, modifier: Modifier = Modifier) {
+internal fun CodeListsColumn(
+    ui: DiagnosticsUiState,
+    lists: CodeLists,
+    onSelect: (Dtc) -> Unit,
+    modifier: Modifier = Modifier,
+    scrollingVehicle: VehicleInfo? = null,
+) {
     LazyColumn(modifier) {
         ui.notice?.let { notice -> item(key = "notice") { NoticeBanner(notice) } }
         codeSection(R.string.diag_section_stored, "stored", lists.stored, ui.selected, onSelect)
         codeSection(R.string.diag_section_pending, "pending", lists.pending, null, null)
         codeSection(R.string.diag_section_permanent, "permanent", lists.permanent, null, null)
+        scrollingVehicle?.let { info -> item(key = "vehicle") { VehiclePanel(info) } }
     }
 }
 
@@ -144,21 +152,25 @@ private fun NoticeBanner(notice: ClearNotice) {
 @Composable
 internal fun ReportSidePanels(report: DiagnosticReport, selected: Dtc?, modifier: Modifier = Modifier) {
     val words = rememberOnOffWords()
-    Column(modifier.verticalScroll(rememberScrollState())) {
-        ReadinessPanel(report.monitors)
-        FreezeFramePanel(freezeFrameView(report.freezeFrame, selected, words, LocalUnitSystem.current))
+    BoxWithConstraints(modifier) {
+        // Two cells to a row while a name still fits beside its status; one when the panel is narrow (a phone).
+        val columns = gridColumnsFor(maxWidth.value)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            ReadinessPanel(report.monitors, columns)
+            FreezeFramePanel(freezeFrameView(report.freezeFrame, selected, words, LocalUnitSystem.current), columns)
+        }
     }
 }
 
 @Composable
-private fun ReadinessPanel(monitors: List<ReadinessMonitor>) {
+private fun ReadinessPanel(monitors: List<ReadinessMonitor>, columns: Int) {
     val summary = readinessSummary(monitors)
     PanelHeader(
         stringResource(R.string.diag_section_readiness),
         if (monitors.isEmpty()) MISSING_VALUE else stringResource(R.string.diag_readiness_summary, summary.ready.toString(), summary.applicable.toString()),
     )
     if (monitors.isEmpty()) StateRow(stringResource(R.string.diag_readiness_none), KLineTheme.colors.inkMuted)
-    GridRows(monitors) { monitor -> MonitorCell(monitor) }
+    GridRows(monitors, columns) { monitor -> MonitorCell(monitor) }
 }
 
 @Composable
@@ -176,7 +188,7 @@ private fun RowScope.MonitorCell(monitor: ReadinessMonitor) {
 }
 
 @Composable
-private fun FreezeFramePanel(view: FreezeFrameView) {
+private fun FreezeFramePanel(view: FreezeFrameView, columns: Int) {
     val colors = KLineTheme.colors
     val trigger = when (view) {
         is FreezeFrameView.Values -> view.triggerCode?.code
@@ -187,7 +199,7 @@ private fun FreezeFramePanel(view: FreezeFrameView) {
     when (view) {
         FreezeFrameView.None -> StateRow(stringResource(R.string.diag_freeze_none), colors.inkMuted)
         is FreezeFrameView.OtherCode -> StateRow(stringResource(R.string.diag_freeze_other, view.selected.code, view.triggerCode.code), colors.inkMuted)
-        is FreezeFrameView.Values -> GridRows(view.rows) { row -> FreezeCell(row) }
+        is FreezeFrameView.Values -> GridRows(view.rows, columns) { row -> FreezeCell(row) }
     }
 }
 
@@ -265,8 +277,8 @@ private fun PanelHeader(title: String, trailing: String?) {
 
 /** [items] as rows of two cells separated by a vertical rule, a rule under each row. */
 @Composable
-private fun <T> GridRows(items: List<T>, cell: @Composable RowScope.(T) -> Unit) {
-    items.chunked(GRID_COLUMNS).forEach { pair ->
+private fun <T> GridRows(items: List<T>, columns: Int, cell: @Composable RowScope.(T) -> Unit) {
+    items.chunked(columns).forEach { pair ->
         Row(Modifier.fillMaxWidth().height(InfoRowHeight)) {
             pair.forEachIndexed { index, item ->
                 if (index > 0) VerticalRule()
@@ -275,7 +287,7 @@ private fun <T> GridRows(items: List<T>, cell: @Composable RowScope.(T) -> Unit)
                     Row(Modifier.fillMaxWidth()) { cell(item) }
                 }
             }
-            if (pair.size < GRID_COLUMNS) {
+            if (pair.size < columns) {
                 VerticalRule()
                 Box(Modifier.weight(1f))
             }

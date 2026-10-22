@@ -1,8 +1,8 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +33,7 @@ import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import kotlin.math.ceil
 
@@ -44,10 +44,6 @@ private val UnitColumnWidth = 64.dp
 private val RateColumnWidth = 88.dp
 private val ColumnGap = 12.dp
 private val EmptyStateButtonWidth = 256.dp
-
-/** From this width the table is split into two side-by-side halves, so 18 sensors fit without scrolling. */
-private val TwoColumnMinWidth = 1_000.dp
-private const val WIDE_COLUMNS = 2
 
 /** Every signal the car supports, with its live value: a table, name left, value right. */
 @Composable
@@ -103,21 +99,19 @@ private fun SensorTable(
     nowMs: State<Long>,
     toneContext: State<ToneContext>,
 ) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val columns = if (maxWidth >= TwoColumnMinWidth) WIDE_COLUMNS else 1
-        val rowCount = ceil(signals.size / columns.toFloat()).toInt()
-        Column(Modifier.fillMaxSize()) {
-            TableRow(columns) { TableHeader() }
-            HorizontalRule()
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(rowCount, key = { signals[it].id }) { row ->
-                    TableRow(columns) { column ->
-                        signals.getOrNull(row + column * rowCount)?.let { signal ->
-                            SensorCell(signal, readings, stats, nowMs, toneContext)
-                        }
+    val columns = sensorColumnCount(LocalScreenProfile.current)
+    val rowCount = ceil(signals.size / columns.toFloat()).toInt()
+    Column(Modifier.fillMaxSize()) {
+        TableRow(columns) { TableHeader() }
+        HorizontalRule()
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(rowCount, key = { signals[it].id }) { row ->
+                TableRow(columns) { column ->
+                    signals.getOrNull(row + column * rowCount)?.let { signal ->
+                        SensorCell(signal, readings, stats, nowMs, toneContext)
                     }
-                    HorizontalRule()
                 }
+                HorizontalRule()
             }
         }
     }

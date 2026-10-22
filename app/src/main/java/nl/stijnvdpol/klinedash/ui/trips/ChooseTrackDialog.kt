@@ -1,18 +1,13 @@
 package nl.stijnvdpol.klinedash.ui.trips
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
-import nl.stijnvdpol.klinedash.ui.DialogListMaxHeight
 import nl.stijnvdpol.klinedash.ui.DialogText
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.PrimaryButton
@@ -37,14 +32,12 @@ internal fun ChooseTrackDialog(vm: SessionViewModel, onDismiss: () -> Unit) {
         if (tracks.isEmpty()) {
             DialogText(stringResource(R.string.session_no_tracks))
         } else {
-            Column(Modifier.heightIn(max = DialogListMaxHeight).verticalScroll(rememberScrollState())) {
-                tracks.forEach { track ->
-                    SelectableRow(selected = track.id == chosen?.id, onClick = {
-                        vm.pickTrack(track.id)
-                        onDismiss()
-                    }) {
-                        Text(track.name, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1)
-                    }
+            tracks.forEach { track ->
+                SelectableRow(selected = track.id == chosen?.id, onClick = {
+                    vm.pickTrack(track.id)
+                    onDismiss()
+                }) {
+                    Text(track.name, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1)
                 }
             }
         }

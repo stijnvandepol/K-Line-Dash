@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.runtime.getValue
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -33,6 +33,7 @@ import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.service.headline
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.accentColor
 
@@ -108,6 +109,7 @@ private fun LinkStatus(onOpenGps: () -> Unit, modifier: Modifier) {
     val colors = KLineTheme.colors
     val state = connection
     val rateWidth = rememberTextWidth(RATE_SAMPLE, KLineType.caption)
+    val showProtocol = showsLinkProtocol(LocalScreenProfile.current)
     Row(
         modifier.padding(end = Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
@@ -121,8 +123,10 @@ private fun LinkStatus(onOpenGps: () -> Unit, modifier: Modifier) {
         } else if (stats.mode == PollMode.ENGINE_OFF) {
             Text(stringResource(R.string.status_engine_off), style = KLineType.caption, color = colors.ink, maxLines = 1)
         } else {
-            Text(state.info.protocolName, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
-            Spacer(Modifier.width(StatusGap))
+            if (showProtocol) {
+                Text(state.info.protocolName, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
+                Spacer(Modifier.width(StatusGap))
+            }
             val rate = if (stats.mode == PollMode.ACTIVE) formatNumber(stats.requestsPerSecond, 1) else MISSING_VALUE
             Text(
                 stringResource(R.string.status_rate, rate),
