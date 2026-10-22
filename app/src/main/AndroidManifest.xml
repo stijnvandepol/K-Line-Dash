@@ -10,13 +10,12 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <!--
-        Only for BLE scanning on API 26-30. CoarseFineLocation is an Android 12+ rule (FINE must be
-        requested together with COARSE); with maxSdkVersion 30 this permission never exists there.
+        GPS for lap timing and trip tracks (LocationManager, no Google Play Services). Fine location
+        is also what BLE scanning needs on API 26-30. Android 12+ wants coarse requested with fine;
+        a user who grants only approximate location gets GpsStatus.NoPermission.
     -->
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30"
-        tools:ignore="CoarseFineLocation" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -29,6 +28,8 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Added to the running service while the app is visible (ObdService.addLocationForegroundType). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -46,6 +47,7 @@
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <!-- Package visibility for the head-unit detection in HeadUnitPlatform.kt (keep the lists in sync). -->
     <queries>
@@ -93,6 +95,6 @@
         <service
             android:name=".service.ObdService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
     </application>
 </manifest>

@@ -72,3 +72,43 @@ internal class AutoRecordPolicy(private val graceMs: Long = AUTO_STOP_GRACE_MS) 
         return nowMs - offSince >= graceMs
     }
 }
+
+/** GPS speed above which the car counts as driving off. */
+internal const val MOTION_START_SPEED_KMH = 10.0
+
+/** The speed must stay above [MOTION_START_SPEED_KMH] this long before it counts. */
+internal const val MOTION_START_AFTER_MS = 5_000L
+
+/** Once moving, the car counts as moving until it is slower than this (the same threshold the statistics use). */
+internal const val MOTION_KEEP_SPEED_KMH = 2.0
+
+/**
+ * "Auto-start when moving" for a phone without an adapter: true after the GPS speed stayed above
+ * [MOTION_START_SPEED_KMH] for [MOTION_START_AFTER_MS], and false again once it fell below
+ * [MOTION_KEEP_SPEED_KMH]. Between those it keeps its answer, so a slow corner does not end the
+ * trip; the 2 minute grace of [AutoRecordPolicy] covers standing still. An unknown speed (no fresh
+ * fix) means not moving. It is the "engine is running" input of [AutoRecordPolicy] for such trips.
+ * No clock and no I/O: the caller passes the time.
+ */
+internal class MotionDetector {
+    private var fastSinceMs: Long? = null
+    private var isMoving = false
+
+    fun update(nowMs: Long, speedKmh: Double?): Boolean {
+        when {
+            speedKmh == null -> reset()
+            isMoving -> if (speedKmh < MOTION_KEEP_SPEED_KMH) reset()
+            speedKmh > MOTION_START_SPEED_KMH -> {
+                val since = fastSinceMs ?: nowMs.also { fastSinceMs = it }
+                if (nowMs - since >= MOTION_START_AFTER_MS) isMoving = true
+            }
+            else -> fastSinceMs = null
+        }
+        return isMoving
+    }
+
+    private fun reset() {
+        fastSinceMs = null
+        isMoving = false
+    }
+}

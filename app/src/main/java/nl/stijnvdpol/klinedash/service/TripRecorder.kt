@@ -15,20 +15,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.TripSettings
+import nl.stijnvdpol.klinedash.data.updateSummary
 
 private const val TAG = "TripRecorder"
 private const val DEMAND_OWNER = "trip"
 private const val RPM_ID = "rpm"
-private const val SAMPLE_INTERVAL_MS = 1_000L
+private const val KMH_PER_MPS = 3.6
 private const val MAX_FILE_NAME_ATTEMPTS = 100
 
 /** What the recorder is doing; shown by the UI as a recording indicator. */
@@ -49,19 +53,35 @@ sealed interface StartResult {
     data object Started : StartResult
     data object AlreadyRecording : StartResult
 
-    /** There is no adapter link yet, so there would be nothing to record. */
+    /** There is no adapter link and no GPS fix yet, so there would be nothing to record. */
     data object NotConnected : StartResult
     data class Failed(val reason: String) : StartResult
 }
 
 /**
  * Records trips to CSV files, either started by the user ([start]/[stop]) or automatically
- * (engine running, per [TripSettings.autoRecord], see [AutoRecordPolicy]).
+ * (engine running, or moving on a phone, per [TripSettings], see [AutoRecordPolicy]).
  *
- * [run] has to be running (the service launches it) for samples to be taken: once a second the
- * readings of the current poller go into a [TripSession], and the trip row in Room is finished with
- * the summary on [stop]. A trip that is never finished (ACC power cut) is repaired by
+ * [run] has to be running (the service launches it) for samples to be taken: the readings of the
+ * current poller and the latest GPS fix go into a [TripSession], and the trip row in Room is
+ * finished with the summary on [stop]. A trip that is never finished (ACC power cut) is repaired by
  * [recoverUnfinished] at the next app start.
+ *
+ * Sample rate: once a second, or the GPS fix rate when the GPS delivers faster, at most 5 Hz (see
+ * [sampleIntervalMs]; the OBD values update slower than that, so more rows add size, not detail).
+ * Each row gets the latest fix only if it arrived within [FIX_MAX_AGE_MS]; otherwise the GPS cells
+ * are empty, so a trip started before the first fix or in a tunnel still records. The row time is
+ * the wall clock; when the unit's clock is behind GPS time the row's `gps_age` is clamped to 0, which
+ * only costs the lap times a few tens of milliseconds of tick jitter.
+ *
+ * A trip can run without an adapter link when a GPS fix exists (phone use): the OBD columns are then
+ * empty. With [TripSettings.autoStartWhenMoving] such a trip also starts by itself (see [MotionDetector]).
+ *
+ * Lap timing: the track in [activeTrack] when the trip starts, and any track set while it runs, is
+ * stored with the trip and timed live (see [live]). Ending the lap session (null track) does not
+ * take the laps away from the trip that is running. A trip with a track gets its cached lap count
+ * and best lap recomputed from the finished CSV by [refreshSummary], because gates set or edited
+ * mid-trip restart the live lap timer and the file knows all fixes.
  *
  * Demand on the poller, owner "trip": while recording rpm, speed and coolant (so the summary
  * means something); otherwise only rpm when auto-record is on (to notice the engine starting).
@@ -77,21 +97,41 @@ class TripRecorder internal constructor(
     private val clock: () -> Long,
     private val zone: ZoneId,
     private val ioDispatcher: CoroutineDispatcher,
+    private val location: LocationSource = NoLocation,
+    private val activeTrack: Flow<Track?> = flowOf(null),
+    private val refreshSummary: suspend (tripId: Long) -> Unit = {},
 ) {
-    constructor(tripsDir: File, tripDao: TripDao, settings: Flow<TripSettings>, poller: StateFlow<ObdPoller?>) :
-        this(tripsDir, tripDao, settings, poller, System::currentTimeMillis, ZoneId.systemDefault(), Dispatchers.IO)
+    constructor(
+        tripsDir: File,
+        tripDao: TripDao,
+        settings: Flow<TripSettings>,
+        poller: StateFlow<ObdPoller?>,
+        location: LocationSource,
+        activeTrack: Flow<Track?>,
+        refreshSummary: suspend (tripId: Long) -> Unit,
+    ) : this(
+        tripsDir, tripDao, settings, poller, System::currentTimeMillis, ZoneId.systemDefault(), Dispatchers.IO,
+        location, activeTrack, refreshSummary,
+    )
 
     private class Active(val tripId: Long, val session: TripSession, val startMs: Long, val origin: RecordingOrigin)
 
     private val lock = Mutex()
     private val policy = AutoRecordPolicy()
     private val recovery = TripRecovery(tripsDir, tripDao, ioDispatcher)
+    private val motion = MotionDetector()
     private var active: Active? = null
+    private var latestTrack: Track? = null
     private var demandedOn: ObdPoller? = null
     private var demandedIds: Set<String> = emptySet()
 
     private val _state = MutableStateFlow<RecordingState>(RecordingState.Idle)
     val state: StateFlow<RecordingState> = _state.asStateFlow()
+
+    private val _live = MutableStateFlow(LiveTripState.Idle)
+
+    /** Statistics, lap timer and laps of the trip being recorded, updated with every sample; [LiveTripState.Idle] when idle. */
+    val live: StateFlow<LiveTripState> = _live.asStateFlow()
 
     private val _lastError = MutableStateFlow<String?>(null)
 
@@ -129,12 +169,13 @@ class TripRecorder internal constructor(
      * finished first, so a normal shutdown leaves no unfinished row.
      */
     suspend fun run() = coroutineScope {
-        val isAutoRecordEnabled = MutableStateFlow(settings.first().autoRecord)
-        launch { settings.collect { isAutoRecordEnabled.value = it.autoRecord } }
+        val currentSettings = MutableStateFlow(settings.first())
+        launch { settings.collect { currentSettings.value = it } }
+        launch { activeTrack.collect { track -> lock.withLock { applyTrackLocked(track) } } }
         try {
             while (true) {
-                tick(isAutoRecordEnabled.value)
-                delay(SAMPLE_INTERVAL_MS)
+                tick(currentSettings.value)
+                delay(sampleIntervalMs((location.status.value as? GpsStatus.Fix)?.rateHz))
             }
         } finally {
             withContext(NonCancellable) {
@@ -148,20 +189,24 @@ class TripRecorder internal constructor(
         }
     }
 
-    private suspend fun tick(isAutoRecordEnabled: Boolean) = lock.withLock {
+    private suspend fun tick(options: TripSettings) = lock.withLock {
+        val isAutoRecordEnabled = options.autoRecord
         val currentPoller = poller.value
         val readings = currentPoller?.readings?.value.orEmpty()
         val nowMs = clock()
+        val gps = location.freshFix(FIX_MAX_AGE_MS)
         updateDemand(currentPoller, isAutoRecordEnabled)
         val isEngineRunning = currentPoller != null && isEngineRunning(readings, nowMs)
-        when (policy.decide(nowMs, isEngineRunning, isAutoRecordEnabled, active?.origin)) {
+        val gpsSpeedKmh = gps?.speedMps?.times(KMH_PER_MPS)?.takeIf { options.autoStartWhenMoving }
+        val isDriving = motion.update(nowMs, gpsSpeedKmh) || isEngineRunning
+        when (policy.decide(nowMs, isDriving, isAutoRecordEnabled, active?.origin)) {
             AutoRecordAction.START -> if (startLocked(RecordingOrigin.AUTO) is StartResult.Failed) {
                 policy.suppressStartUntilEngineStops()
             }
             AutoRecordAction.STOP -> finishLocked()
             AutoRecordAction.NONE -> Unit
         }
-        if (currentPoller != null) sample(nowMs, readings)
+        if (currentPoller != null || gps != null) sample(nowMs, readings, gps)
         updateDemand(currentPoller, isAutoRecordEnabled)
     }
 
@@ -180,12 +225,15 @@ class TripRecorder internal constructor(
 
     private suspend fun startLocked(origin: RecordingOrigin): StartResult {
         if (active != null) return StartResult.AlreadyRecording
-        if (poller.value == null) return StartResult.NotConnected
+        if (poller.value == null && location.freshFix(FIX_MAX_AGE_MS) == null) return StartResult.NotConnected
         val nowMs = clock()
         return try {
             val session = withContext(ioDispatcher) { createSession(nowMs) }
-            val tripId = insertTrip(session, nowMs)
+            val track = latestTrack
+            session.setTrack(track?.id, track?.lapGates())
+            val tripId = insertTrip(session, nowMs, track?.id)
             active = Active(tripId, session, nowMs, origin)
+            _live.value = session.liveState()
             _lastError.value = null
             _state.value = RecordingState.Recording(nowMs, 0, session.file.name, origin == RecordingOrigin.AUTO)
             StartResult.Started
@@ -206,11 +254,11 @@ class TripRecorder internal constructor(
         throw IOException("No free trip file name for $startMs")
     }
 
-    private suspend fun insertTrip(session: TripSession, startMs: Long): Long = try {
+    private suspend fun insertTrip(session: TripSession, startMs: Long, trackId: Long?): Long = try {
         tripDao.insert(
             Trip(
                 startMs = startMs, endMs = null, fileName = session.file.name, sampleCount = 0,
-                distanceKm = 0.0, maxRpm = null, maxSpeedKmh = null, maxCoolantC = null,
+                distanceKm = 0.0, maxRpm = null, maxSpeedKmh = null, maxCoolantC = null, trackId = trackId,
             ),
         )
     } catch (e: SQLException) {
@@ -228,10 +276,26 @@ class TripRecorder internal constructor(
         return StartResult.Failed(reason)
     }
 
-    private suspend fun sample(nowMs: Long, readings: Map<String, Reading>) {
+    /** A new active track applies to the running trip from now on; no track leaves the running trip as it is. */
+    private suspend fun applyTrackLocked(track: Track?) {
+        latestTrack = track
+        val current = active ?: return
+        track ?: return
+        val gates = track.lapGates()
+        if (current.session.trackId == track.id && current.session.gates == gates) return
+        current.session.setTrack(track.id, gates)
+        _live.value = current.session.liveState()
+        try {
+            tripDao.setTrack(current.tripId, track.id)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Could not store the track of trip ${current.tripId}", e)
+        }
+    }
+
+    private suspend fun sample(nowMs: Long, readings: Map<String, Reading>, gps: GeoFix?) {
         val current = active ?: return
         try {
-            withContext(ioDispatcher) { current.session.add(nowMs, readings) }
+            withContext(ioDispatcher) { current.session.add(nowMs, readings, gps) }
         } catch (e: IOException) {
             Log.e(TAG, "Writing the trip file failed, ending the trip", e)
             _lastError.value = "The trip stopped because the file could not be written. Check the free storage of the head unit."
@@ -242,6 +306,7 @@ class TripRecorder internal constructor(
         _state.value = RecordingState.Recording(
             current.startMs, current.session.sampleCount, current.session.file.name, current.origin == RecordingOrigin.AUTO,
         )
+        _live.value = current.session.liveState()
     }
 
     /** Closes the file and stores the summary; a trip without any sample is deleted again. */
@@ -249,6 +314,7 @@ class TripRecorder internal constructor(
         val finished = active ?: return
         active = null
         _state.value = RecordingState.Idle
+        _live.value = LiveTripState.Idle
         withContext(NonCancellable + ioDispatcher) {
             try {
                 finished.session.close()
@@ -270,7 +336,18 @@ class TripRecorder internal constructor(
                     maxSpeedKmh = summary.maxSpeedKmh,
                     maxCoolantC = summary.maxCoolantC,
                 )
+                tripDao.updateSummary(finished.tripId, finished.session.cache())
+                if (finished.session.trackId != null) refreshLapSummary(finished.tripId)
             }
+        }
+    }
+
+    /** The live cache is already stored; if the recomputation fails it stays, and the detail screen recomputes anyway. */
+    private suspend fun refreshLapSummary(tripId: Long) {
+        try {
+            refreshSummary(tripId)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Could not refresh the lap summary of trip $tripId", e)
         }
     }
 }

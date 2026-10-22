@@ -71,4 +71,34 @@ class TripSessionTest {
     fun summaryHasNoValueBeforeTheFirstSample() {
         newSession().use { assertEquals(null, it.summary()) }
     }
+
+    @Test
+    fun rowsCarryTheFixAndTheLiveStateSeesEverySampleAtOnce() {
+        val fixes = circuitFixes(speedKmh = 72.0, durationMs = 5_000, startMs = startMs)
+        newSession(settleMs = 20_000).use { session ->
+            fixes.forEach { session.add(it.timeMs, readings(it.timeMs, "rpm"), it) }
+            assertEquals("the header is still waiting", "", text())
+            val stats = checkNotNull(session.liveState().stats)
+            assertEquals(fixes.size, stats.sampleCount)
+            assertTrue(stats.gpsDistanceKm > 0.09)
+            assertTrue(session.cache().hasGps)
+        }
+        val lines = text().lines().filter { it.isNotEmpty() }
+        assertEquals(fixes.size + 1, lines.size)
+        assertTrue(lines.first().contains("lat (deg),lon (deg)"))
+        assertTrue("latitude and longitude are in the row", lines[1].split(",").takeLast(7).take(2).all { it.isNotEmpty() })
+    }
+
+    @Test
+    fun aTrackSetMidTripStartsLapTimingFromThen() {
+        newSession().use { session ->
+            session.add(startMs, readings(startMs, "rpm"))
+            assertEquals(null, session.liveState().lapTiming)
+            session.setTrack(5, circuitTrack().lapGates())
+            session.add(startMs + 1_000, readings(startMs + 1_000, "rpm"))
+            assertEquals(5L, session.liveState().trackId)
+            assertEquals(false, checkNotNull(session.liveState().lapTiming).isTiming)
+            assertEquals(0, session.cache().lapCount)
+        }
+    }
 }

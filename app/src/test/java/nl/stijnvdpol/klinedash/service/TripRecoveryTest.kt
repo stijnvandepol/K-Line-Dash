@@ -103,4 +103,13 @@ class TripRecoveryTest {
         startMs = startMs, endMs = null, fileName = fileName, sampleCount = 0,
         distanceKm = 0.0, maxRpm = null, maxSpeedKmh = null, maxCoolantC = null,
     )
+
+    @Test
+    fun recoveredTripWithPositionsUsesGpsDistanceAndKnowsItHasGps() {
+        val text = tripCsvOf(circuitFixes(speedKmh = 72.0, durationMs = 60_000))
+        val recovered = checkNotNull(recoverTrip(lines(text), endsWithNewline = true))
+        assertTrue(recovered.hasGps)
+        assertEquals("1.2 km at 20 m/s, taken from the fixes", 1.2, recovered.stats.gpsDistanceKm, 0.02)
+        assertFalse(checkNotNull(recoverTrip(lines(csv(5)), endsWithNewline = true)).hasGps)
+    }
 }

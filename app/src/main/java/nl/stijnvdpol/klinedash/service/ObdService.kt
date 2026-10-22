@@ -26,7 +26,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,6 +48,12 @@ import nl.stijnvdpol.klinedash.ui.MainActivity
  * activity may be killed and recreated while the link stays up; the UI finds the link through
  * [ObdServiceState].
  *
+ * GPS: the service starts (also at boot) as a `connectedDevice` foreground service only. When the UI
+ * reports a visible activity ([ObdServiceState.setAppVisible]) and the fine location permission is
+ * granted, it calls startForeground again with `connectedDevice|location` and starts the location
+ * source; if that throws it logs and carries on without GPS (trips record from OBD alone). See
+ * [superviseLocation] and docs/research/gps-laps-export.md section 1.4.
+ *
  * Decision (phase 1): no partial wake lock. The foreground service keeps the process alive and the
  * link is idle-light; a head unit that sleeps the CPU also powers down the ELM adapter's USB/BT
  * rail in practice. Revisit when polling runs with the screen off (phase 5).
@@ -64,6 +72,10 @@ class ObdService : LifecycleService() {
     private var linkJob: Job? = null
     private var recorderJob: Job? = null
     private var foregroundStarted = false
+
+    // Starts as connectedDevice only (boot start); superviseLocation adds the location type later.
+    @SuppressLint("InlinedApi")
+    private var foregroundType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
     private var lastText = ""
 
     override fun onCreate() {
@@ -89,6 +101,7 @@ class ObdService : LifecycleService() {
         }
         wakeSignals = WakeSignalReceivers(this, ::onWakeSignal)
         lifecycleScope.launch { appGraph.startupSettingsRepository.settings.collect(::applyStartupSettings) }
+        lifecycleScope.launch { superviseLocation() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -193,6 +206,7 @@ class ObdService : LifecycleService() {
     override fun onDestroy() {
         wakeSignals?.close()
         wakeSignals = null
+        appGraph.location.stop()
         appGraph.exportController.stop()
         super.onDestroy()
     }
@@ -213,14 +227,65 @@ class ObdService : LifecycleService() {
     // inlining it on API 26-28 is harmless.
     @SuppressLint("InlinedApi")
     private fun enterForeground(notification: Notification): Boolean = try {
-        ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-        )
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, foregroundType)
         foregroundStarted = true
         true
     } catch (e: RuntimeException) {
         Log.e(TAG, "startForeground failed", e)
         false
+    }
+
+    /**
+     * Follows the app's visibility, the location permission and the recording and starts or stops
+     * the location source accordingly (see [decideGpsAction]). The service itself starts at boot as
+     * `connectedDevice` only: the `location` type may not be added from the background, and a boot
+     * broadcast is not a foreground state. So GPS waits until the activity is visible.
+     */
+    private suspend fun superviseLocation() {
+        val location = appGraph.location
+        val isRecording = appGraph.tripRecorder.state.map { it is RecordingState.Recording }.distinctUntilChanged()
+        combine(
+            ObdServiceState.isAppVisible, ObdServiceState.locationPermissionChanges, isRecording, appGraph.useSimulatedGps,
+        ) { isVisible, _, recording, _ -> isVisible to recording }
+            .collectLatest { (isVisible, recording) ->
+                location.refresh()
+                when (decideGpsAction(isVisible, location.canStart(), location.isRunning, recording)) {
+                    GpsAction.START -> startLocation(location)
+                    GpsAction.STOP -> location.stop()
+                    GpsAction.STOP_AFTER_GRACE -> {
+                        delay(HIDDEN_GPS_GRACE_MS)
+                        location.stop()
+                    }
+                    GpsAction.NONE -> Unit
+                }
+            }
+    }
+
+    /** The device GPS only starts once the foreground service type allows it; the simulated source needs no type. */
+    private fun startLocation(location: LocationSource) {
+        if (location.usesDeviceGps && !addLocationForegroundType()) return
+        location.start()
+    }
+
+    /**
+     * Calls startForeground again with `connectedDevice|location`. Only works while the app is
+     * visible (targetSdk 34 checks the while-in-use permission when the type is added), which is why
+     * [startLocation] runs from the visibility signal. When it throws, the service carries on without
+     * GPS: trips still record from OBD alone. The new type is kept for later startForeground calls,
+     * otherwise the next start command would drop it again.
+     */
+    @SuppressLint("InlinedApi")
+    private fun addLocationForegroundType(): Boolean {
+        val withLocation = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        if (foregroundType == withLocation) return true
+        return try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(lastText), withLocation)
+            foregroundType = withLocation
+            true
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Cannot add the location foreground service type, continuing without GPS", e)
+            false
+        }
     }
 
     /** Returns whether a notification update was actually posted. */

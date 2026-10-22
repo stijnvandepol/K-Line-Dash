@@ -30,8 +30,45 @@ fun tripFileName(startMs: Long, zone: ZoneId, index: Int = FIRST_FILE_INDEX): St
 fun resolveTripFile(tripsDir: File, fileName: String): File? =
     if (fileName.isNotEmpty() && File(fileName).name == fileName) File(tripsDir, fileName) else null
 
-/** All trip CSV files in [tripsDir], newest first. */
+/**
+ * The files generated from a trip CSV for analysis on a PC, named after the trip: the trip
+ * `trip-20261022-140307.csv` gives `trip-20261022-140307.vbo`, `.gpx`, `.pc.csv` and `.laps.csv`.
+ * They live next to the trip, so the Wi-Fi export, the USB copy and the delete of the trip handle
+ * them with it. They are a cache: gates may change, and the next export rewrites them.
+ *
+ * @property needsGps the file is empty without positions, so it is not written for a trip without GPS.
+ */
+enum class ExportFormat(val suffix: String, val needsGps: Boolean) {
+    /** Racelogic VBO: Circuit Tools, RaceChrono, RaceRender. */
+    VBO(".vbo", needsGps = true),
+
+    /** GPX 1.1 with speed and heading: maps, GPS Visualizer, Google Earth. */
+    GPX(".gpx", needsGps = true),
+
+    /** The trip with a `lap` column, for Excel, LibreOffice, pandas. */
+    PC_CSV(".pc.csv", needsGps = false),
+
+    /** One row per lap with times, sectors and statistics. */
+    LAPS_CSV(".laps.csv", needsGps = false),
+}
+
+/** File name of [format] for the trip file [tripFileName] ("trip-20261022-140307.csv"). */
+fun exportFileName(tripFileName: String, format: ExportFormat): String =
+    tripFileName.removeSuffix(".$TRIP_FILE_EXTENSION") + format.suffix
+
+/** The generated files of [tripFileName] that exist now. */
+fun derivedFiles(tripsDir: File, tripFileName: String): List<File> =
+    ExportFormat.entries.mapNotNull { resolveTripFile(tripsDir, exportFileName(tripFileName, it))?.takeIf(File::isFile) }
+
+/** Suffix of a file being written; it is renamed when complete, so nobody downloads half a file. */
+const val PARTIAL_FILE_SUFFIX = ".part"
+
+/**
+ * Everything in [tripsDir] a user may take away, newest first: the trip CSVs and the files generated
+ * from them (see [ExportFormat]). This is what the Wi-Fi export offers. Files still being written
+ * are left out.
+ */
 fun listTripFiles(tripsDir: File): List<File> =
-    tripsDir.listFiles { file -> file.isFile && file.extension == TRIP_FILE_EXTENSION }
+    tripsDir.listFiles { file -> file.isFile && !file.name.endsWith(PARTIAL_FILE_SUFFIX) }
         ?.sortedByDescending { it.lastModified() }
         .orEmpty()

@@ -1,0 +1,226 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "9c8ff58113392c3dcf45a28eafcf325f",
+    "entities": [
+      {
+        "tableName": "settings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER, `fileName` TEXT NOT NULL, `sampleCount` INTEGER NOT NULL, `distanceKm` REAL NOT NULL, `maxRpm` REAL, `maxSpeedKmh` REAL, `maxCoolantC` REAL, `trackId` INTEGER, `hasGps` INTEGER NOT NULL DEFAULT 0, `movingTimeMs` INTEGER, `estimatedFuelLiters` REAL, `lapCount` INTEGER, `bestLapMs` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "fileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleCount",
+            "columnName": "sampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceKm",
+            "columnName": "distanceKm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxRpm",
+            "columnName": "maxRpm",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maxSpeedKmh",
+            "columnName": "maxSpeedKmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maxCoolantC",
+            "columnName": "maxCoolantC",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "trackId",
+            "columnName": "trackId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "hasGps",
+            "columnName": "hasGps",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "movingTimeMs",
+            "columnName": "movingTimeMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "estimatedFuelLiters",
+            "columnName": "estimatedFuelLiters",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lapCount",
+            "columnName": "lapCount",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bestLapMs",
+            "columnName": "bestLapMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trips_startMs",
+            "unique": false,
+            "columnNames": [
+              "startMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_startMs` ON `${TABLE_NAME}` (`startMs`)"
+          },
+          {
+            "name": "index_trips_trackId",
+            "unique": false,
+            "columnNames": [
+              "trackId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_trackId` ON `${TABLE_NAME}` (`trackId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "tracks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `startLat` REAL NOT NULL, `startLon` REAL NOT NULL, `startHeadingDeg` REAL NOT NULL, `startWidthM` REAL NOT NULL, `sectorsJson` TEXT NOT NULL, `createdMs` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startLat",
+            "columnName": "startLat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startLon",
+            "columnName": "startLon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startHeadingDeg",
+            "columnName": "startHeadingDeg",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startWidthM",
+            "columnName": "startWidthM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sectorsJson",
+            "columnName": "sectorsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdMs",
+            "columnName": "createdMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9c8ff58113392c3dcf45a28eafcf325f')"
+    ]
+  }
+}

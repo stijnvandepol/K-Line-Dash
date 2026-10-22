@@ -6,13 +6,16 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStreamWriter
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
+import nl.stijnvdpol.klinedash.core.geo.LapGates
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.core.trip.CsvTripWriter
 import nl.stijnvdpol.klinedash.core.trip.DEFAULT_TRIP_FRESHNESS_MS
-import nl.stijnvdpol.klinedash.core.trip.TripSummarizer
 import nl.stijnvdpol.klinedash.core.trip.TripSummary
+import nl.stijnvdpol.klinedash.core.trip.tripSampleOf
+import nl.stijnvdpol.klinedash.data.TripSummaryCache
 
 /** Signals that always get a column, because the trip summary is built from them. */
 internal val SUMMARY_SIGNAL_IDS = listOf("rpm", "speed", "coolant")
@@ -22,8 +25,9 @@ private const val FLUSH_EVERY_SAMPLES = 10
 private const val BYTE_ORDER_MARK = "\uFEFF"
 
 /**
- * One trip file being written: CSV through a [CsvTripWriter] on a buffered file stream, plus the
- * running [TripSummarizer]. Not thread-safe; [TripRecorder] calls it under its lock.
+ * One trip file being written: CSV (with GPS columns) through a [CsvTripWriter] on a buffered file
+ * stream, plus the live statistics ([LiveTripAnalysis]). The statistics see every sample at once,
+ * also those still waiting for the header. Not thread-safe; [TripRecorder] calls it under its lock.
  *
  * The CSV header has to be fixed before the first row, but the signals a trip contains are only
  * known once the poller has answered for each of them (slow signals take about 15 s). So the first
@@ -50,12 +54,12 @@ internal class TripSession(
     private val freshnessMs: Long = DEFAULT_TRIP_FRESHNESS_MS,
 ) : Closeable {
 
-    private class Sample(val nowMs: Long, val readings: Map<String, Reading>)
+    private class Sample(val nowMs: Long, val readings: Map<String, Reading>, val gps: GeoFix?)
 
     private val stream = FileOutputStream(file)
     private val writer = BufferedWriter(OutputStreamWriter(stream, Charsets.UTF_8))
-    private val csv = CsvTripWriter(writer, freshnessMs)
-    private val summarizer = TripSummarizer(freshnessMs)
+    private val csv = CsvTripWriter(writer, freshnessMs, includeGps = true)
+    private val live = LiveTripAnalysis()
     private val preRoll = ArrayList<Sample>()
     private var isHeaderWritten = false
     private var samplesSinceFlush = 0
@@ -68,19 +72,35 @@ internal class TripSession(
     var sampleCount = 0
         private set
 
-    /** @throws IOException when the file cannot be written (storage full or removed). */
-    fun add(nowMs: Long, readings: Map<String, Reading>) {
+    /** The track the laps are timed for from now on, see [LiveTripAnalysis.setTrack]. */
+    fun setTrack(trackId: Long?, gates: LapGates?) = live.setTrack(trackId, gates)
+
+    val trackId: Long? get() = live.trackId
+    val gates: LapGates? get() = live.gates
+
+    /**
+     * Adds one row; [gps] is the fix to record with it (the recorder passes only fresh ones).
+     * @throws IOException when the file cannot be written (storage full or removed).
+     */
+    fun add(nowMs: Long, readings: Map<String, Reading>, gps: GeoFix? = null) {
         sampleCount++
+        live.add(tripSampleOf(nowMs, readings, gps, freshnessMs))
         if (isHeaderWritten) {
-            write(Sample(nowMs, readings))
+            write(Sample(nowMs, readings, gps))
             return
         }
-        preRoll += Sample(nowMs, readings)
+        preRoll += Sample(nowMs, readings, gps)
         if (nowMs - startMs >= settleMs) writeHeaderAndPreRoll()
     }
 
+    /** What the screens show now. */
+    fun liveState(): LiveTripState = live.state()
+
     /** Null while no sample was added. Complete after [close]. */
-    fun summary(): TripSummary? = summarizer.summary()
+    fun summary(): TripSummary? = live.summary()
+
+    /** The statistics for the trip row. */
+    fun cache(): TripSummaryCache = live.cache()
 
     /** Writes whatever is still waiting for the header, then closes the file. */
     override fun close() {
@@ -107,8 +127,7 @@ internal class TripSession(
     }
 
     private fun write(sample: Sample) {
-        csv.writeSample(sample.nowMs, sample.readings)
-        summarizer.add(sample.nowMs, sample.readings)
+        csv.writeSample(sample.nowMs, sample.readings, sample.gps)
         if (++samplesSinceFlush >= flushEverySamples) flush()
     }
 

@@ -8,22 +8,39 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import nl.stijnvdpol.klinedash.core.diag.BundledDtcDescriptions
 import nl.stijnvdpol.klinedash.core.diag.Dtc
 import nl.stijnvdpol.klinedash.core.diag.DtcDescription
 import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.elm.ProtocolStore
+import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.AppDatabase
 import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
+import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
+import nl.stijnvdpol.klinedash.data.MIGRATION_2_3
 import nl.stijnvdpol.klinedash.data.RoomProtocolStore
 import nl.stijnvdpol.klinedash.data.SettingsRepository
 import nl.stijnvdpol.klinedash.data.StartupSettingsRepository
 import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
+import nl.stijnvdpol.klinedash.data.TrackRepository
 import nl.stijnvdpol.klinedash.data.TripSettingsRepository
 import nl.stijnvdpol.klinedash.service.ExportController
+import nl.stijnvdpol.klinedash.service.LapSessions
+import nl.stijnvdpol.klinedash.service.LocationHub
+import nl.stijnvdpol.klinedash.service.LocationSource
+import nl.stijnvdpol.klinedash.service.LocationTracker
 import nl.stijnvdpol.klinedash.service.ObdServiceState
+import nl.stijnvdpol.klinedash.service.SimulatedLocationSource
+import nl.stijnvdpol.klinedash.service.TripAnalysisRepository
+import nl.stijnvdpol.klinedash.service.TripExporter
 import nl.stijnvdpol.klinedash.service.TripLibrary
 import nl.stijnvdpol.klinedash.service.TripRecorder
 import nl.stijnvdpol.klinedash.service.listTripFiles
@@ -45,7 +62,7 @@ private object NoDtcDescriptions : DtcDescriptions {
 class AppGraph(val appContext: Context) {
     val database: AppDatabase by lazy {
         Room.databaseBuilder(appContext, AppDatabase::class.java, "klinedash.db")
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
     }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(database.settingsDao()) }
@@ -68,9 +85,57 @@ class AppGraph(val appContext: Context) {
         external ?: File(appContext.filesDir, TRIPS_DIR_NAME)
     }
 
+    val gpsSettingsRepository: GpsSettingsRepository by lazy { GpsSettingsRepository(database.settingsDao()) }
+    val trackRepository: TrackRepository by lazy {
+        TrackRepository(database.trackDao(), database.tripDao(), gpsSettingsRepository)
+    }
+
+    private val gpsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** True while the simulated circuit replaces the device GPS: simulator transport selected and the GPS setting on. */
+    val useSimulatedGps: StateFlow<Boolean> by lazy {
+        combine(
+            gpsSettingsRepository.settings.map { it.useSimulatedGps },
+            settingsRepository.connectionSettings.map { it.kind == TransportKind.SIMULATOR },
+        ) { wanted, isSimulator -> wanted && isSimulator }
+            .distinctUntilChanged()
+            .stateIn(gpsScope, SharingStarted.Eagerly, false)
+    }
+
+    /**
+     * Position fix and GPS status for the UI and the recorder (device GPS, or the simulated circuit in
+     * simulator mode). Started by ObdService once the app is visible, see ObdServiceState.setAppVisible.
+     */
+    val location: LocationSource by lazy {
+        LocationHub(
+            device = LocationTracker(appContext, gpsScope),
+            simulated = SimulatedLocationSource(ObdServiceState.poller, gpsScope),
+            useSimulated = useSimulatedGps,
+            scope = gpsScope,
+        )
+    }
+
     /** Records trips; its sampling loop is run by ObdService. */
     val tripRecorder: TripRecorder by lazy {
-        TripRecorder(tripsDir, database.tripDao(), tripSettingsRepository.settings, ObdServiceState.poller)
+        TripRecorder(
+            tripsDir, database.tripDao(), tripSettingsRepository.settings, ObdServiceState.poller,
+            location, trackRepository.activeTrack, tripAnalysis::refreshSummary,
+        )
+    }
+
+    /** Statistics, laps and route of a recorded trip, read from its CSV. */
+    val tripAnalysis: TripAnalysisRepository by lazy {
+        TripAnalysisRepository(tripsDir, database.tripDao(), database.trackDao())
+    }
+
+    /** Generates the VBO, GPX and PC CSV files of a trip into the trips folder, on demand. */
+    val tripExporter: TripExporter by lazy {
+        TripExporter(tripsDir, database.tripDao(), tripAnalysis, tripRecorder.state)
+    }
+
+    /** Tracks (start/finish and sector gates) and lap timing. */
+    val lapSessions: LapSessions by lazy {
+        LapSessions(trackRepository, database.tripDao(), location, tripAnalysis, tripExporter)
     }
 
     /** Trip list, delete and copy-to-USB for the UI. */

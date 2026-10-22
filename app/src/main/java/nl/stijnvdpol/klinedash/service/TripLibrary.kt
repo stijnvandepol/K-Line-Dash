@@ -21,6 +21,17 @@ import nl.stijnvdpol.klinedash.data.TripDao
 private const val TAG = "TripLibrary"
 private const val MAX_LISTED_TRIPS = 500
 private const val CSV_MIME_TYPE = "text/csv"
+private const val GPX_MIME_TYPE = "application/gpx+xml"
+
+/** Anything else (VBO) is plain text with no registered type; octet-stream keeps providers from renaming it. */
+private const val BINARY_MIME_TYPE = "application/octet-stream"
+
+/** The MIME type the folder picker's provider gets for [fileName]; a wrong one makes some providers append an extension. */
+internal fun mimeTypeOf(fileName: String): String = when {
+    fileName.endsWith(".csv") -> CSV_MIME_TYPE
+    fileName.endsWith(".gpx") -> GPX_MIME_TYPE
+    else -> BINARY_MIME_TYPE
+}
 
 /** Result of [TripLibrary.delete]. */
 sealed interface DeleteResult {
@@ -124,7 +135,7 @@ internal class SafDestination(private val resolver: ContentResolver, treeUri: Ur
     }
 
     override fun writeNew(fileName: String, write: (OutputStream) -> Unit) {
-        val document = DocumentsContract.createDocument(resolver, parentUri, CSV_MIME_TYPE, fileName)
+        val document = DocumentsContract.createDocument(resolver, parentUri, mimeTypeOf(fileName), fileName)
             ?: throw IOException("Could not create $fileName")
         try {
             val out = resolver.openOutputStream(document) ?: throw IOException("Could not open $fileName")
@@ -146,9 +157,9 @@ internal class SafDestination(private val resolver: ContentResolver, treeUri: Ur
 }
 
 /**
- * Trip management for the UI: the list ([trips], newest first, at most 500), [delete] and
- * [copyToTree] (to a USB stick or SD card chosen with the system folder picker; the picker grants
- * the app write access, no permission needed).
+ * Trip management for the UI: the list ([trips], newest first, at most 500), [delete] (with the
+ * generated PC files of the trip) and [copyToTree] (to a USB stick or SD card chosen with the
+ * system folder picker; the picker grants the app write access, no permission needed).
  */
 class TripLibrary internal constructor(
     private val tripDao: TripDao,
@@ -172,7 +183,10 @@ class TripLibrary internal constructor(
         if (isRecording(trip)) return DeleteResult.IsRecording
         val file = resolveTripFile(tripsDir, trip.fileName)
         // Existing but undeletable means the row must stay: otherwise the file would be orphaned.
-        val removed = file == null || withContext(ioDispatcher) { !file.exists() || file.delete() }
+        // The generated exports (vbo, gpx, ...) go with it.
+        val removed = file == null || withContext(ioDispatcher) {
+            (derivedFiles(tripsDir, trip.fileName) + file).all { !it.exists() || it.delete() }
+        }
         if (!removed) return DeleteResult.Failed("Could not delete the trip file. Try again.")
         tripDao.deleteById(tripId)
         return DeleteResult.Deleted
@@ -181,15 +195,18 @@ class TripLibrary internal constructor(
     /**
      * Copies the CSV files of [tripIds] (null: every finished trip) into the folder [treeUri]
      * chosen by the user. A selected trip that is still recording is reported as a failure;
-     * with null it is left out.
+     * with null it is left out. With [includeExports] the PC files that were generated for these
+     * trips (see [TripExporter]; only those that exist) are copied too, so [CopyProgress.total]
+     * counts files, not trips.
      */
-    fun copyToTree(treeUri: Uri, tripIds: Set<Long>? = null): Flow<CopyProgress> = flow {
+    fun copyToTree(treeUri: Uri, tripIds: Set<Long>? = null, includeExports: Boolean = true): Flow<CopyProgress> = flow {
         val all = tripDao.getNewest(MAX_LISTED_TRIPS)
         val selected = if (tripIds == null) all.filterNot(::isRecording) else all.filter { it.id in tripIds }
-        val items = selected.map { trip ->
+        val items = selected.flatMap { trip ->
             when {
-                isRecording(trip) -> CopyItem(trip.fileName, null, "This trip is still recording.")
-                else -> CopyItem(trip.fileName, resolveTripFile(tripsDir, trip.fileName))
+                isRecording(trip) -> listOf(CopyItem(trip.fileName, null, "This trip is still recording."))
+                else -> listOf(CopyItem(trip.fileName, resolveTripFile(tripsDir, trip.fileName))) +
+                    if (includeExports) derivedFiles(tripsDir, trip.fileName).map { CopyItem(it.name, it) } else emptyList()
             }
         }
         emitAll(copyTrips(items, SafDestination(resolver, treeUri)))
