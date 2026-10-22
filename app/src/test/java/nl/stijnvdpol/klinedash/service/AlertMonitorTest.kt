@@ -13,6 +13,8 @@ import nl.stijnvdpol.klinedash.core.alert.AlertRules
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.alert.AlertSeverity
 import nl.stijnvdpol.klinedash.core.alert.AlertState
+import nl.stijnvdpol.klinedash.core.alert.AlertEvaluator
+import nl.stijnvdpol.klinedash.core.elm.AdapterInfo
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import org.junit.Assert.assertEquals
@@ -39,7 +41,8 @@ class AlertMonitorTest {
     }
 
     private val poller = FakePoller()
-    private val connection = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
+    private val adapter = AdapterInfo("ELM327 v1.5", "3", "ISO 9141-2", 13.9, usedSavedProtocol = true, unsupportedCommands = emptySet())
+    private val connection = MutableStateFlow<ConnectionState>(ConnectionState.Connected(adapter))
     private val published = ArrayList<List<Alert>>()
     private val tones = ArrayList<AlertSeverity>()
 
@@ -78,6 +81,25 @@ class AlertMonitorTest {
         advanceTimeBy(2_000)
         assertEquals(listOf(coolantAlert), published.last())
         assertTrue(tones.isEmpty())
+    }
+
+    @Test
+    fun aDisconnectByTheUserRaisesNoConnectionLostWarning() = runTest {
+        backgroundScope.launch { monitor(AlertEvaluator).run(poller, connection) }
+        advanceTimeBy(2_000)
+        connection.value = ConnectionState.Idle
+        advanceTimeBy(2_000)
+        assertTrue(published.last().none { it.kind == AlertKind.CONNECTION_LOST })
+        assertTrue(tones.isEmpty())
+    }
+
+    @Test
+    fun aDroppedLinkRaisesConnectionLost() = runTest {
+        backgroundScope.launch { monitor(AlertEvaluator).run(poller, connection) }
+        advanceTimeBy(2_000)
+        connection.value = ConnectionState.Reconnecting(attempt = 1, delayMs = 1_000, reason = "Adapter stopped answering")
+        advanceTimeBy(2_000)
+        assertTrue(published.last().any { it.kind == AlertKind.CONNECTION_LOST })
     }
 
     @Test

@@ -119,16 +119,18 @@ class AlertMonitor(
         var state = AlertState()
         // conflate(): while the collector pauses between evaluations only the latest inputs are kept.
         combine(poller.readings, connection, settings, ticker()) { readings, conn, currentSettings, _ ->
-            Snapshot(AlertInput(readings, conn is ConnectionState.Connected, clock()), currentSettings)
+            Snapshot(AlertInput(readings, conn is ConnectionState.Connected, clock()), currentSettings, conn is ConnectionState.Idle)
         }.conflate().collect { snapshot ->
-            state = rules.evaluate(snapshot.input, snapshot.settings, state)
+            // Idle means the user disconnected (or never connected): not a lost link, so nothing to
+            // warn about, and the next connection starts with fresh baselines.
+            state = if (snapshot.isStoppedByUser) AlertState() else rules.evaluate(snapshot.input, snapshot.settings, state)
             publish(state.active)
             playTone(state, snapshot.settings)
             delay(MIN_EVALUATION_INTERVAL_MS)
         }
     }
 
-    private class Snapshot(val input: AlertInput, val settings: AlertSettings)
+    private class Snapshot(val input: AlertInput, val settings: AlertSettings, val isStoppedByUser: Boolean)
 
     private fun ticker(): Flow<Unit> = flow {
         while (true) {
