@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.GridCell
 import nl.stijnvdpol.klinedash.data.GridPage
@@ -26,6 +27,15 @@ class DashboardFieldsTest {
         val expected = setOf("rpm", "speed", "coolant", "intake_temp", "throttle", "load", "timing", "battery", "maf")
         assertEquals(expected, pageDemandIds(main, targetCarPids))
         assertEquals(expected, pageDemandIds(main, null))
+    }
+
+    @Test
+    fun `a cluster style asks for what its dials show, whatever the primary fields are`() {
+        val custom = MainPage(primary = listOf("throttle", "load", "map"))
+        val dials = pageDemandIds(custom, targetCarPids, ClusterStyle.TWIN)
+        assertTrue(setOf("rpm", "speed", "coolant", "battery").all { it in dials })
+        assertEquals(pageDemandIds(custom, targetCarPids), pageDemandIds(custom, targetCarPids, ClusterStyle.BAR))
+        assertFalse("speed" in pageDemandIds(custom, targetCarPids))
     }
 
     @Test

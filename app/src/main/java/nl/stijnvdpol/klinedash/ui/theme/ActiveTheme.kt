@@ -68,14 +68,18 @@ fun millisUntilNextMinute(nowMs: Long): Long = MILLIS_PER_MINUTE - Math.floorMod
 
 /**
  * The theme in effect: the one [activeThemeId] names (the default theme when that one no longer
- * exists, e.g. a deleted file) with the user's accent override applied.
+ * exists, e.g. a deleted file) with the user's accent and cluster overrides applied. The needle
+ * follows an accent override unless the theme gave it a colour of its own.
  */
 fun resolveTheme(settings: ThemeSettings, catalog: ThemeCatalog, minuteOfDay: Int, isSystemNight: Boolean): ThemeDefinition {
     val base = catalog.find(activeThemeId(settings, minuteOfDay, isSystemNight))
         ?: catalog.find(DEFAULT_THEME_ID)
         ?: ThemeDefinition(DEFAULT_THEME_ID, "Race", RaceColors, isBuiltIn = true)
-    val accent = settings.accentOverride ?: return base
-    return base.copy(colors = base.colors.copy(accent = Color(OPAQUE or accent)))
+    val withCluster = settings.clusterOverride?.let { base.copy(look = base.look.copy(style = it)) } ?: base
+    val accent = settings.accentOverride?.let { Color(OPAQUE or it) } ?: return withCluster
+    val colors = withCluster.colors
+    val needle = if (colors.needle == colors.accent) accent else colors.needle
+    return withCluster.copy(colors = colors.copy(accent = accent, needle = needle))
 }
 
 /** Name of the theme in effect, for the Display section ("Now showing"). */
@@ -118,7 +122,7 @@ fun ActiveThemeHost(content: @Composable () -> Unit) {
     val theme = remember(loadedSettings, loadedCatalog, minuteOfDay, isSystemNight) {
         resolveTheme(loadedSettings, loadedCatalog, minuteOfDay, isSystemNight)
     }
-    CompositionLocalProvider(LocalActiveThemeName provides theme.name) {
+    CompositionLocalProvider(LocalActiveThemeName provides theme.name, LocalClusterLook provides theme.look) {
         KLineDashTheme(theme.colors, content)
     }
 }

@@ -25,9 +25,13 @@ class TripPresentationTest {
         fileName: String = "trip-$id.csv",
         distanceKm: Double = 12.34,
         maxRpm: Double? = 6_850.0,
+        trackId: Long? = null,
+        lapCount: Int? = null,
+        bestLapMs: Long? = null,
     ) = Trip(
         id = id, startMs = startMs, endMs = endMs, fileName = fileName, sampleCount = 1_500,
         distanceKm = distanceKm, maxRpm = maxRpm, maxSpeedKmh = 120.0, maxCoolantC = 95.0,
+        trackId = trackId, lapCount = lapCount, bestLapMs = bestLapMs,
     )
 
     private fun progress(
@@ -68,53 +72,63 @@ class TripPresentationTest {
 
     @Test
     fun `a finished trip shows its summary in fixed formats`() {
-        val row = tripRows(listOf(trip()), recordingFileName = null, zone).single()
+        val row = tripRows(listOf(trip()), recordingFileName = null, zone = zone).single()
         assertEquals("21 Oct 14:05", row.start)
         assertEquals("25:00", row.duration)
         assertEquals("12.3", row.distance)
-        assertEquals("6850", row.maxRpm)
+        assertNull(row.lapSummary)
         assertFalse(row.isRecording)
     }
 
     @Test
     fun `the trip being recorded has no summary yet`() {
         val running = trip(id = 2, endMs = null, distanceKm = 0.0, maxRpm = null, fileName = "trip-running.csv")
-        val rows = tripRows(listOf(running, trip(id = 1)), recordingFileName = "trip-running.csv", zone)
+        val rows = tripRows(listOf(running, trip(id = 1)), recordingFileName = "trip-running.csv", zone = zone)
         assertTrue(rows[0].isRecording)
-        assertEquals(listOf(MISSING_VALUE, MISSING_VALUE, MISSING_VALUE), listOf(rows[0].duration, rows[0].distance, rows[0].maxRpm))
+        assertEquals(listOf(MISSING_VALUE, MISSING_VALUE), listOf(rows[0].duration, rows[0].distance))
         assertFalse(rows[1].isRecording)
     }
 
     @Test
     fun `a trip cut off by a power loss shows dashes for what is unknown`() {
         val cutOff = trip(endMs = null, maxRpm = null)
-        val row = tripRows(listOf(cutOff), recordingFileName = null, zone).single()
+        val row = tripRows(listOf(cutOff), recordingFileName = null, zone = zone).single()
         assertFalse(row.isRecording)
         assertEquals(MISSING_VALUE, row.duration)
         assertEquals(MISSING_VALUE, row.distance)
-        assertEquals(MISSING_VALUE, row.maxRpm)
     }
 
     @Test
-    fun `a trip without any rpm shows a dash`() {
-        assertEquals(MISSING_VALUE, tripRows(listOf(trip(maxRpm = null)), null, zone).single().maxRpm)
+    fun `a lap session shows its track, laps and best lap on a second line`() {
+        val lapTrip = trip(trackId = 7, lapCount = 8, bestLapMs = 131_345)
+        val row = tripRows(listOf(lapTrip), null, mapOf(7L to "Spa-Francorchamps"), zone).single()
+        assertEquals("Spa-Francorchamps, 8 laps, best 2:11.345", row.lapSummary)
+    }
+
+    @Test
+    fun `a lap summary leaves out what is not known yet`() {
+        val names = mapOf(7L to "Spa")
+        assertEquals("Spa, 1 lap", lapSummary(trip(trackId = 7, lapCount = 1), names))
+        assertEquals("Spa, 0 laps", lapSummary(trip(trackId = 7, lapCount = 0), names))
+        assertEquals("Spa", lapSummary(trip(trackId = 7), names))
+        assertEquals("Unknown track, 2 laps", lapSummary(trip(trackId = 9, lapCount = 2), names))
+        assertNull(lapSummary(trip(), names))
     }
 
     @Test
     fun `the order of the list is kept`() {
-        val rows = tripRows(listOf(trip(id = 3), trip(id = 2), trip(id = 1)), null, zone)
+        val rows = tripRows(listOf(trip(id = 3), trip(id = 2), trip(id = 1)), null, zone = zone)
         assertEquals(listOf(3L, 2L, 1L), rows.map { it.id })
     }
 
     @Test
     fun `the delete question names the trip and the file`() {
-        val row = tripRows(listOf(trip()), null, zone).single()
-        assertEquals("Delete trip of 21 Oct 14:05? The CSV file is removed.", deleteQuestion(row))
+        assertEquals("Delete trip of 21 Oct 14:05? The CSV file is removed.", deleteQuestion("21 Oct 14:05"))
     }
 
     @Test
-    fun `only a missing link needs a notice when Record is refused`() {
-        assertEquals(true, startNotice(StartResult.NotConnected)?.contains("Not connected"))
+    fun `only a missing link needs a notice when a start is refused`() {
+        assertEquals(true, startNotice(StartResult.NotConnected)?.contains("no GPS fix"))
         assertNull(startNotice(StartResult.Started))
         assertNull(startNotice(StartResult.AlreadyRecording))
         assertNull(startNotice(StartResult.Failed("Could not create the trip file.")))
@@ -122,9 +136,9 @@ class TripPresentationTest {
 
     @Test
     fun `the idle panel says what to do next`() {
-        assertEquals(RecordingHint.NOT_CONNECTED, recordingHint(isConnected = false, isAutoRecord = true))
-        assertEquals(RecordingHint.WAITING_FOR_ENGINE, recordingHint(isConnected = true, isAutoRecord = true))
-        assertEquals(RecordingHint.PRESS_RECORD, recordingHint(isConnected = true, isAutoRecord = false))
+        assertEquals(RecordingHint.NOT_CONNECTED, recordingHint(canStart = false, isAutoRecord = true))
+        assertEquals(RecordingHint.WAITING_FOR_ENGINE, recordingHint(canStart = true, isAutoRecord = true))
+        assertEquals(RecordingHint.PRESS_START, recordingHint(canStart = true, isAutoRecord = false))
     }
 
     @Test
@@ -135,23 +149,23 @@ class TripPresentationTest {
     }
 
     @Test
-    fun `a finished copy says what was copied and what was already there`() {
-        assertEquals("Copied 3 trips, 1 already there", copyStatus(progress(total = 4, copied = 3, skipped = 1)).summary)
-        assertEquals("Copied 3 trips", copyStatus(progress(total = 3, copied = 3)).summary)
-        assertEquals("Copied 1 trip", copyStatus(progress(total = 1, copied = 1)).summary)
+    fun `a finished copy counts files and says what was already there`() {
+        assertEquals("Copied 3 files, 1 already there", copyStatus(progress(total = 4, copied = 3, skipped = 1)).summary)
+        assertEquals("Copied 3 files", copyStatus(progress(total = 3, copied = 3)).summary)
+        assertEquals("Copied 1 file", copyStatus(progress(total = 1, copied = 1)).summary)
     }
 
     @Test
     fun `a copy with nothing new says so`() {
         assertEquals("Nothing new to copy: 2 already there.", copyStatus(progress(total = 2, skipped = 2)).summary)
-        assertEquals("No trips to copy.", copyStatus(progress(total = 0)).summary)
+        assertEquals("No files to copy.", copyStatus(progress(total = 0)).summary)
     }
 
     @Test
     fun `a copy with failures is an error that names the first reason`() {
         val failures = listOf(CopyFailure("a.csv", "Could not write the file."), CopyFailure("b.csv", "The trip file is missing."))
         val status = copyStatus(progress(total = 3, copied = 1, failures = failures))
-        assertEquals("Copied 1 trip, 2 failed.", status.summary)
+        assertEquals("Copied 1 file, 2 failed.", status.summary)
         assertEquals("Could not write the file.", status.detail)
         assertTrue(status.isError)
     }

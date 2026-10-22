@@ -1,12 +1,19 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -14,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.flow.collectLatest
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.Reading
@@ -38,6 +46,24 @@ internal fun rememberIsStale(reading: State<Reading?>, nowMs: State<Long>, signa
     remember(reading, nowMs, signal) {
         derivedStateOf { reading.value?.let { isStale(signal, it.timestampMs, nowMs.value) } ?: true }
     }
+
+/**
+ * The value [reading] glides to: a linear tween to each new reading in [sweepMs] (the measured time
+ * between two readings, see [sweepDurationMs]), so a bar, arc or needle moves steadily instead of
+ * jumping. No reading counts as 0. It starts at the current reading, so a page that comes back on
+ * screen does not sweep up from 0. Read `.value` in the draw phase only, so a frame of movement
+ * recomposes nothing; a stale reading does not change, so the value stays where it was.
+ */
+@Composable
+internal fun rememberGlide(reading: State<Reading?>, sweepMs: State<Int>): Animatable<Float, AnimationVector1D> {
+    val glide = remember { Animatable(Snapshot.withoutReadObservation { reading.value?.value ?: 0.0 }.toFloat()) }
+    LaunchedEffect(glide) {
+        snapshotFlow { reading.value?.value ?: 0.0 }.collectLatest { target ->
+            glide.animateTo(target.toFloat(), tween(sweepMs.value, easing = LinearEasing))
+        }
+    }
+    return glide
+}
 
 /**
  * The engine state and the warning limits that colour the values. Flips only when the engine
@@ -67,8 +93,8 @@ internal fun rememberOnOffWords(): OnOffWords {
     return remember(on, off) { OnOffWords(on, off) }
 }
 
-private fun KLineColors.valueColor(stale: Boolean, tone: ValueTone): Color = when {
-    stale -> inkFaint
+private fun KLineColors.valueColor(stale: Boolean, tone: ValueTone, ink: Color = this.ink, dimmed: Color = inkFaint): Color = when {
+    stale -> dimmed
     tone == ValueTone.DANGER -> danger
     tone == ValueTone.CAUTION -> caution
     else -> ink
@@ -107,7 +133,8 @@ private fun TextStyle.scaledBy(factor: Float): TextStyle =
  * may change, the slot and everything beside it do not. Dimmed when stale, amber or red when it
  * is outside its limits; a missing value shows [MISSING_VALUE]. The box is as tall as the digits
  * and its baseline is the bottom edge, so `Modifier.alignByBaseline()` and padding work from the
- * glyphs. [sample] sets the slot width when several rows must share one column.
+ * glyphs. [sample] sets the slot width when several rows must share one column. On a dial face the
+ * number is drawn in [ink] and, when stale, in [dimmed], and may be centred with [align].
  */
 @Composable
 internal fun ValueText(
@@ -118,6 +145,9 @@ internal fun ValueText(
     style: TextStyle,
     modifier: Modifier = Modifier,
     sample: String = slotSample(signal),
+    ink: Color = KLineTheme.colors.ink,
+    dimmed: Color = KLineTheme.colors.inkFaint,
+    align: TextAlign = TextAlign.End,
 ) {
     val words = rememberOnOffWords()
     val text by remember(signal, words) {
@@ -127,8 +157,8 @@ internal fun ValueText(
     Text(
         text = text,
         style = style,
-        color = KLineTheme.colors.valueColor(stale.value, tone.value),
-        textAlign = TextAlign.End,
+        color = KLineTheme.colors.valueColor(stale.value, tone.value, ink, dimmed),
+        textAlign = align,
         maxLines = 1,
         softWrap = false,
         modifier = modifier.width(slotWidth).capHeightBox(style.fontSize),

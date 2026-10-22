@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,8 +30,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.DayNightMode
 import nl.stijnvdpol.klinedash.data.ThemeSettings
+import nl.stijnvdpol.klinedash.ui.cluster.ClusterPreview
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -43,6 +46,7 @@ private val HeaderHeight = 56.dp
 private val ThemeColumnWidth = 440.dp
 private val SwatchStripCell = 20.dp
 private val SwatchStripGap = 4.dp
+private val PreviewGap = 12.dp
 
 /** The mode rows: label, one-line explanation. */
 private val ModeRows = listOf(
@@ -107,6 +111,8 @@ private fun ThemeColumn(
             catalog.themes.forEach { theme ->
                 SelectableRow(selected = theme.id == selectedId, onClick = { vm.chooseTheme(slot, theme.id) }) {
                     Text(theme.name, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
+                    ClusterPreview(theme.colors, theme.look.style)
+                    Spacer(Modifier.width(PreviewGap))
                     SwatchStrip(theme.colors)
                 }
             }
@@ -189,9 +195,35 @@ private fun OptionsColumn(settings: ThemeSettings, vm: DisplayViewModel, modifie
             HorizontalRule()
         }
         if (settings.mode != DayNightMode.MANUAL) NowShowing()
+        ColumnHeader(R.string.display_cluster_title)
+        ClusterChoice(settings.clusterOverride, vm::setCluster)
         ColumnHeader(R.string.display_accent_title)
         AccentPicker(settings.accentOverride, vm::setAccent)
     }
+}
+
+/** The cluster row: "Theme default" first, then the five styles, one global override as 72 dp cells. */
+@Composable
+private fun ClusterChoice(chosen: ClusterStyle?, onChoose: (ClusterStyle?) -> Unit) {
+    val styles = ClusterStyle.entries
+    val labels = listOf(stringResource(R.string.display_cluster_default)) + styles.map { stringResource(it.labelRes()) }
+    ChoiceCells(labels, selectedIndex = if (chosen == null) 0 else styles.indexOf(chosen) + 1, onSelect = { onChoose(if (it == 0) null else styles[it - 1]) })
+    HorizontalRule()
+    Text(
+        stringResource(R.string.display_cluster_hint),
+        style = KLineType.caption, color = KLineTheme.colors.inkMuted,
+        modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
+    )
+    HorizontalRule()
+}
+
+@StringRes
+private fun ClusterStyle.labelRes(): Int = when (this) {
+    ClusterStyle.BAR -> R.string.display_cluster_bar
+    ClusterStyle.TWIN -> R.string.display_cluster_twin
+    ClusterStyle.CENTER -> R.string.display_cluster_center
+    ClusterStyle.ARC -> R.string.display_cluster_arc
+    ClusterStyle.VIRTUAL -> R.string.display_cluster_virtual
 }
 
 /** The theme in effect right now, so the schedule and the head-unit mode can be checked at a glance. */

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.DayNightMode
 import nl.stijnvdpol.klinedash.data.ThemeSettings
 import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
@@ -60,6 +61,9 @@ internal class DisplayViewModel(
 
     /** [rgb] is 0xRRGGBB; null goes back to the accent of the theme itself. */
     fun setAccent(rgb: Int?) = update { it.copy(accentOverride = rgb) }
+
+    /** One cluster style for every theme; null follows the cluster of the theme in effect. */
+    fun setCluster(style: ClusterStyle?) = update { it.copy(clusterOverride = style) }
 
     private fun update(transform: (ThemeSettings) -> ThemeSettings) {
         viewModelScope.launch { repository.update(transform) }

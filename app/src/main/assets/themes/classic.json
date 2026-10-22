@@ -1,0 +1,21 @@
+{
+  "name": "Classic",
+  "cluster": "twin",
+  "numerals": "serif",
+  "colors": {
+    "background": "#1B1712",
+    "surface": "#2C261D",
+    "rule": "#3A3226",
+    "ink": "#EFE6D2",
+    "inkMuted": "#A89F8A",
+    "inkFaint": "#6B6354",
+    "ok": "#3FB871",
+    "caution": "#C77700",
+    "danger": "#CC1520",
+    "accent": "#CC1520",
+    "face": "#EFE6D2",
+    "faceInk": "#1A1A1A",
+    "ring": "#B5B5B5",
+    "needle": "#CC1520"
+  }
+}

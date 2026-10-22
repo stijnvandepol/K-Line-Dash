@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.ui.theme.ActiveThemeHost
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 
@@ -26,6 +27,17 @@ class MainActivity : ComponentActivity() {
                 AppRoot()
             }
         }
+    }
+
+    // Location may only be added to the foreground service while the app is visible (see ObdServiceState.setAppVisible).
+    override fun onStart() {
+        super.onStart()
+        ObdServiceState.setAppVisible(true)
+    }
+
+    override fun onStop() {
+        ObdServiceState.setAppVisible(false)
+        super.onStop()
     }
 
     // Re-hide on every focus gain: dialogs, the IME and the permission prompt bring the bars back.

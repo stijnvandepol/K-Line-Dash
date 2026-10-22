@@ -1,0 +1,21 @@
+{
+  "name": "Autobahn",
+  "cluster": "twin",
+  "numerals": "condensed",
+  "colors": {
+    "background": "#050608",
+    "surface": "#16181D",
+    "rule": "#23262B",
+    "ink": "#F2F2F2",
+    "inkMuted": "#8E9299",
+    "inkFaint": "#50545B",
+    "ok": "#2ED47A",
+    "caution": "#FFB000",
+    "danger": "#FF2D2D",
+    "accent": "#FF5A1F",
+    "face": "#0A0B0D",
+    "faceInk": "#F2F2F2",
+    "ring": "#3C4047",
+    "needle": "#FF5A1F"
+  }
+}

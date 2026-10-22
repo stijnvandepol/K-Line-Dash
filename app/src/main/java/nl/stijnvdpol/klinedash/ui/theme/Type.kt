@@ -7,6 +7,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
@@ -66,6 +67,25 @@ object KLineType {
         fontSize = 15.sp,
         lineHeight = 22.sp,
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+    )
+}
+
+/**
+ * The numerals of a dial in the theme's [face], [fontSize] big: Roboto Condensed Bold, Noto Serif or
+ * Roboto Light, all from the system. Tabular figures like every other number, so a changing value keeps its width.
+ */
+fun numeralStyle(face: NumeralFace, fontSize: TextUnit): TextStyle {
+    val (family, weight) = when (face) {
+        NumeralFace.CONDENSED -> CondensedBold to FontWeight.Bold
+        NumeralFace.SERIF -> FontFamily.Serif to FontWeight.Medium
+        NumeralFace.LIGHT -> FontFamily.SansSerif to FontWeight.Light
+    }
+    return TextStyle(
+        fontFamily = family,
+        fontWeight = weight,
+        fontSize = fontSize,
+        lineHeight = fontSize * LINE_HEIGHT_FACTOR,
+        fontFeatureSettings = TABULAR_FIGURES,
     )
 }
 

@@ -24,6 +24,7 @@ internal enum class SetupSection(@StringRes val labelRes: Int) {
     Dashboard(R.string.setup_dashboard),
     Display(R.string.setup_display),
     Startup(R.string.setup_startup),
+    GpsTracks(R.string.setup_gps_tracks),
     Debug(R.string.setup_debug),
 }
 
@@ -38,9 +39,15 @@ private val MenuHeaderHeight = 88.dp
  *
  * @param connection the Connection section; it needs the permission handling of the activity, so the
  *   caller supplies it.
+ * @param onAllowLocation asks for the location permission (GPS & Tracks); the activity owns that dialog.
  */
 @Composable
-internal fun SetupScreen(section: SetupSection, onSelect: (SetupSection) -> Unit, connection: @Composable () -> Unit) {
+internal fun SetupScreen(
+    section: SetupSection,
+    onSelect: (SetupSection) -> Unit,
+    onAllowLocation: () -> Unit,
+    connection: @Composable () -> Unit,
+) {
     Row(Modifier.fillMaxSize()) {
         SetupMenu(section, onSelect, Modifier.width(MenuWidth).fillMaxHeight())
         VerticalRule()
@@ -51,6 +58,7 @@ internal fun SetupScreen(section: SetupSection, onSelect: (SetupSection) -> Unit
                 SetupSection.Dashboard -> DashboardSetupScreen()
                 SetupSection.Display -> DisplayScreen()
                 SetupSection.Startup -> StartupSettingsScreen()
+                SetupSection.GpsTracks -> GpsTracksScreen(onAllowLocation)
                 SetupSection.Debug -> DebugScreen()
             }
         }

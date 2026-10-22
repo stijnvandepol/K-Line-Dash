@@ -1,0 +1,21 @@
+{
+  "name": "Virtual",
+  "cluster": "virtual",
+  "numerals": "light",
+  "colors": {
+    "background": "#000000",
+    "surface": "#151515",
+    "rule": "#262626",
+    "ink": "#FFFFFF",
+    "inkMuted": "#9A9A9A",
+    "inkFaint": "#555555",
+    "ok": "#2ED47A",
+    "caution": "#FFB000",
+    "danger": "#FF2D2D",
+    "accent": "#D4001A",
+    "face": "#000000",
+    "faceInk": "#FFFFFF",
+    "ring": "#4A4A4A",
+    "needle": "#D4001A"
+  }
+}

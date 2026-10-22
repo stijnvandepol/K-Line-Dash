@@ -26,6 +26,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.core.elm.AdapterInfo
+import nl.stijnvdpol.klinedash.core.elm.ChipFamily
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
@@ -270,4 +272,51 @@ private fun ElmResult.toReply(command: String): CommandReply {
     }
     val text = if (this is ElmResult.Data) lines.joinToString("  |  ") else raw.trim().withVisibleControlChars()
     return CommandReply(command, type, text, isData = this is ElmResult.Data)
+}
+
+/** Rows of the Adapter section on Debug, in display order. */
+internal enum class AdapterField(val labelRes: Int) {
+    CHIP(R.string.label_chip),
+    FIRMWARE(R.string.label_firmware),
+    PROTOCOL(R.string.label_protocol),
+    CAN(R.string.label_can),
+    ADAPTIVE_TIMING(R.string.label_adaptive_timing),
+    SAVED_PROTOCOL(R.string.label_saved_protocol),
+    UNSUPPORTED_COMMANDS(R.string.label_unsupported),
+}
+
+/** The words the Adapter section is written in, passed in so [adapterValues] stays free of Android. */
+internal data class AdapterWords(
+    val yes: String,
+    val no: String,
+    val none: String,
+    val chipGenuine: String,
+    val chipStn: String,
+    val chipClone: String,
+    val timingAt1: String,
+    val timingAt2: String,
+)
+
+/**
+ * What the Adapter section shows per field. A null value renders as "--": not connected, or the
+ * adapter reported nothing conclusive (chip family unknown, no ATI answer).
+ */
+internal fun adapterValues(info: AdapterInfo?, words: AdapterWords): Map<AdapterField, String?> {
+    val profile = info?.profile
+    return AdapterField.entries.associateWith { field ->
+        when (field) {
+            AdapterField.CHIP -> when (profile?.family) {
+                ChipFamily.GENUINE_ELM -> words.chipGenuine
+                ChipFamily.STN -> words.chipStn
+                ChipFamily.CLONE -> words.chipClone
+                ChipFamily.UNKNOWN, null -> null
+            }
+            AdapterField.FIRMWARE -> profile?.firmware
+            AdapterField.PROTOCOL -> info?.let { "${it.protocolName} (${it.protocolNumber})" }
+            AdapterField.CAN -> info?.let { if (it.isCan) words.yes else words.no }
+            AdapterField.ADAPTIVE_TIMING -> profile?.let { if (it.usesAdaptiveTiming2) words.timingAt2 else words.timingAt1 }
+            AdapterField.SAVED_PROTOCOL -> info?.let { if (it.usedSavedProtocol) words.yes else words.no }
+            AdapterField.UNSUPPORTED_COMMANDS -> info?.let { it.unsupportedCommands.sorted().joinToString().ifEmpty { words.none } }
+        }
+    }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +53,7 @@ private val AdapterColumnWidth = 400.dp
 private val HeaderHeight = 88.dp
 private val FieldLabelWidth = 264.dp
 private val StatusDotTopInset = 10.dp
+private const val UNSUPPORTED_REASON_MAX_LINES = 3
 
 /** The port typed so far, or null while it is not (yet) a usable TCP port. */
 private fun String.toValidPort(): Int? = toIntOrNull()?.takeIf { it in ValidPorts }
@@ -82,10 +84,10 @@ fun ConnectionScreen(
         AdapterColumn(vm, s, Modifier.width(AdapterColumnWidth).fillMaxHeight())
         VerticalRule()
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            StatusBlock(state, Modifier.fillMaxWidth().height(HeaderHeight))
+            StatusBlock(state, Modifier.fillMaxWidth().heightIn(min = HeaderHeight))
             HorizontalRule()
             // Right under the status, level with the first adapter row: the state and what to do
-            // about it read as one block, and the buttons never move with the details below.
+            // about it read as one block. Only the unsupported-adapter help makes the status taller.
             Actions(
                 vm = vm,
                 state = state,
@@ -127,18 +129,44 @@ private fun TransportRow(labelRes: Int, kind: TransportKind, s: ConnectionSettin
     }
 }
 
-/** State in `title`, details muted below it; the lamp has the colour of the state. */
+/**
+ * State in `title`, details muted below it; the lamp has the colour of the state. An unsupported
+ * adapter gets its full reason and the list of adapters that work instead of a one-line detail.
+ */
 @Composable
 private fun StatusBlock(state: ConnectionState, modifier: Modifier) {
     val resources = LocalContext.current.resources
     val colors = KLineTheme.colors
+    val unsupported = state.isUnsupportedAdapter()
     Row(modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
         // The lamp sits on the line of the title, not in the middle of the two lines.
         StatusDot(state.accentColor(colors), Modifier.padding(top = StatusDotTopInset))
         Spacer(Modifier.width(Spacing.fieldPaddingHorizontal))
         Column {
             Text(state.headline(resources), style = KLineType.title, color = colors.ink, maxLines = 1)
-            Text(state.detail(resources), style = KLineType.body, color = colors.inkMuted, maxLines = 1)
+            Text(
+                state.detail(resources),
+                style = KLineType.body,
+                color = colors.inkMuted,
+                maxLines = if (unsupported) UNSUPPORTED_REASON_MAX_LINES else 1,
+            )
+            if (unsupported) SupportedAdaptersList(Modifier.padding(top = Spacing.fieldPaddingVertical))
+        }
+    }
+}
+
+/** "Adapters that work" as a caps label and the README's list in two columns of `caption`. */
+@Composable
+private fun SupportedAdaptersList(modifier: Modifier) {
+    val colors = KLineTheme.colors
+    Column(modifier) {
+        Text(stringResource(R.string.adapters_that_work).uppercase(), style = KLineType.fieldLabel, color = colors.inkMuted)
+        Row(Modifier.padding(top = Spacing.grid)) {
+            SupportedAdapters.chunked((SupportedAdapters.size + 1) / 2).forEach { column ->
+                Column(Modifier.weight(1f)) {
+                    column.forEach { Text(it.label, style = KLineType.caption, color = colors.ink, maxLines = 1) }
+                }
+            }
         }
     }
 }
@@ -277,7 +305,7 @@ private fun DeviceList(
     HorizontalRule()
     if (devices.isEmpty()) {
         if (selectedAddress != null && pinnedName != null) {
-            DeviceRow(pinnedName, selectedAddress, looksLikeObd = false, selected = true, onClick = {})
+            DeviceRow(pinnedName, selectedAddress, looksLikeObd = false, knownAppLocked = false, selected = true, onClick = {})
         }
         Hint(emptyText, Modifier.padding(top = Spacing.fieldPaddingVertical))
         return
@@ -287,19 +315,33 @@ private fun DeviceList(
             name = device.name,
             address = device.address,
             looksLikeObd = device.looksLikeObd,
+            knownAppLocked = device.knownAppLocked,
             selected = device.address == selectedAddress,
             onClick = { onSelect(device) },
         )
     }
 }
 
-/** Chosen device = white bar and white name; a likely OBD adapter says so in words. */
+/**
+ * Chosen device = white bar and white name; a likely OBD adapter says so in words. A dongle known to
+ * work only with its own app gets a caution caption but stays selectable: a device that answers is used.
+ */
 @Composable
-private fun DeviceRow(name: String, address: String, looksLikeObd: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun DeviceRow(
+    name: String,
+    address: String,
+    looksLikeObd: Boolean,
+    knownAppLocked: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     val colors = KLineTheme.colors
     SelectableRow(selected = selected, onClick = onClick) {
         Column(Modifier.weight(1f)) {
             Text(name, style = KLineType.body, color = if (selected) colors.ink else colors.inkMuted, maxLines = 1)
+            if (knownAppLocked) {
+                Text(stringResource(R.string.device_may_not_work), style = KLineType.caption, color = colors.caution, maxLines = 1)
+            }
             Text(address, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
         }
         if (looksLikeObd) {

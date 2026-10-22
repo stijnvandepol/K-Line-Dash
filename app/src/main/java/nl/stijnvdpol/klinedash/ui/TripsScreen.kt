@@ -5,10 +5,8 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,65 +19,83 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.data.TripSettings
 import nl.stijnvdpol.klinedash.service.CopyProgress
 import nl.stijnvdpol.klinedash.service.ExportState
 import nl.stijnvdpol.klinedash.service.RecordingState
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
+import nl.stijnvdpol.klinedash.ui.trips.ChooseTrackDialog
+import nl.stijnvdpol.klinedash.ui.trips.SessionPanel
+import nl.stijnvdpol.klinedash.ui.trips.SessionViewModel
+import nl.stijnvdpol.klinedash.ui.trips.TripDetailScreen
 
 private const val TAG = "TripsScreen"
-private val RecordingColumnWidth = 480.dp
-private val StatusHeight = 80.dp
-private val NumbersHeight = 96.dp
-private val StatusDotTopInset = 10.dp
+private val SessionColumnWidth = 480.dp
 
 /**
- * TRIPS: recording and export on the left, the trip list on the right, a line for notices along the
- * bottom. Delete asks once; copying to USB or SD uses the system folder picker, so no permission.
+ * TRIPS: the session (start a trip or a lap session, live statistics and lap timer), the automatic
+ * recording switches and the export on the left, the trip list on the right, a line for notices along
+ * the bottom. A tap on a trip opens its detail page. Delete asks once; copying to USB or SD uses the
+ * system folder picker, so no permission.
  */
 @Composable
 fun TripsScreen() {
+    var openTripId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val tripId = openTripId
+    if (tripId != null) {
+        TripDetailScreen(tripId, onBack = { openTripId = null })
+    } else {
+        TripsOverview(onOpenTrip = { openTripId = it })
+    }
+}
+
+@Composable
+private fun TripsOverview(onOpenTrip: (Long) -> Unit) {
     val vm = graphViewModel { TripsViewModel.forGraph(it) }
+    val session = graphViewModel { SessionViewModel.forGraph(it) }
     val recording = vm.recording.collectAsStateWithLifecycle()
     val trips by vm.trips.collectAsStateWithLifecycle()
-    val isAutoRecord by vm.isAutoRecord.collectAsStateWithLifecycle()
+    val trackNames by vm.trackNames.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val notice by vm.notice.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<TripRow?>(null) }
+    var isChoosingTrack by remember { mutableStateOf(false) }
     // Only the file name decides which row is "Recording": the sample count changes every second.
     val recordingFileName by remember(recording) { derivedStateOf { (recording.value as? RecordingState.Recording)?.fileName } }
-    val rows = remember(trips, recordingFileName) { trips?.let { tripRows(it, recordingFileName) } }
+    val rows = remember(trips, recordingFileName, trackNames) { trips?.let { tripRows(it, recordingFileName, trackNames) } }
 
     DisposableEffect(vm) { onDispose(vm::clearCopyResult) }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            RecordingColumn(vm, recording, isAutoRecord, Modifier.width(RecordingColumnWidth).fillMaxHeight())
+            SessionColumn(vm, session, settings, { isChoosingTrack = true }, Modifier.width(SessionColumnWidth).fillMaxHeight())
             VerticalRule()
-            TripList(rows, isAutoRecord != false, onDelete = { pendingDelete = it }, modifier = Modifier.weight(1f).fillMaxHeight())
+            TripList(rows, settings?.autoRecord != false, onOpen = onOpenTrip, onDelete = { pendingDelete = it }, modifier = Modifier.weight(1f).fillMaxHeight())
         }
         notice?.let { NoticeBar(it) }
     }
     pendingDelete?.let { row ->
-        DeleteTripDialog(row, onCancel = { pendingDelete = null }, onDelete = {
+        DeleteTripDialog(row.start, onCancel = { pendingDelete = null }, onDelete = {
             vm.delete(row.id)
             pendingDelete = null
         })
     }
+    if (isChoosingTrack) ChooseTrackDialog(session, onDismiss = { isChoosingTrack = false })
 }
 
 @Composable
@@ -93,34 +109,15 @@ private fun NoticeBar(text: String) {
     )
 }
 
-/** The question before a trip is removed. Cancel has the focus, so a D-pad press cannot delete by accident. */
+/** The session, the automatic recording switches, then the export block. Scrolls when the head unit's screen is shorter than the content. */
 @Composable
-private fun DeleteTripDialog(row: TripRow, onCancel: () -> Unit, onDelete: () -> Unit) {
-    val focus = rememberInitialFocus()
-    RaceDialog(
-        title = stringResource(R.string.trips_delete_title),
-        onDismiss = onCancel,
-        accent = KLineTheme.colors.danger,
-        actions = {
-            PrimaryButton(stringResource(R.string.btn_cancel), onCancel, Modifier.weight(1f).focusRequester(focus))
-            DangerButton(stringResource(R.string.trips_delete), onDelete, Modifier.weight(1f))
-        },
-    ) {
-        HorizontalRule()
-        DialogText(deleteQuestion(row))
-    }
-}
-
-/** Recording state and controls, then the export block. Scrolls when the head unit's screen is shorter than the content. */
-@Composable
-private fun RecordingColumn(vm: TripsViewModel, recording: State<RecordingState>, isAutoRecord: Boolean?, modifier: Modifier) {
-    val isConnected by vm.isConnected.collectAsStateWithLifecycle()
-    val error by vm.recordingError.collectAsStateWithLifecycle()
+private fun SessionColumn(vm: TripsViewModel, session: SessionViewModel, settings: TripSettings?, onChooseTrack: () -> Unit, modifier: Modifier) {
+    val canStart by session.canStart.collectAsStateWithLifecycle()
     val export by vm.export.collectAsStateWithLifecycle()
     val copy by vm.copy.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
     // The export buttons are at the bottom: when they start to report something (address and PIN, a
-    // copy result) it is scrolled into view; it is not when the page opens, so the state stays on top.
+    // copy result) it is scrolled into view; it is not when the page opens, so the session stays on top.
     val hasReport = export is ExportState.Running || copy != null
     var hadReport by remember { mutableStateOf(hasReport) }
     LaunchedEffect(hasReport) {
@@ -131,88 +128,21 @@ private fun RecordingColumn(vm: TripsViewModel, recording: State<RecordingState>
         hadReport = hasReport
     }
     Column(modifier.verticalScroll(scroll)) {
-        RecordingStatus(recording, recordingHint(isConnected, isAutoRecord != false), Modifier.fillMaxWidth().height(StatusHeight))
+        SessionPanel(session, recordingHint(canStart, settings?.autoRecord != false), onChooseTrack)
+        SectionTitle(stringResource(R.string.trips_section_auto))
+        SwitchRow(stringResource(R.string.trips_auto_record), settings?.autoRecord == true, vm::setAutoRecord, Modifier.height(Spacing.touchMin))
         HorizontalRule()
-        RecordingNumbers(recording, Modifier.fillMaxWidth().height(NumbersHeight))
-        HorizontalRule()
-        RecordAction(vm, isRecording = recording.value is RecordingState.Recording, canRecord = isConnected)
-        HorizontalRule()
-        error?.let {
-            ErrorText(it)
-            HorizontalRule()
-        }
-        SwitchRow(stringResource(R.string.trips_auto_record), isAutoRecord == true, vm::setAutoRecord, Modifier.height(Spacing.touchMin))
+        SwitchRow(
+            stringResource(R.string.trips_auto_moving), settings?.autoStartWhenMoving == true, vm::setAutoStartWhenMoving,
+            Modifier.height(Spacing.touchMin), enabled = settings?.autoRecord == true,
+        )
         HorizontalRule()
         ExportSection(vm, export, copy)
     }
 }
 
-/** Record (white) or Stop (outline): the one action of the panel, a 72 dp button with the side margin of the Export buttons. */
 @Composable
-private fun RecordAction(vm: TripsViewModel, isRecording: Boolean, canRecord: Boolean) {
-    val button = Modifier.fillMaxWidth().height(Spacing.touchMin)
-    Box(Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid)) {
-        if (isRecording) {
-            SecondaryButton(stringResource(R.string.trips_stop), vm::stopRecording, button)
-        } else {
-            PrimaryButton(stringResource(R.string.trips_record), vm::startRecording, button, enabled = canRecord)
-        }
-    }
-}
-
-/** Lamp and state like the Connection status block; under it the file name, or what to do next. */
-@Composable
-private fun RecordingStatus(recording: State<RecordingState>, hint: RecordingHint, modifier: Modifier) {
-    val colors = KLineTheme.colors
-    val state = recording.value
-    val isRecording = state is RecordingState.Recording
-    Row(modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
-        StatusDot(if (isRecording) colors.danger else colors.inkFaint, Modifier.padding(top = StatusDotTopInset))
-        Spacer(Modifier.width(Spacing.fieldPaddingHorizontal))
-        Column {
-            Text(
-                stringResource(if (isRecording) R.string.trips_state_recording else R.string.trips_state_idle),
-                style = KLineType.title, color = colors.ink, maxLines = 1,
-            )
-            Text(
-                text = if (state is RecordingState.Recording) state.fileName else stringResource(hint.textRes()),
-                style = KLineType.caption, color = colors.inkMuted, maxLines = 2,
-            )
-        }
-    }
-}
-
-private fun RecordingHint.textRes(): Int = when (this) {
-    RecordingHint.NOT_CONNECTED -> R.string.trips_hint_not_connected
-    RecordingHint.WAITING_FOR_ENGINE -> R.string.trips_hint_waiting
-    RecordingHint.PRESS_RECORD -> R.string.trips_hint_press_record
-}
-
-/** Elapsed time and samples as two fields like the dashboard's; "--" while nothing records. */
-@Composable
-private fun RecordingNumbers(recording: State<RecordingState>, modifier: Modifier) {
-    val colors = KLineTheme.colors
-    val nowMs by rememberNowMs()
-    val state = recording.value
-    Row(modifier) {
-        StripField(
-            label = stringResource(R.string.trips_label_elapsed),
-            value = (state as? RecordingState.Recording)?.let { formatDuration(elapsedMs(it.startMs, nowMs)) },
-            valueColor = colors.ink,
-            modifier = Modifier.weight(1f),
-        )
-        VerticalRule()
-        StripField(
-            label = stringResource(R.string.trips_label_samples),
-            value = (state as? RecordingState.Recording)?.samples?.toString(),
-            valueColor = colors.ink,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun ErrorText(text: String) {
+internal fun ErrorText(text: String) {
     Text(
         text,
         style = KLineType.body,

@@ -116,3 +116,6 @@ fun DashboardLayout.graphSignalIds(): Set<String> =
     pages.filterIsInstance<GridPage>().flatMapTo(HashSet()) { page ->
         page.cells.filter { it.widget == WidgetType.GRAPH }.map { it.signalId }
     }
+
+/** The shift point of the first Track page, which the shift lights of the Main page's arc cluster follow; the default when there is none. */
+fun DashboardLayout.shiftRpm(): Int = pages.filterIsInstance<TrackPage>().firstOrNull()?.shiftRpm ?: DEFAULT_SHIFT_RPM

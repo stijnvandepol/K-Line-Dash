@@ -20,6 +20,7 @@ class ThemeSettingsPersistenceTest {
             dayStartMinute = 6 * 60 + 45,
             nightStartMinute = 22 * 60 + 15,
             accentOverride = 0x0D9488,
+            clusterOverride = ClusterStyle.ARC,
         )
         val rows = encodeThemeSettings(custom).filterValues { it != null }.mapValues { it.value!! }
         assertEquals(custom, decodeThemeSettings(rows))
@@ -29,6 +30,18 @@ class ThemeSettingsPersistenceTest {
     fun noAccentOverrideRemovesItsRow() {
         assertNull(encodeThemeSettings(ThemeSettings(accentOverride = null))[ThemeSettingsKeys.ACCENT])
         assertEquals("000000", encodeThemeSettings(ThemeSettings(accentOverride = 0))[ThemeSettingsKeys.ACCENT])
+    }
+
+    @Test
+    fun theClusterOverrideIsStoredByIdAndFollowsTheThemeWhenAbsent() {
+        assertNull(encodeThemeSettings(ThemeSettings())[ThemeSettingsKeys.CLUSTER])
+        assertEquals("virtual", encodeThemeSettings(ThemeSettings(clusterOverride = ClusterStyle.VIRTUAL))[ThemeSettingsKeys.CLUSTER])
+        assertNull(decodeThemeSettings(emptyMap()).clusterOverride)
+    }
+
+    @Test
+    fun aClusterIdThisVersionDoesNotKnowFallsBackToTheThemesOwn() {
+        assertNull(decodeThemeSettings(mapOf(ThemeSettingsKeys.CLUSTER to "hologram")).clusterOverride)
     }
 
     @Test

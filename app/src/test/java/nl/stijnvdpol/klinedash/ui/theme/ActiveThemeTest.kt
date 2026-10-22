@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.DayNightMode
 import nl.stijnvdpol.klinedash.data.ThemeSettings
 import org.junit.Assert.assertEquals
@@ -155,5 +156,24 @@ class ResolveThemeTest {
     @Test
     fun withoutAnOverrideTheThemeKeepsItsOwnAccent() {
         assertEquals(Color.Black, resolveTheme(ThemeSettings(manualThemeId = "day"), catalog, 0, false).colors.accent)
+    }
+
+    @Test
+    fun theClusterOverrideReplacesTheClusterOfTheThemeAndNothingElse() {
+        val own = ThemeDefinition("rosso", "Rosso", RaceColors, isBuiltIn = true, look = ClusterLook(ClusterStyle.CENTER, NumeralFace.LIGHT))
+        val settings = ThemeSettings(manualThemeId = "rosso", clusterOverride = ClusterStyle.ARC)
+        val catalog = ThemeCatalog(listOf(own), emptyList(), "")
+        assertEquals(ClusterLook(ClusterStyle.ARC, NumeralFace.LIGHT), resolveTheme(settings, catalog, 0, false).look)
+        assertEquals(ClusterStyle.CENTER, resolveTheme(settings.copy(clusterOverride = null), catalog, 0, false).look.style)
+    }
+
+    @Test
+    fun theNeedleFollowsAnAccentOverrideUnlessTheThemeColouredItItself() {
+        val following = ThemeDefinition("a", "A", RaceColors.copy(accent = Color.Red, needle = Color.Red), isBuiltIn = true)
+        val own = ThemeDefinition("b", "B", RaceColors.copy(accent = Color.Red, needle = Color.Green), isBuiltIn = true)
+        val catalog = ThemeCatalog(listOf(following, own), emptyList(), "")
+        val blue = Color(0xFF3B82F6)
+        assertEquals(blue, resolveTheme(ThemeSettings(manualThemeId = "a", accentOverride = 0x3B82F6), catalog, 0, false).colors.needle)
+        assertEquals(Color.Green, resolveTheme(ThemeSettings(manualThemeId = "b", accentOverride = 0x3B82F6), catalog, 0, false).colors.needle)
     }
 }

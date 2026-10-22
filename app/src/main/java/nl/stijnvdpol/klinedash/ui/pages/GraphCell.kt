@@ -45,8 +45,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private val LineWidth = 2.dp
-private val LabelGap = 8.dp
+internal val LineWidth = 2.dp
+internal val LabelGap = 8.dp
 private val PlotPaddingBottom = 12.dp
 
 private val UnknownSignalLook = ValueLook(KLineType.fieldValue)
@@ -143,7 +143,7 @@ private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory,
 }
 
 /** Lays out the text of a value, and keeps the layout while the value stays the same. */
-private class ValueLabel(private val measurer: TextMeasurer, private val decimals: Int) {
+internal class ValueLabel(private val measurer: TextMeasurer, private val decimals: Int) {
     private var value = Double.NaN
     private var layout: TextLayoutResult? = null
 

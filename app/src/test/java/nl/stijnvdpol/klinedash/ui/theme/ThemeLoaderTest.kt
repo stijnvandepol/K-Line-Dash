@@ -19,7 +19,7 @@ class ThemeLoaderTest {
     @Test
     fun emptyFolderGivesJustTheBuiltInsInOrder() {
         val catalog = loader().load()
-        assertEquals(listOf("race", "minimal", "retro", "day"), catalog.themes.map { it.id })
+        assertEquals(BuiltInThemeIds, catalog.themes.map { it.id })
         assertTrue(catalog.themes.all { it.isBuiltIn })
         assertTrue(catalog.invalid.isEmpty())
         assertEquals(folder.root.path, catalog.userFolderPath)
@@ -27,7 +27,7 @@ class ThemeLoaderTest {
 
     @Test
     fun aMissingFolderIsTreatedAsEmpty() {
-        assertEquals(4, loader(File(folder.root, "nope")).load().themes.size)
+        assertEquals(BuiltInThemeIds.size, loader(File(folder.root, "nope")).load().themes.size)
     }
 
     @Test

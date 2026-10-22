@@ -6,6 +6,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LatLon
 import nl.stijnvdpol.klinedash.core.trip.LapStats
 import nl.stijnvdpol.klinedash.core.trip.TripAnalyzer
@@ -73,6 +74,21 @@ class TripAnalysisRepository internal constructor(
         } catch (e: IOException) {
             Log.e(TAG, "Could not read ${trip.fileName}", e)
             AnalysisResult.Failed("Could not read the trip file. Try again.")
+        }
+    }
+
+    /**
+     * The route and the speed and rpm of one [lap] of trip [tripId], for the lap graph of the detail
+     * screen. Null when the trip file is missing or cannot be read (logged); the lap itself comes from [analyze].
+     */
+    suspend fun lapTrace(tripId: Long, lap: Lap): LapTrace? {
+        val trip = tripDao.get(tripId) ?: return null
+        val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile } ?: return null
+        return try {
+            withContext(ioDispatcher) { withTripCsv(file) { csv -> lapTraceOf(csv.samples, lap) } }
+        } catch (e: IOException) {
+            Log.e(TAG, "Could not read lap ${lap.number} of ${trip.fileName}", e)
+            null
         }
     }
 

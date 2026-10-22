@@ -4,11 +4,15 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 
 /**
  * The colour tokens of docs/design-system.md. A theme is only a different set of these values;
  * grid, type scale and the meaning of each colour never change (see docs/themes.md).
  * [accent] colours the lit RPM segments below the caution zone and the active-page marker.
+ * The last four are for the dial styles of docs/cluster-styles.md and follow the base tokens when a
+ * theme does not set them: [face] fills a dial, [faceInk] draws its ticks and numerals, [ring] is
+ * its rim and track, [needle] is the needle and the lit arc.
  */
 @Immutable
 data class KLineColors(
@@ -22,7 +26,29 @@ data class KLineColors(
     val caution: Color,
     val danger: Color,
     val accent: Color,
+    val face: Color = background,
+    val faceInk: Color = ink,
+    val ring: Color = rule,
+    val needle: Color = accent,
 )
+
+/** The typeface of the numerals on the dials (docs/themes.md, key `numerals`). */
+enum class NumeralFace(val id: String) {
+    CONDENSED("condensed"),
+    SERIF("serif"),
+    LIGHT("light"),
+    ;
+
+    companion object {
+        fun fromId(id: String): NumeralFace? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/** What a theme besides its colours brings to the Main page: the cluster style in effect and the numerals of its dials. */
+@Immutable
+data class ClusterLook(val style: ClusterStyle = ClusterStyle.BAR, val numerals: NumeralFace = NumeralFace.CONDENSED)
+
+val LocalClusterLook = staticCompositionLocalOf { ClusterLook() }
 
 /**
  * Default theme "Race", also the fallback while no theme is loaded. A test keeps it identical to

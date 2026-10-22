@@ -205,9 +205,10 @@ Two columns, grouped by what they act on:
   new messages never shows half a line at the top edge. Along its bottom a toolbar of 72 dp cells
   separated by rules: Pause/Resume log, Clear log, Export log, and the Auto-scroll switch (two
   cells wide). An export result shows for a few seconds just above the toolbar.
-- **Right third, the adapter:** "Adapter" with ELM version, protocol, whether the saved protocol
-  was used, and unsupported commands (label `inkMuted`, value `ink`, "--" while not connected so
-  nothing below moves). The battery voltage is not repeated here; it is live on the dashboard.
+- **Right third, the adapter:** "Adapter" with chip (ELM327, STN or clone), firmware (the ATI
+  answer), protocol, CAN, adaptive timing (AT1/AT2), whether the saved protocol was used, and
+  unsupported commands (label `inkMuted`, value `ink`, "--" while not connected so nothing below
+  moves). The battery voltage is not repeated here; it is live on the dashboard.
   Then "Command": the input field with Send, and the quick commands as a grid of 72 dp cells.
   A reply appears under the grid. Everything fits in 720 dp without scrolling.
 
@@ -300,6 +301,64 @@ a `danger` line above the field, because below it is off screen while the keyboa
 **Reset to defaults**. Then **Keep the app alive**: the detected platform and its instructions
 (FYT/UIS: factory settings > sleep whitelist; MTCD/MTCE; other) and two buttons, the battery
 optimization exemption and "display over other apps".
+
+## Phase 6
+
+### GPS status (bottom bar)
+
+The status block on the right of the bottom bar gains a GPS mark before the link status: "GPS"
+in `fieldLabel`, `ok` when there is a fix (with the satellite count in `caption`), `inkMuted`
+while searching, `inkFaint` and struck through when location is off or not permitted. Tapping it
+opens SETUP > GPS & Tracks. It is information first, so it stays small.
+
+### Trips page (replaces the phase 4 layout)
+
+Two columns, like before, but the left column is now the **session**:
+
+- **Not recording:** "Start trip" (white fill, 72 dp) and "Start lap session" (outline) with the
+  track to use (last used track, or "Choose a track"); the auto-record switch rows ("When the
+  engine runs", "When the car moves (no OBD needed)").
+- **Recording a trip:** live statistics as a 2 x 3 grid of fields like the dashboard field row:
+  TIME, DISTANCE, AVG KM/H, MAX KM/H, MAX RPM, FUEL (estimate, `caption` "est."). Below: "Stop".
+- **Lap session:** CURRENT LAP as the hero numeral (`primaryValue`, `m:ss.s`), under it LAST and
+  BEST (`fieldValue`) and DELTA to best (`fieldValue`, `ok` when faster, `danger` when slower,
+  with a sign), then the lap count and sector splits of the current lap in a row. While no
+  start/finish line exists: "Set start/finish here" (white fill) with the hint "Drive across the
+  line at a steady speed and tap when you pass it." It needs a GPS fix with accuracy ≤ 15 m;
+  otherwise the button explains why it is disabled.
+- The right column keeps the trip list (newest first): date, duration, distance, and for lap
+  sessions the track name, lap count and best lap. Tapping a row opens the trip detail.
+
+### Trip detail
+
+A full page (back arrow cell top-left, 72 dp) with three parts:
+
+- **Top strip:** date, track (if any), and the actions "Export for PC" (opens a choice of VBO,
+  GPX, CSV, all as 72 dp cells; shows the file names when done, which the Wi-Fi export and USB
+  copy then offer) and "Delete".
+- **Left:** the route as a line (2 dp, `ink`) on `surface`, scaled to fit, north up, no map tiles
+  (offline). Start/finish and sector gates as short `accent` bars; the selected lap's part in
+  `accent`, the rest in `inkFaint`.
+- **Right:** a statistics table (TripStats) and, for lap sessions, the lap table: lap number,
+  lap time, delta to best, max speed, max RPM, full-throttle %, in tabular slots; the best lap
+  marked with `ok` text "BEST". Selecting a lap highlights it on the route and shows its sectors.
+  Under the tables one graph (speed and RPM over time or distance for the selected lap, the same
+  style as the dashboard Graph cell).
+
+### GPS & Tracks (SETUP > GPS & Tracks)
+
+On top the location rows: GPS status (fix, satellites, measured rate), "Allow location" when the
+permission is missing, "Use the simulated circuit" (only with the simulator connection). Then a
+list of saved tracks (name, length if known, number of sessions) with rename (text field, only
+when parked: it is a keyboard) and delete (confirm). Sector gates are added from a lap session
+("Add sector here") the same way as the start/finish line.
+
+### Unsupported adapters (SETUP > Connection)
+
+When the link ends in "unsupported adapter", the status block shows the reason in `body` and,
+below it, "Adapters that work" as a short list (from the README's supported list) instead of the
+reconnect countdown. In the device lists, devices whose name matches a known app-locked dongle get
+a `caution` "May not work" caption; they stay selectable.
 
 ## Writing
 

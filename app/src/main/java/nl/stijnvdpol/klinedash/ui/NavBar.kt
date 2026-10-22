@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
@@ -54,7 +56,7 @@ private val StatusGap = 12.dp
  * in the same place.
  */
 @Composable
-internal fun NavBar(selected: Screen, onSelect: (Screen) -> Unit, modifier: Modifier = Modifier) {
+internal fun NavBar(selected: Screen, onSelect: (Screen) -> Unit, onOpenGps: () -> Unit, modifier: Modifier = Modifier) {
     val ruleColor = KLineTheme.colors.rule
     Row(
         modifier
@@ -68,7 +70,7 @@ internal fun NavBar(selected: Screen, onSelect: (Screen) -> Unit, modifier: Modi
                 VerticalRule()
             }
         }
-        LinkStatus(Modifier.weight(STATUS_WEIGHT).fillMaxHeight())
+        LinkStatus(onOpenGps, Modifier.weight(STATUS_WEIGHT).fillMaxHeight())
     }
 }
 
@@ -95,11 +97,12 @@ private fun NavButton(screen: Screen, isSelected: Boolean, onClick: () -> Unit, 
 }
 
 /**
- * Lamp, protocol and the measured request rate; information, not a control. Connected shows the
- * protocol and rate, engine off says so, every other state names itself.
+ * The GPS mark, then lamp, protocol and the measured request rate; information, not a control (the
+ * GPS mark is the one exception: it opens SETUP > GPS & Tracks). Connected shows the protocol and
+ * rate, engine off says so, every other state names itself.
  */
 @Composable
-private fun LinkStatus(modifier: Modifier) {
+private fun LinkStatus(onOpenGps: () -> Unit, modifier: Modifier) {
     val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
     val connection by vm.connectionState.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
@@ -107,10 +110,11 @@ private fun LinkStatus(modifier: Modifier) {
     val state = connection
     val rateWidth = rememberTextWidth(RATE_SAMPLE, KLineType.caption)
     Row(
-        modifier.padding(horizontal = Spacing.fieldPaddingHorizontal),
+        modifier.padding(end = Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
     ) {
+        GpsMarkButton(onOpenGps, Modifier.fillMaxHeight())
         StatusDot(state.accentColor(colors))
         Spacer(Modifier.width(StatusGap))
         if (state !is ConnectionState.Connected) {
@@ -130,5 +134,36 @@ private fun LinkStatus(modifier: Modifier) {
                 modifier = Modifier.width(rateWidth),
             )
         }
+    }
+}
+
+/**
+ * "GPS" in `fieldLabel`: `ok` with the satellite count while there is a fix, `inkMuted` while
+ * searching, `inkFaint` and struck through when location is off or not allowed. The whole height of
+ * the bar is the target, the mark itself stays small.
+ */
+@Composable
+private fun GpsMarkButton(onClick: () -> Unit, modifier: Modifier) {
+    val vm = graphViewModel { GpsMarkViewModel.forGraph(it) }
+    val mark by vm.mark.collectAsStateWithLifecycle()
+    val colors = KLineTheme.colors
+    val color = when (mark.kind) {
+        GpsMarkKind.FIX -> colors.ok
+        GpsMarkKind.SEARCHING -> colors.inkMuted
+        GpsMarkKind.OFF -> colors.inkFaint
+    }
+    Row(
+        modifier.clickable(role = Role.Button, onClick = onClick).padding(horizontal = Spacing.fieldPaddingHorizontal),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.grid),
+    ) {
+        Text(
+            stringResource(R.string.gps_mark),
+            style = KLineType.fieldLabel,
+            color = color,
+            textDecoration = if (mark.kind == GpsMarkKind.OFF) TextDecoration.LineThrough else null,
+            maxLines = 1,
+        )
+        mark.satellites?.let { Text(it.toString(), style = KLineType.caption, color = colors.inkMuted, maxLines = 1) }
     }
 }

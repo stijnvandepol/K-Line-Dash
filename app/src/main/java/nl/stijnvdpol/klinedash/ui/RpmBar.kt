@@ -1,8 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +13,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -128,12 +125,7 @@ internal fun RpmBar(
     modifier: Modifier = Modifier,
     shiftLight: ShiftLight? = null,
 ) {
-    val lit = remember { Animatable(0f) }
-    LaunchedEffect(lit) {
-        snapshotFlow { reading.value?.value ?: 0.0 }.collectLatest { target ->
-            lit.animateTo(target.toFloat(), tween(sweepMs.value, easing = LinearEasing))
-        }
-    }
+    val lit = rememberGlide(reading, sweepMs)
     if (shiftLight != null) {
         LaunchedEffect(shiftLight) { runShiftLight(shiftLight, lit, reading, stale) }
     }

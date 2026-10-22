@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.core.obd.Signals
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.FIELD_SLOT_COUNT
 import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.ui.DataField
@@ -24,8 +25,13 @@ import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.rememberIsStale
 import nl.stijnvdpol.klinedash.ui.rememberReading
+import nl.stijnvdpol.klinedash.ui.cluster.ArcCluster
+import nl.stijnvdpol.klinedash.ui.cluster.CenterCluster
+import nl.stijnvdpol.klinedash.ui.cluster.TwinCluster
+import nl.stijnvdpol.klinedash.ui.cluster.VirtualCluster
 import nl.stijnvdpol.klinedash.ui.sweepDurationMs
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
 
 private const val RPM_FIELD_WEIGHT = 2f
 private const val SPEED_FIELD_WEIGHT = 1.4f
@@ -47,23 +53,42 @@ private val PrimaryLooks = listOf(
 )
 private val SmallLook = ValueLook(KLineType.fieldValue)
 
-/** The classic dashboard: the RPM bar on top, three primary fields and a row of six small ones, all separated by rules. */
+/**
+ * The main dashboard: the cluster of the active theme on top (the RPM bar and three primary fields in
+ * the `bar` style, dials or an arc in the others; see docs/cluster-styles.md), and under it a row of
+ * six small fields, all separated by rules. [shiftRpm] is where the arc cluster's shift lights end.
+ */
 @Composable
-internal fun MainPageContent(page: MainPage, live: LiveState) {
+internal fun MainPageContent(page: MainPage, live: LiveState, shiftRpm: Int) {
     Column(Modifier.fillMaxSize()) {
-        RpmBarRow(live)
-        HorizontalRule()
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            page.primary.forEachIndexed { slot, id ->
-                if (slot > 0) VerticalRule()
-                DataField(id, PrimaryLooks[slot], live, Modifier.weight(PrimaryWeights[slot]).fillMaxHeight())
-            }
+        val clusterModifier = Modifier.weight(1f).fillMaxWidth()
+        when (LocalClusterLook.current.style) {
+            ClusterStyle.BAR -> BarCluster(page, live, clusterModifier)
+            ClusterStyle.TWIN -> TwinCluster(live, clusterModifier)
+            ClusterStyle.CENTER -> CenterCluster(live, clusterModifier)
+            ClusterStyle.ARC -> ArcCluster(live, shiftRpm, clusterModifier)
+            ClusterStyle.VIRTUAL -> VirtualCluster(page, live, clusterModifier)
         }
         HorizontalRule()
         Row(Modifier.height(SmallFieldRowHeight).fillMaxWidth()) {
             for (slot in 0 until FIELD_SLOT_COUNT) {
                 if (slot > 0) VerticalRule()
                 DataField(page.fields[slot], SmallLook, live, Modifier.weight(1f).fillMaxHeight())
+            }
+        }
+    }
+}
+
+/** The `bar` cluster: the RPM bar with its scale above the three primary fields. */
+@Composable
+private fun BarCluster(page: MainPage, live: LiveState, modifier: Modifier) {
+    Column(modifier) {
+        RpmBarRow(live)
+        HorizontalRule()
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            page.primary.forEachIndexed { slot, id ->
+                if (slot > 0) VerticalRule()
+                DataField(id, PrimaryLooks[slot], live, Modifier.weight(PrimaryWeights[slot]).fillMaxHeight())
             }
         }
     }

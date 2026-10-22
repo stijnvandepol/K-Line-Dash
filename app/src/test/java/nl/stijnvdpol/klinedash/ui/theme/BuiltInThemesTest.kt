@@ -1,12 +1,16 @@
 package nl.stijnvdpol.klinedash.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import nl.stijnvdpol.klinedash.data.ClusterStyle
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private val AssetsDir = File("src/main/assets/themes")
+
+/** Caution and danger bands on a dial face: a band is a wide stroke, so it needs less than text does. */
+private const val MIN_BAND_CONTRAST = 2.5
 
 private fun builtIn(id: String): ThemeParseResult.Valid =
     when (val result = parseTheme(File(AssetsDir, "$id.json").readText())) {
@@ -19,7 +23,7 @@ class BuiltInThemesTest {
 
     @Test
     fun everyShippedThemeFileIsListedAndValid() {
-        assertEquals(listOf("race", "minimal", "retro", "day"), BuiltInThemeIds)
+        assertEquals(listOf("race", "minimal", "retro", "day", "rosso", "rspec", "autobahn", "virtual", "classic"), BuiltInThemeIds)
         assertEquals(BuiltInThemeIds.sorted(), AssetsDir.list()!!.map { it.removeSuffix(".json") }.sorted())
     }
 
@@ -75,6 +79,60 @@ class BuiltInThemesTest {
         check("minimal", "Minimal", 0xFF000000, 0xFFC8C8C8, 0xFF7FA7C9)
         check("retro", "Retro", 0xFF0A0603, 0xFFFFB54A, 0xFFFF8A1F)
         check("day", "Day", 0xFFF2F2F2, 0xFF0A0A0A, 0xFF0A0A0A)
+    }
+
+    @Test
+    fun dialNumbersMeetTheContrastRuleOnTheirFace() {
+        all.forEach { (id, theme) ->
+            val ratio = contrastRatio(theme.colors.faceInk, theme.colors.face)
+            assertTrue("$id faceInk on face $ratio", ratio >= MIN_LABEL_CONTRAST)
+        }
+    }
+
+    @Test
+    fun needlesAndZoneBandsShowUpOnTheirFace() {
+        all.forEach { (id, theme) ->
+            val c = theme.colors
+            assertTrue("$id needle on face", contrastRatio(c.needle, c.face) >= MIN_FILLED_TEXT_CONTRAST)
+            assertTrue("$id caution band on face", contrastRatio(c.caution, c.face) >= MIN_BAND_CONTRAST)
+            assertTrue("$id danger band on face", contrastRatio(c.danger, c.face) >= MIN_BAND_CONTRAST)
+        }
+    }
+
+    @Test
+    fun theThemesBringTheirClusterAndNumerals() {
+        fun check(id: String, cluster: ClusterStyle, numerals: NumeralFace) = assertEquals(id, ClusterLook(cluster, numerals), builtIn(id).look)
+        listOf("race", "minimal", "retro", "day").forEach { check(it, ClusterStyle.BAR, NumeralFace.CONDENSED) }
+        check("rosso", ClusterStyle.CENTER, NumeralFace.CONDENSED)
+        check("rspec", ClusterStyle.ARC, NumeralFace.CONDENSED)
+        check("autobahn", ClusterStyle.TWIN, NumeralFace.CONDENSED)
+        check("virtual", ClusterStyle.VIRTUAL, NumeralFace.LIGHT)
+        check("classic", ClusterStyle.TWIN, NumeralFace.SERIF)
+    }
+
+    @Test
+    fun theClusterThemesUseTheColoursOfTheSpec() {
+        fun check(id: String, name: String, face: Long, faceInk: Long, needle: Long) {
+            val c = builtIn(id).colors
+            assertEquals(name, builtIn(id).name)
+            assertEquals("$id face", Color(face), c.face)
+            assertEquals("$id faceInk", Color(faceInk), c.faceInk)
+            assertEquals("$id needle", Color(needle), c.needle)
+        }
+        check("rosso", "Rosso", 0xFFFFD200, 0xFF000000, 0xFFE3001B)
+        check("rspec", "R-Spec", 0xFF000000, 0xFFFFFFFF, 0xFFE60012)
+        check("autobahn", "Autobahn", 0xFF0A0B0D, 0xFFF2F2F2, 0xFFFF5A1F)
+        check("virtual", "Virtual", 0xFF000000, 0xFFFFFFFF, 0xFFD4001A)
+        check("classic", "Classic", 0xFFEFE6D2, 0xFF1A1A1A, 0xFFCC1520)
+    }
+
+    @Test
+    fun noThemeNamesABrand() {
+        val brands = listOf("ferrari", "honda", "porsche", "audi", "volkswagen", "bmw", "toyota", "lotus", "type r", "gti")
+        AssetsDir.listFiles()!!.forEach { file ->
+            val text = file.readText().lowercase()
+            brands.forEach { brand -> assertTrue("${file.name} mentions $brand", brand !in text) }
+        }
     }
 
     @Test

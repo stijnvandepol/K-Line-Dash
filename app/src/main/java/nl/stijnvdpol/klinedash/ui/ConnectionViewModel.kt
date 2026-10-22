@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
+import nl.stijnvdpol.klinedash.core.elm.FailureKind
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.service.ObdServiceState
@@ -149,3 +150,27 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         const val NOTICE_MS = 5_000L
     }
 }
+
+/** One line of the "Adapters that work" list: a brand and the models that were verified to work. */
+internal data class SupportedAdapter(val brand: String, val models: List<String> = emptyList()) {
+    val label: String get() = if (models.isEmpty()) brand else "$brand ${models.joinToString(", ")}"
+}
+
+/**
+ * Shown when the link ends in "unsupported adapter". Keep in sync with "Works well" and "Works, with
+ * caveats" in the README section "Supported adapters"; SupportedAdaptersTest fails when a name here
+ * is missing from the README.
+ */
+internal val SupportedAdapters = listOf(
+    SupportedAdapter("OBDLink", listOf("LX", "MX+", "CX")),
+    SupportedAdapter("Vgate vLinker", listOf("MC+", "BM+", "FS", "MS")),
+    SupportedAdapter("Vgate iCar Pro 2S"),
+    SupportedAdapter("Veepeak", listOf("OBDCheck BLE+", "VP11")),
+    SupportedAdapter("Konnwei", listOf("KW902", "KW905")),
+    SupportedAdapter("Viecar"),
+    SupportedAdapter("BAFX"),
+)
+
+/** True when retrying is pointless and the status block should list the adapters that do work. */
+internal fun ConnectionState.isUnsupportedAdapter(): Boolean =
+    this is ConnectionState.Failed && kind == FailureKind.UNSUPPORTED_ADAPTER

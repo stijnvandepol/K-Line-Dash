@@ -3,6 +3,7 @@ package nl.stijnvdpol.klinedash.service
 import android.content.res.Resources
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
+import nl.stijnvdpol.klinedash.core.elm.FailureKind
 import kotlin.math.ceil
 
 private const val MILLIS_PER_SECOND = 1000.0
@@ -33,7 +34,8 @@ fun ConnectionState.headline(res: Resources): String = res.getString(
         is ConnectionState.Initializing -> R.string.headline_initializing
         is ConnectionState.Connected -> R.string.headline_connected
         is ConnectionState.Reconnecting -> R.string.headline_reconnecting
-        is ConnectionState.Failed -> R.string.headline_failed
+        is ConnectionState.Failed ->
+            if (kind == FailureKind.UNSUPPORTED_ADAPTER) R.string.headline_unsupported_adapter else R.string.headline_failed
     },
 )
 
@@ -52,5 +54,7 @@ fun ConnectionState.detail(res: Resources): String = when (this) {
     }
     is ConnectionState.Reconnecting ->
         res.getString(R.string.detail_reconnecting, attempt, ceil(delayMs / MILLIS_PER_SECOND).toInt())
-    is ConnectionState.Failed -> res.getString(R.string.detail_failed, reason.trimEnd('.'))
+    // Retrying cannot help with an unsupported adapter, so no "tap Connect" advice.
+    is ConnectionState.Failed ->
+        if (kind == FailureKind.UNSUPPORTED_ADAPTER) reason else res.getString(R.string.detail_failed, reason.trimEnd('.'))
 }

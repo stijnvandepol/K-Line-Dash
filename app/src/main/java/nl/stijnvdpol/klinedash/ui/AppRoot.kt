@@ -33,6 +33,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 /** What to do once the permission dialog has been answered (granted or not). */
 private enum class AfterPermissions { Nothing, StartupAutoConnect, Connect }
 
+private val LocationPermissions = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+
 private const val PREFS = "ui"
 private const val KEY_PERMISSIONS_ASKED = "permissions_asked"
 
@@ -50,6 +52,10 @@ fun AppRoot() {
         setupSection = SetupSection.Connection
         screen = Screen.Setup
     }
+    val openGps = {
+        setupSection = SetupSection.GpsTracks
+        screen = Screen.Setup
+    }
     var permissionRevision by remember { mutableIntStateOf(0) }
     var after by remember { mutableStateOf(AfterPermissions.Nothing) }
 
@@ -58,6 +64,8 @@ fun AppRoot() {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
         permissionRevision++
+        // Whatever was asked, the service re-checks the location permission; it costs nothing when nothing changed.
+        ObdServiceState.notifyLocationPermissionChanged()
         val action = after
         after = AfterPermissions.Nothing
         scope.launch {
@@ -94,7 +102,14 @@ fun AppRoot() {
                     Screen.Sensors -> SensorsScreen(onOpenConnection = openConnection)
                     Screen.Diagnostics -> DiagnosticsScreen(onOpenConnection = openConnection)
                     Screen.Trips -> TripsScreen()
-                    Screen.Setup -> SetupScreen(setupSection, onSelect = { setupSection = it }) {
+                    Screen.Setup -> SetupScreen(
+                        setupSection,
+                        onSelect = { setupSection = it },
+                        onAllowLocation = {
+                            after = AfterPermissions.Nothing
+                            permissionLauncher.launch(LocationPermissions)
+                        },
+                    ) {
                         ConnectionScreen(
                             onConnect = { needsBluetooth ->
                                 val missing = if (needsBluetooth) missingPermissions(context, includeNotifications = false) else emptyArray<String>()
@@ -121,7 +136,7 @@ fun AppRoot() {
                 }
             }
             overlay.banner?.let { banner -> WarningBanner(banner, onDismiss = { overlayModel.dismiss(banner.alert) }) }
-            NavBar(selected = screen, onSelect = { screen = it })
+            NavBar(selected = screen, onSelect = { screen = it }, onOpenGps = openGps)
         }
     }
 }

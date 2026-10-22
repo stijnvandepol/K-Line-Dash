@@ -27,12 +27,14 @@ import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.data.TrackPage
+import nl.stijnvdpol.klinedash.data.shiftRpm
 import nl.stijnvdpol.klinedash.ui.pages.GridPageContent
 import nl.stijnvdpol.klinedash.ui.pages.MainPageContent
 import nl.stijnvdpol.klinedash.ui.pages.TrackPageContent
 import nl.stijnvdpol.klinedash.ui.pages.rememberPageTitles
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private const val DEMAND_OWNER = "dashboard"
@@ -62,7 +64,9 @@ private fun DashboardPager(layout: DashboardLayout, live: LiveDataViewModel, das
     val poller by live.poller.collectAsStateWithLifecycle()
     val supportedPids by live.supportedPids.collectAsStateWithLifecycle()
     val currentPage = pages[pagerState.currentPage.coerceIn(pages.indices)]
-    DemandWhileVisible(poller, DEMAND_OWNER, remember(currentPage, supportedPids) { pageDemandIds(currentPage, supportedPids) })
+    val cluster = LocalClusterLook.current.style
+    DemandWhileVisible(poller, DEMAND_OWNER, remember(currentPage, supportedPids, cluster) { pageDemandIds(currentPage, supportedPids, cluster) })
+    val shiftRpm = remember(layout) { layout.shiftRpm() }
 
     // States, not values: only the small composables below read them, so this one never recomposes
     // for a new reading.
@@ -77,7 +81,7 @@ private fun DashboardPager(layout: DashboardLayout, live: LiveDataViewModel, das
     Box(Modifier.fillMaxSize()) {
         HorizontalPager(pagerState, Modifier.fillMaxSize()) { index ->
             when (val page = pages[index]) {
-                is MainPage -> MainPageContent(page, liveState)
+                is MainPage -> MainPageContent(page, liveState, shiftRpm)
                 is GridPage -> GridPageContent(page, liveState, dashboard.history, graphRevision)
                 is TrackPage -> TrackPageContent(page, liveState, peaks, dashboard::resetPeaks)
             }

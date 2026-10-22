@@ -23,6 +23,7 @@
     <string name="headline_connected">Connected</string>
     <string name="headline_reconnecting">Reconnecting</string>
     <string name="headline_failed">Connection failed</string>
+    <string name="headline_unsupported_adapter">Adapter not supported</string>
     <string name="detail_idle">Choose an adapter and tap Connect.</string>
     <string name="detail_connecting">To %1$s</string>
     <string name="detail_connected_voltage">%1$s, battery %2$s V</string>
@@ -118,6 +119,7 @@
     <string name="setup_dashboard">Dashboard</string>
     <string name="setup_display">Display</string>
     <string name="setup_startup">Startup</string>
+    <string name="setup_gps_tracks">GPS &amp; Tracks</string>
     <string name="setup_debug">Debug</string>
 
     <!-- Setup: warnings -->
@@ -140,14 +142,13 @@
     <!-- Trips -->
     <string name="trips_state_recording">Recording</string>
     <string name="trips_state_idle">Not recording</string>
-    <string name="trips_hint_not_connected">Not connected. Connect under Setup, Connection.</string>
+    <string name="trips_hint_not_connected">Not connected and no GPS fix. Connect under Setup, Connection, or wait for the GPS.</string>
     <string name="trips_hint_waiting">Recording starts when the engine runs.</string>
-    <string name="trips_hint_press_record">Press Record to start a trip.</string>
-    <string name="trips_label_elapsed">Time</string>
-    <string name="trips_label_samples">Samples</string>
-    <string name="trips_record">Record</string>
+    <string name="trips_hint_press_start">Start a trip, or a lap session on a track.</string>
     <string name="trips_stop">Stop</string>
-    <string name="trips_auto_record">Record automatically when the engine runs</string>
+    <string name="trips_section_auto">Record automatically</string>
+    <string name="trips_auto_record">When the engine runs</string>
+    <string name="trips_auto_moving">When the car moves (no OBD needed)</string>
     <string name="trips_section_export">Export</string>
     <string name="trips_copy">Copy to USB or SD card</string>
     <string name="trips_wifi_start">Start Wi-Fi export</string>
@@ -157,9 +158,8 @@
     <string name="trips_column_start">Started</string>
     <string name="trips_column_duration">Duration</string>
     <string name="trips_column_distance">Distance</string>
-    <string name="trips_column_max_rpm">Max RPM</string>
     <string name="trips_empty_auto">No trips yet. Recording starts when the engine runs.</string>
-    <string name="trips_empty_manual">No trips yet. Press Record to start one.</string>
+    <string name="trips_empty_manual">No trips yet. Start a trip to record one.</string>
     <string name="trips_delete">Delete</string>
     <string name="trips_delete_title">Delete trip?</string>
     <string name="unit_km">km</string>
@@ -195,6 +195,8 @@
     <string name="wifi_host">IP address or host name</string>
     <string name="wifi_port">Port</string>
     <string name="device_obd_badge">OBD adapter</string>
+    <string name="device_may_not_work">May not work</string>
+    <string name="adapters_that_work">Adapters that work</string>
 
     <!-- Debug screen -->
     <string name="debug_section_adapter">Adapter</string>
@@ -213,7 +215,15 @@
     <string name="debug_export_failed">Export failed. Try again.</string>
     <string name="debug_export_saved_to">Log saved to %1$s</string>
     <string name="debug_export_no_picker">No file picker available. Log saved to %1$s</string>
-    <string name="label_elm_version">ELM version</string>
+    <string name="label_chip">Chip</string>
+    <string name="label_firmware">Firmware</string>
+    <string name="label_can">CAN</string>
+    <string name="label_adaptive_timing">Adaptive timing</string>
+    <string name="value_chip_genuine">ELM327</string>
+    <string name="value_chip_stn">STN</string>
+    <string name="value_chip_clone">ELM327 clone</string>
+    <string name="value_timing_at1">AT1</string>
+    <string name="value_timing_at2">AT2</string>
     <string name="label_protocol">Protocol</string>
     <string name="label_saved_protocol">Saved protocol used</string>
     <string name="label_unsupported">Unsupported commands</string>
@@ -242,6 +252,15 @@
     <string name="display_day_starts">Day starts</string>
     <string name="display_night_starts">Night starts</string>
     <string name="display_now_showing">Now showing</string>
+    <string name="display_cluster_title">Cluster</string>
+    <string name="display_cluster_hint">How the main page shows engine speed, road speed and coolant. Theme default follows the theme in effect.</string>
+    <string name="display_cluster_default">Theme default</string>
+    <string name="display_cluster_bar">Race bar</string>
+    <string name="display_cluster_twin">Twin dials</string>
+    <string name="display_cluster_center">Centre tach</string>
+    <string name="display_cluster_arc">Digital arc</string>
+    <string name="display_cluster_virtual">Virtual cockpit</string>
+    <string name="cluster_tach_scale">x1000</string>
     <string name="display_accent_title">Accent colour</string>
     <string name="display_accent_default">Theme default</string>
     <string name="step_lower">lower</string>
@@ -320,4 +339,50 @@
     <string name="track_preview_rpm">RPM</string>
     <string name="track_preview_coolant_speed">Water and speed</string>
     <string name="track_preview_peaks">Peak hold</string>
+    <!-- Trips: the session panel, the trip detail and GPS & Tracks -->
+    <string name="session_start_trip">Start trip</string>
+    <string name="session_start_laps">Start lap session</string>
+    <string name="session_track">Track: %1$s</string>
+    <string name="session_choose_track">Choose a track</string>
+    <string name="session_choose_title">Choose a track</string>
+    <string name="session_no_tracks">No tracks yet. Start a lap session and set the start/finish line on the road.</string>
+    <string name="session_start_timing">Start lap timing</string>
+    <string name="session_lap_session">Lap session</string>
+    <string name="session_no_line">No start/finish line yet</string>
+    <string name="session_set_hint">Drive across the line at a steady speed and tap when you pass it.</string>
+    <string name="session_set_start_finish">Set start/finish here</string>
+    <string name="session_add_sector">Add sector here</string>
+    <string name="session_current_lap">Current lap</string>
+    <string name="session_last">Last</string>
+    <string name="session_best">Best</string>
+    <string name="session_delta">Delta</string>
+    <string name="session_laps">Laps</string>
+    <string name="detail_back">&#8592; Back</string>
+    <string name="detail_export">Export for PC</string>
+    <string name="detail_loading">Reading the trip...</string>
+    <string name="detail_exporting">Writing the files...</string>
+    <string name="detail_export_hint">Choose a format. The files are made from the trip and its track as they are now.</string>
+    <string name="detail_export_where">Get them off the head unit with the Wi-Fi export or Copy to USB on the Trips page.</string>
+    <string name="detail_route_description">The driven route, north up</string>
+    <string name="detail_no_gps">This trip has no GPS data, so there is no route.</string>
+    <string name="detail_lap_unavailable">Could not read this lap. Select it again.</string>
+    <string name="gps_mark">GPS</string>
+    <string name="gps_title">GPS</string>
+    <string name="gps_state">Status</string>
+    <string name="gps_satellites">Satellites</string>
+    <string name="gps_accuracy">Accuracy</string>
+    <string name="gps_rate">Fix rate</string>
+    <string name="gps_allow">Allow location</string>
+    <string name="gps_simulated">Use the simulated circuit</string>
+    <string name="gps_simulated_hint">The simulated car drives a 2 km circuit at the speed of the simulator, so laps can be timed without a car.</string>
+    <string name="gps_tracks_title">Saved tracks</string>
+    <string name="gps_no_tracks">No tracks yet. Start a lap session on the Trips page and set the start/finish line while driving.</string>
+    <string name="gps_tracks_hint">USE chooses the track for the next lap session. ACTIVE switches lap timing off again.</string>
+    <string name="gps_tracks_hint_moving">Renaming opens the keyboard, so it is off while the car moves. USE chooses the track for the next lap session.</string>
+    <string name="gps_track_active">Active</string>
+    <string name="gps_track_use">Use</string>
+    <string name="gps_track_rename">Rename</string>
+    <string name="gps_rename_title">Rename track</string>
+    <string name="gps_rename_save">Save</string>
+    <string name="gps_delete_title">Delete track?</string>
 </resources>

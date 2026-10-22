@@ -1,0 +1,21 @@
+{
+  "name": "Rosso",
+  "cluster": "center",
+  "numerals": "condensed",
+  "colors": {
+    "background": "#000000",
+    "surface": "#1C1C1C",
+    "rule": "#2A2A2A",
+    "ink": "#FFFFFF",
+    "inkMuted": "#8C8C8C",
+    "inkFaint": "#4D4D4D",
+    "ok": "#2ED47A",
+    "caution": "#D45500",
+    "danger": "#E3001B",
+    "accent": "#E3001B",
+    "face": "#FFD200",
+    "faceInk": "#000000",
+    "ring": "#2A2A2A",
+    "needle": "#E3001B"
+  }
+}

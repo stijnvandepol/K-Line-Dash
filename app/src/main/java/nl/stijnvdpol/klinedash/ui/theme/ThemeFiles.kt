@@ -23,7 +23,7 @@ private const val BYTES_PER_KB = 1024
 const val DEFAULT_THEME_ID = "race"
 
 /** Built-in themes in list order; each is assets/themes/<id>.json. */
-internal val BuiltInThemeIds = listOf(DEFAULT_THEME_ID, "minimal", "retro", "day")
+internal val BuiltInThemeIds = listOf(DEFAULT_THEME_ID, "minimal", "retro", "day", "rosso", "rspec", "autobahn", "virtual", "classic")
 
 class InvalidThemeFile(val fileName: String, val reason: String)
 
@@ -56,7 +56,7 @@ class ThemeLoader(private val readBuiltIn: (id: String) -> String, private val u
             return null
         }
         return when (result) {
-            is ThemeParseResult.Valid -> ThemeDefinition(id, result.name, result.colors, isBuiltIn = true)
+            is ThemeParseResult.Valid -> ThemeDefinition(id, result.name, result.colors, isBuiltIn = true, look = result.look)
             // A shipped theme that does not validate is a bug; the unit tests guard against it.
             is ThemeParseResult.Invalid -> null.also { Log.e(TAG, "Built-in theme $id is invalid: ${result.reason}") }
         }
@@ -71,7 +71,7 @@ class ThemeLoader(private val readBuiltIn: (id: String) -> String, private val u
         }
         return files.take(MAX_USER_FILES).mapNotNull { file ->
             when (val result = parseUserFile(file)) {
-                is ThemeParseResult.Valid -> ThemeDefinition(USER_ID_PREFIX + file.name, result.name, result.colors, isBuiltIn = false)
+                is ThemeParseResult.Valid -> ThemeDefinition(USER_ID_PREFIX + file.name, result.name, result.colors, isBuiltIn = false, look = result.look)
                 is ThemeParseResult.Invalid -> null.also { invalid += InvalidThemeFile(file.name, result.reason) }
             }
         }
