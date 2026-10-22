@@ -40,6 +40,12 @@ class GpsPresentationTest {
     }
 
     @Test
+    fun `a fix without satellite data shows no count instead of zero`() {
+        assertEquals(GpsMark(GpsMarkKind.FIX, null), gpsMark(GpsStatus.Fix(3.0, 0, 1.0)))
+        assertEquals("--", gpsInfo(GpsStatus.Fix(accuracyM = 3.0, satellites = 0, rateHz = 1.0)).satellites)
+    }
+
+    @Test
     fun `without a fix the values are dashes and a hint says what to do`() {
         val missing = gpsInfo(GpsStatus.NoPermission)
         assertEquals("Not allowed", missing.state)

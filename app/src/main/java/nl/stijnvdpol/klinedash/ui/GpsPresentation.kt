@@ -29,8 +29,15 @@ internal enum class GpsMarkKind { FIX, SEARCHING, OFF }
 /** The mark: [satellites] is shown next to "GPS" while there is a fix and the count is known. */
 internal data class GpsMark(val kind: GpsMarkKind, val satellites: Int?)
 
+/**
+ * Satellites used in the fix, or null when unknown. A fix with zero satellites in use comes from a
+ * source without satellite data (a mocked or simulated location, or a device that reports no GNSS
+ * status), so "0" would be wrong rather than informative.
+ */
+private fun knownSatellites(fix: GpsStatus.Fix): Int? = fix.satellites?.takeIf { it > 0 }
+
 internal fun gpsMark(status: GpsStatus): GpsMark = when (status) {
-    is GpsStatus.Fix -> GpsMark(GpsMarkKind.FIX, status.satellites)
+    is GpsStatus.Fix -> GpsMark(GpsMarkKind.FIX, knownSatellites(status))
     GpsStatus.Searching, GpsStatus.Idle -> GpsMark(GpsMarkKind.SEARCHING, null)
     GpsStatus.NoPermission, GpsStatus.Disabled -> GpsMark(GpsMarkKind.OFF, null)
 }
@@ -48,7 +55,7 @@ internal fun gpsInfo(status: GpsStatus): GpsInfo {
             GpsStatus.NoPermission -> "Not allowed"
             GpsStatus.Disabled -> "Off"
         },
-        satellites = fix?.satellites?.toString() ?: MISSING_VALUE,
+        satellites = fix?.let(::knownSatellites)?.toString() ?: MISSING_VALUE,
         accuracyM = fix?.accuracyM?.let { formatNumber(it, ACCURACY_DECIMALS) } ?: MISSING_VALUE,
         rateHz = fix?.rateHz?.let { formatNumber(it, RATE_DECIMALS) } ?: MISSING_VALUE,
         hint = when (status) {
