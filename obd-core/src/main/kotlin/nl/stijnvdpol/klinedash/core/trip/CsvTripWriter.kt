@@ -1,9 +1,6 @@
 package nl.stijnvdpol.klinedash.core.trip
 
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
 
@@ -23,6 +20,13 @@ internal fun Map<String, Reading>.freshValue(signalId: String, nowMs: Long, fres
  *   `coolant (°C)`, `rpm (rpm)`; a signal without a unit is just `<id>`, e.g. `mil_on`. The id is
  *   the stable machine-readable part, the unit is for humans. Fields containing a comma, quote or
  *   line break are quoted.
+ * - With [includeGps] the header ends with seven GPS columns:
+ *   `lat (deg),lon (deg),gps_speed (km/h),heading (deg),gps_acc (m),sats,gps_age (ms)`. `lat`/`lon`
+ *   have 7 decimals, `gps_age` is the row time minus the fix time. A row without a fix, or a fix
+ *   without speed, heading, accuracy or satellites, has empty cells. Files written without
+ *   [includeGps] (older versions) simply lack these columns; [readTripCsv] reads both.
+ * - There is no `lap` column: laps depend on the start/finish gate, which the user may change
+ *   after the drive, so they are derived from the fixes later and added by the exporters.
  * - `time_iso` is ISO-8601 in UTC with milliseconds (`2026-10-22T14:03:07.250Z`); `elapsed_s` is the
  *   time since the first sample with one decimal.
  * - Values use the signal's own decimals with a '.' separator whatever the device locale is.
@@ -31,6 +35,7 @@ internal fun Map<String, Reading>.freshValue(signalId: String, nowMs: Long, fres
 class CsvTripWriter(
     private val out: Appendable,
     private val freshnessMs: Long = DEFAULT_TRIP_FRESHNESS_MS,
+    private val includeGps: Boolean = false,
 ) : TripWriter {
 
     private var columns: List<Signal>? = null
@@ -39,49 +44,34 @@ class CsvTripWriter(
     override fun writeHeader(columns: List<Signal>) {
         check(this.columns == null) { "The CSV header was already written" }
         this.columns = columns
-        val names = listOf(TIME_COLUMN, ELAPSED_COLUMN) + columns.map(::columnName)
-        writeLine(names.map(::escapeField))
+        val signalNames = columns.map { TripCsvFormat.columnName(it.id, it.unit) }
+        val names = listOf(TripCsvFormat.TIME_COLUMN, TripCsvFormat.ELAPSED_COLUMN) + signalNames + gpsHeader()
+        writeLine(names.map(TripCsvFormat::escapeField))
     }
 
-    override fun writeSample(nowMs: Long, readings: Map<String, Reading>) {
+    override fun writeSample(nowMs: Long, readings: Map<String, Reading>, gps: GeoFix?) {
         val columns = checkNotNull(columns) { "writeHeader must be called before writeSample" }
         val origin = firstSampleMs ?: nowMs.also { firstSampleMs = it }
         val cells = columns.map { column ->
             readings.freshValue(column.id, nowMs, freshnessMs)
                 ?.takeIf { it.isFinite() }
-                ?.let { formatValue(it, column.decimals) }
+                ?.let { TripCsvFormat.formatFixed(it, column.decimals) }
                 .orEmpty()
         }
-        writeLine(listOf(formatTime(nowMs), formatElapsedSeconds(nowMs - origin)) + cells)
+        val gpsCells = if (includeGps) GpsColumns.cells(gps, nowMs) else emptyList()
+        writeLine(listOf(TripCsvFormat.formatTime(nowMs), formatElapsedSeconds(nowMs - origin)) + cells + gpsCells)
     }
+
+    private fun gpsHeader(): List<String> = if (includeGps) GpsColumns.header else emptyList()
 
     private fun writeLine(fields: List<String>) {
-        out.append(fields.joinToString(SEPARATOR)).append(LINE_END)
+        out.append(fields.joinToString(TripCsvFormat.SEPARATOR)).append(TripCsvFormat.LINE_END)
     }
-
-    private fun columnName(signal: Signal): String =
-        if (signal.unit.isEmpty()) signal.id else "${signal.id} (${signal.unit})"
-
-    private fun formatTime(epochMs: Long): String = TIME_FORMAT.format(Instant.ofEpochMilli(epochMs))
 
     private fun formatElapsedSeconds(elapsedMs: Long): String =
-        String.format(Locale.US, "%.1f", elapsedMs / MS_PER_SECOND)
-
-    private fun formatValue(value: Double, decimals: Int): String =
-        String.format(Locale.US, "%.${decimals}f", value)
-
-    private fun escapeField(field: String): String {
-        val needsQuotes = field.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
-        return if (needsQuotes) "\"" + field.replace("\"", "\"\"") + "\"" else field
-    }
+        TripCsvFormat.formatFixed(elapsedMs / MS_PER_SECOND, 1)
 
     private companion object {
-        const val TIME_COLUMN = "time_iso"
-        const val ELAPSED_COLUMN = "elapsed_s"
-        const val SEPARATOR = ","
-        const val LINE_END = "\n"
         const val MS_PER_SECOND = 1000.0
-        val TIME_FORMAT: DateTimeFormatter =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).withZone(ZoneOffset.UTC)
     }
 }

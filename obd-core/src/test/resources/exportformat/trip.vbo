@@ -1,0 +1,31 @@
+File created on 22/10/2026 at 14:04:07
+
+[header]
+satellites
+time
+latitude
+longitude
+velocity kmh
+heading
+height
+rpm
+throttle
+coolant
+
+[channel units]
+rpm
+%
+degC
+
+[comments]
+K-Line Dash: Test trip <&>
+Times are UTC. Height is not recorded (always 0). A missing OBD value repeats the last known one.
+
+[column names]
+sats time lat long velocity heading height rpm throttle coolant
+
+[data]
+009 140308.000 +03119.10000 +00058.49280 036.000 090.00 +00000.00 2000 15 85
+009 140309.000 +03119.10000 +00058.47600 054.000 090.50 +00000.00 2500 40 85
+010 140311.000 +03119.10600 +00058.45200 072.000 000.00 +00000.00 3500 40 86
+000 140312.000 +03119.11200 +00058.42800 000.000 000.00 +00000.00 4000 100 86

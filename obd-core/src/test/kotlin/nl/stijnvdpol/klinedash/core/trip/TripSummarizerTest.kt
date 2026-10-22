@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.core.trip
 
+import nl.stijnvdpol.klinedash.core.geo.TestWorld
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -124,5 +125,18 @@ class TripSummarizerTest {
         assertNull(summary.maxSpeedKmh)
         assertNull(summary.maxCoolantC)
         assertEquals(0.0, summary.distanceKm, 0.0)
+    }
+
+    @Test
+    fun gpsFixesTakeOverTheDistanceWhenTheyAreGiven() {
+        val summarizer = TripSummarizer()
+        for (second in 0..10) {
+            val fix = TestWorld.fix(t0 + second * 1_000L, 0.0, second * 20.0, speedMps = 20.0)
+            val readings = mapOf("speed" to Reading("speed", 100.0, t0 + second * 1_000L))
+            summarizer.add(t0 + second * 1_000L, readings, fix)
+        }
+        val summary = summarizer.summary()!!
+        assertEquals(0.2, summary.distanceKm, 0.001)
+        assertEquals(72.0, summary.maxSpeedKmh!!, 1e-9)
     }
 }

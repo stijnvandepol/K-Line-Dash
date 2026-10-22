@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="K-Line Dash" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v2" xmlns:kld="urn:nl.stijnvdpol.klinedash:gpx:1">
+  <metadata><name>Test trip &lt;&amp;&gt;</name><time>2026-10-22T14:04:07.000Z</time></metadata>
+  <wpt lat="51.9850000" lon="-0.9750000"><name>Start/Finish</name></wpt>
+  <wpt lat="51.9851000" lon="-0.9740000"><name>Sector 1</name></wpt>
+  <trk>
+    <name>Test trip &lt;&amp;&gt;</name>
+    <trkseg>
+      <trkpt lat="51.9850000" lon="-0.9748800">
+        <time>2026-10-22T14:03:08.000Z</time>
+        <sat>9</sat>
+        <extensions>
+          <gpxtpx:TrackPointExtension><gpxtpx:speed>10.0</gpxtpx:speed><gpxtpx:course>90.0</gpxtpx:course></gpxtpx:TrackPointExtension>
+          <kld:lap>1</kld:lap>
+          <kld:accuracy>3.0</kld:accuracy>
+          <kld:rpm>2000</kld:rpm>
+          <kld:throttle>15</kld:throttle>
+          <kld:coolant>85</kld:coolant>
+        </extensions>
+      </trkpt>
+      <trkpt lat="51.9850000" lon="-0.9746000">
+        <time>2026-10-22T14:03:09.000Z</time>
+        <sat>9</sat>
+        <extensions>
+          <gpxtpx:TrackPointExtension><gpxtpx:speed>15.0</gpxtpx:speed><gpxtpx:course>90.5</gpxtpx:course></gpxtpx:TrackPointExtension>
+          <kld:lap>1</kld:lap>
+          <kld:accuracy>3.0</kld:accuracy>
+          <kld:rpm>2500</kld:rpm>
+          <kld:throttle>40</kld:throttle>
+          <kld:coolant>85</kld:coolant>
+        </extensions>
+      </trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="51.9851000" lon="-0.9742000">
+        <time>2026-10-22T14:03:11.000Z</time>
+        <sat>10</sat>
+        <extensions>
+          <gpxtpx:TrackPointExtension><gpxtpx:speed>20.0</gpxtpx:speed><gpxtpx:course>0.0</gpxtpx:course></gpxtpx:TrackPointExtension>
+          <kld:lap>2</kld:lap>
+          <kld:accuracy>2.5</kld:accuracy>
+          <kld:rpm>3500</kld:rpm>
+          <kld:coolant>86</kld:coolant>
+        </extensions>
+      </trkpt>
+      <trkpt lat="51.9852000" lon="-0.9738000">
+        <time>2026-10-22T14:03:12.000Z</time>
+        <extensions>
+          <kld:lap>2</kld:lap>
+          <kld:rpm>4000</kld:rpm>
+          <kld:throttle>100</kld:throttle>
+          <kld:coolant>86</kld:coolant>
+        </extensions>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

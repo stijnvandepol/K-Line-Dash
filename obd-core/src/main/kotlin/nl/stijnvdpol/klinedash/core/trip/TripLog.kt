@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.core.trip
 
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
 
@@ -13,16 +14,19 @@ interface TripWriter {
     /** Writes the header for [columns]; must be called once before [writeSample]. */
     fun writeHeader(columns: List<Signal>)
 
-    /** Appends one row for [nowMs] from [readings]. */
-    fun writeSample(nowMs: Long, readings: Map<String, Reading>)
+    /** Appends one row for [nowMs] from [readings] and the latest GPS fix [gps], if the writer stores one. */
+    fun writeSample(nowMs: Long, readings: Map<String, Reading>, gps: GeoFix? = null)
 }
 
-/** Running totals of a trip, updated per sample; stored with the trip when it ends. */
+/**
+ * Running totals of a trip, updated per sample; stored with the trip when it ends.
+ * [distanceKm] comes from GPS where fixes exist and from integrated vehicle speed elsewhere.
+ */
 data class TripSummary(
     val startMs: Long,
     val endMs: Long,
     val sampleCount: Int,
-    /** Integrated from vehicle speed; 0 when speed was not polled. */
+    /** 0 when neither GPS nor vehicle speed was available. */
     val distanceKm: Double,
     val maxRpm: Double?,
     val maxSpeedKmh: Double?,
