@@ -9,6 +9,10 @@ lifecycle = "2.8.7"
 composeBom = "2025.07.00"
 room = "2.7.2"
 junit = "4.13.2"
+# Instrumented UI tests (app/src/androidTest). The orchestrator runs every test in its own process
+# with cleared app data, see docs/RELEASING.md.
+androidxTestRunner = "1.6.2"
+androidxTestOrchestrator = "1.5.1"
 # Android ships org.json, but plain JVM unit tests do not; same API, used only in tests.
 orgJson = "20260814"
 
@@ -24,6 +28,7 @@ androidx-lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", 
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
@@ -31,6 +36,8 @@ androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 junit = { module = "junit:junit", version.ref = "junit" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
+androidx-test-orchestrator = { module = "androidx.test:orchestrator", version.ref = "androidxTestOrchestrator" }
 org-json = { module = "org.json:json", version.ref = "orgJson" }
 
 [plugins]

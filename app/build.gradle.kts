@@ -49,6 +49,9 @@ android {
         targetSdk = 34
         versionCode = appVersionCode
         versionName = appVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The orchestrator clears the app's data before every instrumented test: see docs/RELEASING.md.
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
     signingConfigs {
@@ -89,7 +92,11 @@ android {
     }
 
     // The ViewModel tests run on the JVM, where android.util.Log has no implementation.
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // One process and one cleared data directory per instrumented test; the app keeps its state in process-wide singletons.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
 }
 
 ksp {
@@ -131,4 +138,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.org.json)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestUtil(libs.androidx.test.orchestrator)
 }

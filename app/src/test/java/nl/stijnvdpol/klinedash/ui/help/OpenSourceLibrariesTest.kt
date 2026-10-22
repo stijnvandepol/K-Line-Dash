@@ -9,7 +9,7 @@ class OpenSourceLibrariesTest {
     /** Libraries of the version catalog that only tests or the build use; they are not inside the APK. */
     private val notShipped = setOf(
         "kotlinx-coroutines-test", "androidx-compose-ui-tooling", "androidx-room-compiler", "junit", "org-json",
-        "androidx-compose-bom",
+        "androidx-compose-bom", "androidx-compose-ui-test-junit4", "androidx-test-runner", "androidx-test-orchestrator",
     )
 
     /** alias to Maven group of every `[libraries]` entry of gradle/libs.versions.toml. */
