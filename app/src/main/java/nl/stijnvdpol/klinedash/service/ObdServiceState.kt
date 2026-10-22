@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import nl.stijnvdpol.klinedash.core.alert.Alert
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
@@ -27,6 +28,11 @@ object ObdServiceState {
 
     /** The poller that belongs to [link]; screens register the signals they show with it. */
     val poller: StateFlow<ObdPoller?> = _poller.asStateFlow()
+
+    private val _alerts = MutableStateFlow<List<Alert>>(emptyList())
+
+    /** Warnings that are active right now (coolant, battery, MIL, ...); empty while there is no link. */
+    val alerts: StateFlow<List<Alert>> = _alerts.asStateFlow()
 
     /** State of the current link, or Idle while there is none. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -50,12 +56,19 @@ object ObdServiceState {
         transport.setEngineRunning(_simulatorEngineRunning.value)
     }
 
+    internal fun publishAlerts(active: List<Alert>) {
+        _alerts.value = active
+    }
+
     internal fun publish(link: ElmLink, poller: ObdPoller) {
         _link.value = link
         _poller.value = poller
     }
 
     internal fun unpublish(link: ElmLink) {
-        if (_link.compareAndSet(link, null)) _poller.value = null
+        if (_link.compareAndSet(link, null)) {
+            _poller.value = null
+            _alerts.value = emptyList()
+        }
     }
 }

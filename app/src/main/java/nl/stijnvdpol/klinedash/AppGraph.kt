@@ -13,11 +13,22 @@ import nl.stijnvdpol.klinedash.core.diag.Dtc
 import nl.stijnvdpol.klinedash.core.diag.DtcDescription
 import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.elm.ProtocolStore
+import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.AppDatabase
+import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
 import nl.stijnvdpol.klinedash.data.RoomProtocolStore
 import nl.stijnvdpol.klinedash.data.SettingsRepository
+import nl.stijnvdpol.klinedash.data.TripSettingsRepository
+import nl.stijnvdpol.klinedash.service.ExportController
+import nl.stijnvdpol.klinedash.service.ObdServiceState
+import nl.stijnvdpol.klinedash.service.TripLibrary
+import nl.stijnvdpol.klinedash.service.TripRecorder
+import nl.stijnvdpol.klinedash.service.listTripFiles
+import nl.stijnvdpol.klinedash.core.export.TripFileSource
+import java.io.File
 
 private const val TAG = "AppGraph"
+private const val TRIPS_DIR_NAME = "trips"
 
 /** Stands in when the bundled database cannot be read: codes are then shown without text. */
 private object NoDtcDescriptions : DtcDescriptions {
@@ -27,10 +38,42 @@ private object NoDtcDescriptions : DtcDescriptions {
 /** Manual DI container (no Hilt: one process, a handful of singletons). */
 class AppGraph(val appContext: Context) {
     val database: AppDatabase by lazy {
-        Room.databaseBuilder(appContext, AppDatabase::class.java, "klinedash.db").build()
+        Room.databaseBuilder(appContext, AppDatabase::class.java, "klinedash.db")
+            .addMigrations(MIGRATION_1_2)
+            .build()
     }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(database.settingsDao()) }
     val protocolStore: ProtocolStore by lazy { RoomProtocolStore(database.settingsDao()) }
+
+    private val exportScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(database.settingsDao()) }
+    val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(database.settingsDao()) }
+
+    /**
+     * App-specific external storage: no permission needed, removed with the app. Null only when that
+     * storage is unavailable; the internal files directory then keeps recording working.
+     */
+    val tripsDir: File by lazy {
+        val external = appContext.getExternalFilesDir(TRIPS_DIR_NAME)
+        if (external == null) Log.w(TAG, "External files directory unavailable, trips go to internal storage")
+        external ?: File(appContext.filesDir, TRIPS_DIR_NAME)
+    }
+
+    /** Records trips; its sampling loop is run by ObdService. */
+    val tripRecorder: TripRecorder by lazy {
+        TripRecorder(tripsDir, database.tripDao(), tripSettingsRepository.settings, ObdServiceState.poller)
+    }
+
+    /** Trip list, delete and copy-to-USB for the UI. */
+    val tripLibrary: TripLibrary by lazy {
+        TripLibrary(database.tripDao(), tripsDir, tripRecorder.state, appContext.contentResolver)
+    }
+
+    /** Wi-Fi export of the trip files; stopped by ObdService when it ends. */
+    val exportController: ExportController by lazy {
+        ExportController(TripFileSource { listTripFiles(tripsDir) }, exportScope)
+    }
 
     private val loadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

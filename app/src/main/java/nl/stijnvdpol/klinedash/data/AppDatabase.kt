@@ -34,7 +34,8 @@ interface SettingsDao {
     suspend fun delete(key: String)
 }
 
-@Database(entities = [SettingEntry::class], version = 1, exportSchema = true)
+@Database(entities = [SettingEntry::class, Trip::class], version = 2, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun settingsDao(): SettingsDao
+    abstract fun tripDao(): TripDao
 }

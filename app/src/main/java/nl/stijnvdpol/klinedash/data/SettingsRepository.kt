@@ -1,11 +1,6 @@
 package nl.stijnvdpol.klinedash.data
 
-import android.util.Log
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.WifiTransport
 
@@ -20,29 +15,15 @@ data class ConnectionSettings(
     val autoConnect: Boolean = true,
 )
 
-class SettingsRepository(private val dao: SettingsDao) {
-    private val writeLock = Mutex()
+class SettingsRepository(dao: SettingsDao) {
+    private val store = TypedSettings(dao, { it.toConnectionSettings() }, { it.toRows() })
 
-    /** Re-emits on every row change (also protocol.* rows), hence the distinctUntilChanged. */
-    val connectionSettings: Flow<ConnectionSettings> =
-        dao.observeAll().map { rows -> rows.toConnectionSettings() }.distinctUntilChanged()
+    /** Re-emits only when the connection settings themselves change (not for protocol.* rows). */
+    val connectionSettings: Flow<ConnectionSettings> = store.flow
 
-    /** Read-modify-write under a lock; only rows that actually changed are written. */
-    suspend fun update(transform: (ConnectionSettings) -> ConnectionSettings) {
-        writeLock.withLock {
-            val old = dao.getAll().toConnectionSettings()
-            val new = transform(old)
-            if (new == old) return
-            val oldRows = old.toRows()
-            for ((key, value) in new.toRows()) {
-                if (oldRows[key] == value) continue
-                if (value == null) dao.delete(key) else dao.upsert(SettingEntry(key, value))
-            }
-        }
-    }
+    suspend fun update(transform: (ConnectionSettings) -> ConnectionSettings) = store.update(transform)
 
     private companion object {
-        const val TAG = "SettingsRepository"
         const val KIND = "conn.kind"
         const val BT_ADDRESS = "conn.btAddress"
         const val BT_NAME = "conn.btName"
@@ -54,28 +35,21 @@ class SettingsRepository(private val dao: SettingsDao) {
     }
 
     /**
-     * Missing rows mean "never set" and give the default. A row that does not parse (written by a
-     * newer app version, or corrupted) is treated the same way, so the user can simply pick again
-     * on the connection screen, but it is logged instead of passing silently.
+     * Missing rows mean "never set" and give the default. A row that does not parse is treated the
+     * same way, so the user can simply pick again on the connection screen (and it is logged).
      */
-    private fun List<SettingEntry>.toConnectionSettings(): ConnectionSettings {
-        val map = associate { it.key to it.value }
+    private fun Map<String, String>.toConnectionSettings(): ConnectionSettings {
         val d = ConnectionSettings()
         return ConnectionSettings(
-            kind = map.parsed(KIND, d.kind) { name -> TransportKind.entries.firstOrNull { it.name == name } },
-            btAddress = map[BT_ADDRESS],
-            btName = map[BT_NAME],
-            bleAddress = map[BLE_ADDRESS],
-            bleName = map[BLE_NAME],
-            wifiHost = map[WIFI_HOST] ?: d.wifiHost,
-            wifiPort = map.parsed(WIFI_PORT, d.wifiPort) { it.toIntOrNull() },
-            autoConnect = map.parsed(AUTO_CONNECT, d.autoConnect) { it.toBooleanStrictOrNull() },
+            kind = parsed(KIND, d.kind) { name -> TransportKind.entries.firstOrNull { it.name == name } },
+            btAddress = this[BT_ADDRESS],
+            btName = this[BT_NAME],
+            bleAddress = this[BLE_ADDRESS],
+            bleName = this[BLE_NAME],
+            wifiHost = this[WIFI_HOST] ?: d.wifiHost,
+            wifiPort = parsed(WIFI_PORT, d.wifiPort) { it.toIntOrNull() },
+            autoConnect = parsed(AUTO_CONNECT, d.autoConnect) { it.toBooleanStrictOrNull() },
         )
-    }
-
-    private fun <T> Map<String, String>.parsed(key: String, default: T, parse: (String) -> T?): T {
-        val raw = this[key] ?: return default
-        return parse(raw) ?: default.also { Log.w(TAG, "Unreadable setting $key=\"$raw\", using $it") }
     }
 
     /** Null value means "remove the row". */

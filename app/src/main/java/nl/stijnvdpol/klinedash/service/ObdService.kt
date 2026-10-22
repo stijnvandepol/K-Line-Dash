@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.appGraph
+import nl.stijnvdpol.klinedash.core.alert.AlertEvaluator
 import nl.stijnvdpol.klinedash.core.elm.ElmConnectionManager
 import nl.stijnvdpol.klinedash.core.obd.ObdPollScheduler
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
@@ -52,6 +53,7 @@ class ObdService : LifecycleService() {
     /** Bumped by ACTION_CONNECT to rebuild the link even though the settings did not change. */
     private val restartTicks = MutableStateFlow(0)
     private var linkJob: Job? = null
+    private var recorderJob: Job? = null
     private var foregroundStarted = false
     private var lastText = ""
 
@@ -64,6 +66,8 @@ class ObdService : LifecycleService() {
             stopSelf()
             return
         }
+        // Default dispatcher: the loop writes files once a second. It finishes the running trip when cancelled.
+        recorderJob = lifecycleScope.launch(Dispatchers.Default) { appGraph.tripRecorder.run() }
         linkJob = lifecycleScope.launch {
             // Only a different adapter rebuilds the link: toggling autoConnect, the stored device name
             // (written as a separate row right after the address) or another kind's fields must not
@@ -110,6 +114,13 @@ class ObdService : LifecycleService() {
         link.start()
         // Waits for the link to be Connected; with nothing demanded it only detects the supported PIDs.
         poller.start()
+        val alertMonitor = AlertMonitor(
+            settings = appGraph.alertSettingsRepository.settings,
+            rules = AlertEvaluator,
+            tonePlayer = ToneGeneratorPlayer(),
+            publish = ObdServiceState::publishAlerts,
+        )
+        linkScope.launch { alertMonitor.run(poller, link.state) }
         try {
             // Throttled: init steps can follow each other within milliseconds and the system sheds
             // notification updates above ~5/s, which could leave a stale "Initialiseren" text.
@@ -127,10 +138,18 @@ class ObdService : LifecycleService() {
         }
     }
 
+    override fun onDestroy() {
+        appGraph.exportController.stop()
+        super.onDestroy()
+    }
+
     private fun shutdown() {
         lifecycleScope.launch {
             linkJob?.cancelAndJoin()
             linkJob = null
+            // Joined so the running trip is finished in the database before the process may go.
+            recorderJob?.cancelAndJoin()
+            recorderJob = null
             ServiceCompat.stopForeground(this@ObdService, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
