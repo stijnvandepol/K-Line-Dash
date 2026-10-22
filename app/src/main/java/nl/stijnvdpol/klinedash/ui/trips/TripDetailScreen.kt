@@ -196,7 +196,3 @@ private fun LapSection(detail: TripDetail, selected: Int?, trace: LapTraceState,
         LapTraceState.Loading, LapTraceState.None -> Unit
     }
 }
-
-/** Why the trip has no laps: no track was set, or none was completed on it. */
-internal fun noLapsText(track: Track?): String =
-    if (track == null) "No track was set for this trip, so there are no laps." else "No lap was completed on ${track.name}."

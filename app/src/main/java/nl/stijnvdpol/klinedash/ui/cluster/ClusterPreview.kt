@@ -63,7 +63,7 @@ private fun DrawScope.drawFieldRow(colors: KLineColors): Float {
     val rowHeight = size.height * FIELD_ROW_SHARE
     val top = size.height - rowHeight
     val cell = size.width / FIELD_COUNT
-    drawRect(colors.rule, Offset(0f, top), Size(size.width, 1.dp.toPx()))
+    drawRect(colors.rule, Offset(0f, top), Size(size.width, Spacing.ruleThickness.toPx()))
     for (i in 0 until FIELD_COUNT) {
         drawRect(colors.inkMuted, Offset(i * cell + cell * 0.2f, top + rowHeight * 0.35f), Size(cell * 0.6f, rowHeight * 0.3f))
     }
@@ -126,11 +126,7 @@ private fun DrawScope.drawArcSketch(colors: KLineColors) {
     val margin = size.width * MARGIN_SHARE
     val pitch = (size.width - 2 * margin) / LIGHT_COUNT
     for (i in 0 until LIGHT_COUNT) {
-        val tone = when (shiftLightColour(i)) {
-            ShiftLightColour.GREEN -> colors.ok
-            ShiftLightColour.AMBER -> colors.caution
-            ShiftLightColour.RED -> colors.danger
-        }
+        val tone = colors.lightColour(i)
         val at = Offset(margin + i * pitch, top * 0.07f)
         val light = Size(pitch - 1.5.dp.toPx(), top * 0.1f)
         drawRect(colors.surface, at, light)

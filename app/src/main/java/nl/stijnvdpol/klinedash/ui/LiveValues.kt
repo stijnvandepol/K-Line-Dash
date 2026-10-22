@@ -150,7 +150,7 @@ internal fun ValueText(
     align: TextAlign = TextAlign.End,
 ) {
     val words = rememberOnOffWords()
-    val text by remember(signal, words) {
+    val text by remember(signal, reading, words) {
         derivedStateOf { reading.value?.let { formatReading(signal, it.value, words) } ?: MISSING_VALUE }
     }
     val slotWidth = rememberTextWidth(sample, style)

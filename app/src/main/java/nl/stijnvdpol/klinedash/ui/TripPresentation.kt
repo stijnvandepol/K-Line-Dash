@@ -26,6 +26,7 @@ private const val UNKNOWN_TRACK = "Unknown track"
 internal const val PICKER_MISSING_NOTICE =
     "This head unit has no folder picker. Use the Wi-Fi export to get the trips off the head unit."
 internal const val STILL_RECORDING_NOTICE = "This trip is still recording. Stop it first."
+internal const val COPY_FAILED_NOTICE = "Copying stopped unexpectedly. Check the USB stick or SD card and try again."
 
 /** "12:34", or "1:05:09" from one hour on: seconds always show, so the clock visibly runs. */
 internal fun formatDuration(durationMs: Long): String {

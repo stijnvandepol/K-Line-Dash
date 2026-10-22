@@ -28,9 +28,6 @@ import nl.stijnvdpol.klinedash.ui.TimedMessage
 import nl.stijnvdpol.klinedash.ui.startNotice
 
 private const val STOP_TIMEOUT_MS = 5_000L
-private const val START_FINISH_SET = "Start/finish line set. Lap 1 starts when you cross it."
-private const val SECTOR_SET = "Sector line added."
-private const val NO_TRACK = "There is no track yet. Set the start/finish line first."
 
 /**
  * The session panel of the TRIPS page: starting and stopping a trip or a lap session, the live

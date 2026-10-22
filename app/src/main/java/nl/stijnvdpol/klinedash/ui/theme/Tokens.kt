@@ -76,6 +76,12 @@ object Spacing {
     val fieldPaddingVertical = 12.dp
     val touchMin = 72.dp
     val listRowMin = 56.dp
+
+    /** The header above a column of SETUP (menu, Connection, Dashboard), so their first rows line up. */
+    val sectionHeaderHeight = 88.dp
+
+    /** A row of caps column labels above a table or a group of rows. */
+    val tableHeaderHeight = 56.dp
     val ruleThickness = 1.dp
     val markerThickness = 4.dp
 }

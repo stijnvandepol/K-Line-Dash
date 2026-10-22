@@ -1,6 +1,5 @@
 package nl.stijnvdpol.klinedash.ui
 
-import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.MainPage
@@ -33,10 +32,7 @@ internal fun pageDemandIds(page: Page, supportedPids: Set<Int>?, cluster: Cluste
         page is MainPage && cluster != ClusterStyle.BAR -> page.signalIds() + ClusterSignalIds
         else -> page.signalIds() + RPM_ID
     }
-    return shown.filterTo(HashSet()) { id ->
-        val signal = Signals.byId(id)
-        signal != null && (supportedPids == null || signal.isAvailable(supportedPids))
-    }
+    return shown.filterTo(HashSet()) { isKnownAndSupported(it, supportedPids) }
 }
 
 /** On a race display the label of these fields is already the unit ("RPM", "KM/H"). */

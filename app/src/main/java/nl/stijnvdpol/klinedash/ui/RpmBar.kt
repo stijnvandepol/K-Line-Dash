@@ -61,7 +61,7 @@ private val SegmentGap = 2.dp
 private val ScaleGap = 4.dp
 private val ScaleHeight = 20.dp
 private val BarPaddingTop = 12.dp
-private val BarPaddingBottom = 8.dp
+private val BarPaddingBottom = Spacing.grid
 
 internal enum class RpmZone { NORMAL, CAUTION, DANGER }
 

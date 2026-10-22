@@ -7,6 +7,11 @@ import nl.stijnvdpol.klinedash.ui.formatDuration
 
 private const val PERCENT = 100.0
 
+/*
+ * What the statistics tables of the TRIPS page say, as plain functions: the labels, units and values
+ * of every cell, so the tests can read them without a screen. The composables only draw the result.
+ */
+
 /** One cell of the statistics table: a caps label with its unit, and the value ready to draw. */
 internal data class StatCell(val label: String, val unit: String?, val value: String)
 
@@ -24,7 +29,7 @@ internal fun statCells(stats: TripStats?): List<StatCell> = listOf(
     StatCell("Max speed", "km/h", number(stats?.maxSpeedKmh, 0)),
     StatCell("Max RPM", "rpm", number(stats?.maxRpm, 0)),
     StatCell("Max coolant", "°C", number(stats?.maxCoolantC, 0)),
-    StatCell("Full throttle", "%", number(stats?.let(::fullThrottleShare), 0)),
+    StatCell("Full throttle", "%", number(stats?.let { fullThrottleShare(it.fullThrottleTimeMs, it.durationMs, hasObdData = it.maxRpm != null) }, 0)),
     StatCell("Fuel (est.)", "L", number(stats?.estimatedFuelLiters, 1)),
     StatCell("Fuel/100 km (est.)", "L", number(stats?.estimatedFuelLitersPer100Km, 1)),
 )
@@ -45,6 +50,9 @@ internal fun liveStatCells(stats: TripStats?): List<StatCell> = listOf(
 
 private fun number(value: Double?, decimals: Int): String = value?.let { formatNumber(it, decimals) } ?: MISSING_VALUE
 
-/** Share of the trip with the throttle above 90 %; null without OBD data (no rpm), where 0 would be a lie. */
-private fun fullThrottleShare(stats: TripStats): Double? =
-    if (stats.maxRpm == null || stats.durationMs <= 0) null else stats.fullThrottleTimeMs * PERCENT / stats.durationMs
+/**
+ * The share of [durationMs] (a trip or a lap) with the throttle above 90 %, in percent; null without OBD
+ * data (no rpm was read), where 0 would be a lie, and for a duration of 0.
+ */
+internal fun fullThrottleShare(fullThrottleMs: Long, durationMs: Long, hasObdData: Boolean): Double? =
+    if (!hasObdData || durationMs <= 0) null else fullThrottleMs * PERCENT / durationMs

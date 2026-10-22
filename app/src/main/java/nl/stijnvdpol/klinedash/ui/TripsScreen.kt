@@ -87,7 +87,7 @@ private fun TripsOverview(onOpenTrip: (Long) -> Unit) {
             VerticalRule()
             TripList(rows, settings?.autoRecord != false, onOpen = onOpenTrip, onDelete = { pendingDelete = it }, modifier = Modifier.weight(1f).fillMaxHeight())
         }
-        notice?.let { NoticeBar(it) }
+        notice?.let { NoticeLine(it, KLineTheme.colors.ink) }
     }
     pendingDelete?.let { row ->
         DeleteTripDialog(row.start, onCancel = { pendingDelete = null }, onDelete = {
@@ -96,17 +96,6 @@ private fun TripsOverview(onOpenTrip: (Long) -> Unit) {
         })
     }
     if (isChoosingTrack) ChooseTrackDialog(session, onDismiss = { isChoosingTrack = false })
-}
-
-@Composable
-private fun NoticeBar(text: String) {
-    HorizontalRule()
-    Text(
-        text,
-        style = KLineType.body,
-        color = KLineTheme.colors.ink,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
-    )
 }
 
 /** The session, the automatic recording switches, then the export block. Scrolls when the head unit's screen is shorter than the content. */

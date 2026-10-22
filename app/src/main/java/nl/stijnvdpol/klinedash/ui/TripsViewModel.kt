@@ -27,7 +27,6 @@ import nl.stijnvdpol.klinedash.service.TripLibrary
 
 private const val TAG = "TripsViewModel"
 private const val STOP_TIMEOUT_MS = 5_000L
-private const val COPY_FAILED_NOTICE = "Copying stopped unexpectedly. Check the USB stick or SD card and try again."
 
 /**
  * The TRIPS page apart from the session panel (see SessionViewModel): the trip list, the automatic

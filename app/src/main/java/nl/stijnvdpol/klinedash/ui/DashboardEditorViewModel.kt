@@ -32,6 +32,11 @@ import nl.stijnvdpol.klinedash.data.withoutPage
 
 private const val STOP_TIMEOUT_MS = 5_000L
 
+private fun TrackPage.steppedShiftRpm(direction: Int): TrackPage = withShiftRpm(shiftRpm + direction * SHIFT_RPM_STEP)
+
+/** False at the ends of the shift point range, where the stepper cell is dimmed. */
+internal fun canStepShiftRpm(page: TrackPage, direction: Int): Boolean = page.steppedShiftRpm(direction) != page
+
 /**
  * SETUP > Dashboard. Every change is one read-modify-write on the stored layout, which the pager
  * on the dashboard picks up from the same flow. The selected page is not stored.
@@ -93,7 +98,7 @@ internal class DashboardEditorViewModel(
 
     /** One step of the shift point: [direction] 1 raises it by 100 rpm, -1 lowers it. */
     fun stepShiftRpm(direction: Int) = editSelected { page ->
-        if (page is TrackPage) page.withShiftRpm(page.shiftRpm + direction * SHIFT_RPM_STEP) else page
+        if (page is TrackPage) page.steppedShiftRpm(direction) else page
     }
 
     private fun editSelected(change: (Page) -> Page) {

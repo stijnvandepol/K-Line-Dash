@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 /** The sections of the SETUP page, in menu order. */
 internal enum class SetupSection(@StringRes val labelRes: Int) {
@@ -29,9 +30,6 @@ internal enum class SetupSection(@StringRes val labelRes: Int) {
 }
 
 private val MenuWidth = 240.dp
-
-/** Same height as the header of the Connection columns, so the menu rows line up with theirs. */
-private val MenuHeaderHeight = 88.dp
 
 /**
  * SETUP: a 240 dp menu on the left and the chosen section on the right. [section] is kept by the
@@ -68,7 +66,7 @@ internal fun SetupScreen(
 @Composable
 private fun SetupMenu(section: SetupSection, onSelect: (SetupSection) -> Unit, modifier: Modifier) {
     Column(modifier) {
-        SectionTitle(stringResource(R.string.nav_setup), Modifier.height(MenuHeaderHeight))
+        SectionTitle(stringResource(R.string.nav_setup), Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
         SetupSection.entries.forEach { entry ->
             val isSelected = entry == section

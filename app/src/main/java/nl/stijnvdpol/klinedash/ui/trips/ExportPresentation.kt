@@ -4,6 +4,11 @@ import nl.stijnvdpol.klinedash.service.ExportFormat
 import nl.stijnvdpol.klinedash.service.ExportResult
 import nl.stijnvdpol.klinedash.ui.STILL_RECORDING_NOTICE
 
+/*
+ * What "Export for PC" says, as plain functions: the choices, the files written and why a format was
+ * left out. The composables only draw the result.
+ */
+
 internal const val TRIP_GONE = "This trip no longer exists."
 
 /** The cells of "Export for PC": what the user asks for, and the formats that make it. */

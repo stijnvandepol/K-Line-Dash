@@ -18,9 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,7 +35,7 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private val LabelToValueGap = 8.dp
+private val LabelToValueGap = Spacing.grid
 
 /** What a field loses of its inner height above the value: the label line and the gap under it. */
 internal fun Density.labelAndGapHeight(): Dp = KLineType.fieldLabel.fontSize.toDp() * CAP_HEIGHT_EM + LabelToValueGap
@@ -113,6 +115,34 @@ internal fun FieldFrame(
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) { content(style) }
         }
+    }
+}
+
+/**
+ * A field with a plain text value (a statistic, a lap time, the check-engine lamp): [label] top-left,
+ * [unit] top-right, [value] right-aligned at the bottom in the style of [look], shrunk (never wrapped)
+ * so that [slotSample] fits. The value is dimmed while it is "--", like every missing value.
+ */
+@Composable
+internal fun ValueField(
+    label: String,
+    unit: String?,
+    value: String,
+    look: ValueLook,
+    slotSample: String,
+    modifier: Modifier,
+    color: Color = KLineTheme.colors.ink,
+) {
+    FieldFrame(label.uppercase(), unit?.uppercase(), look, slotSample, modifier) { style ->
+        Text(
+            value,
+            style = style,
+            color = if (value == MISSING_VALUE) KLineTheme.colors.inkFaint else color,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.capHeightBox(style.fontSize),
+        )
     }
 }
 

@@ -40,6 +40,9 @@ import kotlin.math.roundToInt
 private const val CLOCK_TICK_MS = 1_000L
 private val StatusDotSize = 12.dp
 
+/** Puts a [StatusDot] on the first line of a `title` next to it, not in the middle of title and detail. */
+internal val StatusDotTitleInset = 10.dp
+
 /** Cap height of Roboto as a fraction of the font size; digits and capitals are this tall. */
 internal const val CAP_HEIGHT_EM = 0.711f
 

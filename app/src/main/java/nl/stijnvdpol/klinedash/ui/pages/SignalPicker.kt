@@ -11,12 +11,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.WidgetType
 import nl.stijnvdpol.klinedash.ui.ChoiceCells
+import nl.stijnvdpol.klinedash.ui.DialogListMaxHeight
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.RaceDialog
 import nl.stijnvdpol.klinedash.ui.SecondaryButton
@@ -26,9 +26,6 @@ import nl.stijnvdpol.klinedash.ui.supportedSignals
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
-
-/** Tall enough for five rows; the list scrolls. */
-private val ListMaxHeight = 360.dp
 
 /** The signals the dashboard can show: those the car supports, or all of them while that is not known. */
 internal fun pickableSignals(supportedPids: Set<Int>?): List<Signal> =
@@ -60,7 +57,7 @@ internal fun SignalPickerDialog(
         if (widget != null) {
             val types = WidgetType.entries
             ChoiceCells(
-                labels = types.map { stringResource(if (it == WidgetType.GRAPH) R.string.widget_graph else R.string.widget_number) },
+                labels = types.map { stringResource(widgetLabelRes(it)) },
                 selectedIndex = types.indexOf(widget),
                 onSelect = { onWidget(types[it]) },
             )
@@ -76,7 +73,7 @@ internal fun SignalPickerDialog(
             HorizontalRule()
         }
         // Takes what the buttons and the choice above leave, so a short screen scrolls the list, not the dialog.
-        Column(Modifier.weight(1f, fill = false).fillMaxWidth().heightIn(max = ListMaxHeight).verticalScroll(rememberScrollState())) {
+        Column(Modifier.weight(1f, fill = false).fillMaxWidth().heightIn(max = DialogListMaxHeight).verticalScroll(rememberScrollState())) {
             signals.forEach { signal ->
                 SelectableRow(selected = signal.id == currentSignalId, onClick = { onPick(signal.id) }) {
                     Text(signal.name, style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.weight(1f))

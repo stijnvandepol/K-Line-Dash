@@ -44,7 +44,6 @@ internal enum class Screen(@StringRes val labelRes: Int) {
     Setup(R.string.nav_setup),
 }
 
-private val NavBarHeight = 72.dp
 private const val BUTTONS_WEIGHT = 6f
 private const val STATUS_WEIGHT = 3f
 private const val RATE_SAMPLE = "88.8/s"
@@ -61,7 +60,7 @@ internal fun NavBar(selected: Screen, onSelect: (Screen) -> Unit, onOpenGps: () 
     Row(
         modifier
             .fillMaxWidth()
-            .height(NavBarHeight)
+            .height(Spacing.touchMin)
             .drawBehind { drawRect(ruleColor, size = Size(size.width, Spacing.ruleThickness.toPx())) },
     ) {
         Row(Modifier.weight(BUTTONS_WEIGHT).fillMaxHeight()) {

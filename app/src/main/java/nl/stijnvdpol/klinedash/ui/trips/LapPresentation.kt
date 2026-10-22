@@ -2,7 +2,6 @@ package nl.stijnvdpol.klinedash.ui.trips
 
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.LapTimingState
 import nl.stijnvdpol.klinedash.core.trip.LapStats
@@ -12,6 +11,7 @@ import nl.stijnvdpol.klinedash.service.GatePlacement
 import nl.stijnvdpol.klinedash.service.GpsStatus
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.service.placeGateAt
+import nl.stijnvdpol.klinedash.ui.LOCATION_OFF_HINT
 import nl.stijnvdpol.klinedash.ui.MISSING_VALUE
 import nl.stijnvdpol.klinedash.ui.formatTripStart
 
@@ -26,12 +26,16 @@ private const val MS_PER_MINUTE = 60_000L
 private const val MS_PER_TENTH = 100L
 private const val MS_PER_CENTISECOND = 10.0
 private const val CENTISECONDS_PER_SECOND = 100L
-private const val PERCENT = 100.0
 private const val DEFAULT_TRACK_NAME_PREFIX = "Circuit "
 
 internal const val BLOCK_NO_PERMISSION = "Location is not allowed. Allow it under Setup, GPS & Tracks."
-internal const val BLOCK_DISABLED = "Location is switched off on this device. Switch it on in the system settings."
+internal const val BLOCK_DISABLED = LOCATION_OFF_HINT
 internal const val BLOCK_WAITING = "Waiting for a GPS fix."
+
+/** The answers to the gate buttons of the session panel. */
+internal const val START_FINISH_SET = "Start/finish line set. Lap 1 starts when you cross it."
+internal const val SECTOR_SET = "Sector line added."
+internal const val NO_TRACK = "There is no track yet. Set the start/finish line first."
 
 /** "1:23.456": the time of a finished lap or a sector, to the millisecond. */
 internal fun formatLapTime(ms: Long): String {
@@ -73,6 +77,9 @@ internal fun deltaTone(deltaMs: Long?): DeltaTone {
 
 /** A sector gate crossed in the current lap: "S1" and the elapsed time at the gate, or "--" while it is ahead. */
 internal data class SectorSplit(val label: String, val time: String)
+
+/** "S1" for the first sector: the name of sector [index] (from 0) in the lap timer and the trip detail. */
+internal fun sectorLabel(index: Int): String = "S${index + 1}"
 
 /**
  * The session column is 480 dp wide: three splits fit on a line at body size. More than
@@ -123,7 +130,7 @@ internal fun lapPanel(timing: LapTimingState?, sectorGateCount: Int): LapPanel {
         deltaTone = deltaTone(timing?.deltaToBestMs),
         lapCount = timing?.lapCount ?: 0,
         splits = List(sectorGateCount) { index ->
-            SectorSplit("S${index + 1}", splitsMs.getOrNull(index)?.let(::formatLiveLapTime) ?: MISSING_VALUE)
+            SectorSplit(sectorLabel(index), splitsMs.getOrNull(index)?.let(::formatLiveLapTime) ?: MISSING_VALUE)
         },
     )
 }
@@ -165,7 +172,7 @@ internal data class LapRow(
     val maxRpm: String,
     val fullThrottle: String,
     val mark: LapMark,
-    val sectors: List<String>,
+    val sectors: List<SectorSplit>,
 )
 
 /**
@@ -188,15 +195,14 @@ internal fun lapRows(laps: List<LapStats>): List<LapRow> {
             delta = if (mark == LapMark.NONE && best != null) formatDelta(lap.lapTimeMs - best.lap.lapTimeMs) else MISSING_VALUE,
             maxSpeed = stats.maxSpeedKmh?.let { formatNumber(it, 0) } ?: MISSING_VALUE,
             maxRpm = stats.maxRpm?.let { formatNumber(it, 0) } ?: MISSING_VALUE,
-            fullThrottle = fullThrottlePercent(stats)?.let { "$it" } ?: MISSING_VALUE,
+            fullThrottle = fullThrottleShare(stats.fullThrottleTimeMs, lap.lapTimeMs, hasObdData = stats.maxRpm != null)
+                ?.let { formatNumber(it, 0) } ?: MISSING_VALUE,
             mark = mark,
-            sectors = lap.sectorTimesMs.map(::formatLapTime),
+            sectors = lap.sectorTimesMs.mapIndexed { index, timeMs -> SectorSplit(sectorLabel(index), formatLapTime(timeMs)) },
         )
     }
 }
 
-private fun fullThrottlePercent(stats: LapStats): Int? {
-    val lapMs = stats.lap.lapTimeMs
-    if (stats.maxRpm == null || lapMs <= 0) return null
-    return (stats.fullThrottleTimeMs * PERCENT / lapMs).roundToInt()
-}
+/** Why the trip has no laps: no track was set, or none was completed on it. */
+internal fun noLapsText(track: Track?): String =
+    if (track == null) "No track was set for this trip, so there are no laps." else "No lap was completed on ${track.name}."

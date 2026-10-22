@@ -40,7 +40,6 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 private val LastReceivedWidth = 176.dp
 private val RemoveWidth = 136.dp
 private val AddButtonWidth = 200.dp
-private val GroupHeaderHeight = 56.dp
 
 /**
  * SETUP > Startup: three switches, the wake and sleep broadcast lists with the time each last
@@ -71,7 +70,7 @@ fun StartupSettingsScreen() {
             OverlayNote()
             HorizontalRule()
         }
-        SectionTitle(stringResource(R.string.startup_signals_title), Modifier.height(GroupHeaderHeight))
+        SectionTitle(stringResource(R.string.startup_signals_title), Modifier.height(Spacing.tableHeaderHeight))
         Text(
             stringResource(R.string.startup_signals_hint),
             style = KLineType.caption,
@@ -116,15 +115,9 @@ private fun OverlayNote() {
 private fun ActionGroup(@StringRes titleRes: Int, actions: List<String>, settings: StartupSettings, vm: StartupSettingsViewModel) {
     val colors = KLineTheme.colors
     HorizontalRule()
-    Row(Modifier.fillMaxWidth().height(GroupHeaderHeight), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            stringResource(titleRes).uppercase(), style = KLineType.fieldLabel, color = colors.inkMuted,
-            modifier = Modifier.weight(1f).padding(horizontal = Spacing.fieldPaddingHorizontal),
-        )
-        Text(
-            stringResource(R.string.startup_last_received).uppercase(), style = KLineType.fieldLabel, color = colors.inkMuted,
-            modifier = Modifier.width(LastReceivedWidth + RemoveWidth).padding(horizontal = Spacing.fieldPaddingHorizontal),
-        )
+    Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight)) {
+        HeaderCell(stringResource(titleRes), Modifier.weight(1f).fillMaxHeight())
+        HeaderCell(stringResource(R.string.startup_last_received), Modifier.width(LastReceivedWidth + RemoveWidth).fillMaxHeight())
     }
     HorizontalRule()
     actions.forEach { action ->
@@ -188,7 +181,7 @@ private fun AddActionRow(settings: StartupSettings, vm: StartupSettingsViewModel
 @Composable
 private fun problemText(problem: ActionProblem): String = when (problem) {
     ActionProblem.EMPTY -> stringResource(R.string.startup_problem_empty)
-    ActionProblem.TOO_LONG -> stringResource(R.string.startup_problem_long, MAX_ACTION_LENGTH)
+    ActionProblem.TOO_LONG -> stringResource(R.string.startup_problem_long, MAX_ACTION_LENGTH.toString())
     ActionProblem.BAD_CHARACTERS -> stringResource(R.string.startup_problem_chars)
     ActionProblem.DUPLICATE -> stringResource(R.string.startup_problem_duplicate)
 }

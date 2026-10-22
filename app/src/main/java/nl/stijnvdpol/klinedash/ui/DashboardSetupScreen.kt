@@ -27,8 +27,6 @@ import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.GridSize
 import nl.stijnvdpol.klinedash.data.MAX_PAGES
-import nl.stijnvdpol.klinedash.data.MAX_SHIFT_RPM
-import nl.stijnvdpol.klinedash.data.MIN_SHIFT_RPM
 import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.data.Page
 import nl.stijnvdpol.klinedash.data.PageTemplate
@@ -46,7 +44,9 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val PageListWidth = 320.dp
-private val HeaderHeight = 88.dp
+
+/** The template names of the add dialog share one column, so their descriptions start at one x. */
+private val TemplateLabelWidth = 120.dp
 
 /** What the editor asks the user about right now, if anything. */
 private sealed interface EditorDialog {
@@ -79,7 +79,11 @@ internal fun DashboardSetupScreen() {
         when (val open = dialog) {
             null -> Unit
             EditorDialog.AddPage -> AddPageDialog(onAdd = { vm.addPage(it); dialog = null }, onDismiss = { dialog = null })
-            EditorDialog.DeletePage -> DeletePageDialog(titles[index], onDelete = { vm.deleteSelectedPage(); dialog = null }, onDismiss = { dialog = null })
+            EditorDialog.DeletePage -> ConfirmDeleteDialog(
+                stringResource(R.string.dash_delete_title), stringResource(R.string.dash_delete_body, titles[index]), stringResource(R.string.dash_delete_page),
+                onCancel = { dialog = null },
+                onDelete = { vm.deleteSelectedPage(); dialog = null },
+            )
             is EditorDialog.PickSignal -> PickSignalDialog(layout.pages[index], open.slot, supportedPids, vm) { dialog = null }
         }
     }
@@ -95,14 +99,14 @@ private fun PageListColumn(
     modifier: Modifier,
 ) {
     Column(modifier) {
-        SectionTitle(stringResource(R.string.dash_pages_title), Modifier.height(HeaderHeight))
+        SectionTitle(stringResource(R.string.dash_pages_title), Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
             titles.forEachIndexed { position, title ->
                 val isSelected = position == selectedIndex
                 SelectableRow(isSelected, { vm.selectPage(position) }) {
                     Text(
-                        stringResource(R.string.dash_page_row, position + 1, title),
+                        stringResource(R.string.dash_page_row, (position + 1).toString(), title),
                         style = KLineType.body,
                         color = if (isSelected) KLineTheme.colors.ink else KLineTheme.colors.inkMuted,
                     )
@@ -145,7 +149,7 @@ private fun PageEditorColumn(
     modifier: Modifier,
 ) {
     Column(modifier) {
-        SectionTitle(title, Modifier.height(HeaderHeight))
+        SectionTitle(title, Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
         // The page's one setting, if it has one, directly under the title.
         when (page) {
@@ -158,7 +162,7 @@ private fun PageEditorColumn(
                 StepperRow(
                     stringResource(R.string.dash_shift_point), formatNumber(page.shiftRpm.toDouble(), 0), stringResource(R.string.unit_rpm),
                     StepWords.LOWER_RAISE, vm::stepShiftRpm,
-                    canStep = { direction -> if (direction < 0) page.shiftRpm > MIN_SHIFT_RPM else page.shiftRpm < MAX_SHIFT_RPM },
+                    canStep = { direction -> canStepShiftRpm(page, direction) },
                 )
                 HorizontalRule()
             }
@@ -183,7 +187,7 @@ private fun hintRes(template: PageTemplate): Int = when (template) {
 private fun GridSizeChoice(current: GridSize, onSelect: (GridSize) -> Unit) {
     val sizes = GridSize.entries
     ChoiceCells(
-        labels = sizes.map { stringResource(R.string.dash_grid_size, it.columns, it.rows) },
+        labels = sizes.map { stringResource(R.string.dash_grid_size, it.columns.toString(), it.rows.toString()) },
         selectedIndex = sizes.indexOf(current),
         onSelect = { onSelect(sizes[it]) },
     )
@@ -200,7 +204,7 @@ private fun AddPageDialog(onAdd: (PageTemplate) -> Unit, onDismiss: () -> Unit) 
         HorizontalRule()
         PageTemplate.entries.forEach { template ->
             SelectableRow(selected = false, onClick = { onAdd(template) }) {
-                Text(stringResource(templateLabelRes(template)), style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.width(120.dp))
+                Text(stringResource(templateLabelRes(template)), style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.width(TemplateLabelWidth))
                 Text(stringResource(templateHintRes(template)), style = KLineType.caption, color = KLineTheme.colors.inkMuted)
             }
         }
@@ -211,23 +215,6 @@ private fun templateHintRes(template: PageTemplate): Int = when (template) {
     PageTemplate.MAIN -> R.string.dash_template_main
     PageTemplate.GRID -> R.string.dash_template_grid
     PageTemplate.TRACK -> R.string.dash_template_track
-}
-
-@Composable
-private fun DeletePageDialog(title: String, onDelete: () -> Unit, onDismiss: () -> Unit) {
-    val focus = rememberInitialFocus()
-    RaceDialog(
-        title = stringResource(R.string.dash_delete_title),
-        onDismiss = onDismiss,
-        accent = KLineTheme.colors.danger,
-        actions = {
-            PrimaryButton(stringResource(R.string.btn_cancel), onDismiss, Modifier.weight(1f).focusRequester(focus))
-            DangerButton(stringResource(R.string.dash_delete_page), onDelete, Modifier.weight(1f))
-        },
-    ) {
-        HorizontalRule()
-        DialogText(stringResource(R.string.dash_delete_body, title))
-    }
 }
 
 /** The picker for [slot] of [page]: a Main slot or a grid cell (which also gets the widget choice). */

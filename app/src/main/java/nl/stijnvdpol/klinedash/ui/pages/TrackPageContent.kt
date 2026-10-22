@@ -43,7 +43,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private const val RPM_COLUMN_WEIGHT = 2f
+/** The rpm takes two thirds of the width, also in the editor's sketch of the page. */
+internal const val TRACK_RPM_COLUMN_WEIGHT = 2f
 private const val SIDE_COLUMN_WEIGHT = 1f
 private val PeakRowHeight = 104.dp
 private val ShiftFrameThickness = 12.dp
@@ -76,7 +77,7 @@ internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Pea
             RpmBarRow(live, shiftLight)
             HorizontalRule()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                DataField(RPM_ID, RpmLook, live, Modifier.weight(RPM_COLUMN_WEIGHT).fillMaxHeight())
+                DataField(RPM_ID, RpmLook, live, Modifier.weight(TRACK_RPM_COLUMN_WEIGHT).fillMaxHeight())
                 VerticalRule()
                 SideColumn(live, peaks, onResetPeaks, Modifier.weight(SIDE_COLUMN_WEIGHT).fillMaxHeight())
             }

@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,16 +48,9 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.accentColor
 
 private const val TAG = "ConnectionScreen"
-private val ValidPorts = 1..65535
-private const val MAX_PORT_DIGITS = 5
 private val AdapterColumnWidth = 400.dp
-private val HeaderHeight = 88.dp
 private val FieldLabelWidth = 264.dp
-private val StatusDotTopInset = 10.dp
 private const val UNSUPPORTED_REASON_MAX_LINES = 3
-
-/** The port typed so far, or null while it is not (yet) a usable TCP port. */
-private fun String.toValidPort(): Int? = toIntOrNull()?.takeIf { it in ValidPorts }
 
 /**
  * @param onConnect called with whether the chosen transport needs Bluetooth permissions; the
@@ -84,7 +78,7 @@ fun ConnectionScreen(
         AdapterColumn(vm, s, Modifier.width(AdapterColumnWidth).fillMaxHeight())
         VerticalRule()
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            StatusBlock(state, Modifier.fillMaxWidth().heightIn(min = HeaderHeight))
+            StatusBlock(state, Modifier.fillMaxWidth().heightIn(min = Spacing.sectionHeaderHeight))
             HorizontalRule()
             // Right under the status, level with the first adapter row: the state and what to do
             // about it read as one block. Only the unsupported-adapter help makes the status taller.
@@ -104,7 +98,7 @@ fun ConnectionScreen(
 @Composable
 private fun AdapterColumn(vm: ConnectionViewModel, s: ConnectionSettings, modifier: Modifier) {
     Column(modifier) {
-        SectionTitle(stringResource(R.string.section_adapter_kind), Modifier.height(HeaderHeight))
+        SectionTitle(stringResource(R.string.section_adapter_kind), Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             TransportRow(R.string.transport_simulator, TransportKind.SIMULATOR, s, vm)
@@ -118,7 +112,7 @@ private fun AdapterColumn(vm: ConnectionViewModel, s: ConnectionSettings, modifi
 }
 
 @Composable
-private fun TransportRow(labelRes: Int, kind: TransportKind, s: ConnectionSettings, vm: ConnectionViewModel) {
+private fun TransportRow(@StringRes labelRes: Int, kind: TransportKind, s: ConnectionSettings, vm: ConnectionViewModel) {
     val selected = s.kind == kind
     SelectableRow(selected = selected, onClick = { vm.selectKind(kind) }) {
         Text(
@@ -140,7 +134,7 @@ private fun StatusBlock(state: ConnectionState, modifier: Modifier) {
     val unsupported = state.isUnsupportedAdapter()
     Row(modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
         // The lamp sits on the line of the title, not in the middle of the two lines.
-        StatusDot(state.accentColor(colors), Modifier.padding(top = StatusDotTopInset))
+        StatusDot(state.accentColor(colors), Modifier.padding(top = StatusDotTitleInset))
         Spacer(Modifier.width(Spacing.fieldPaddingHorizontal))
         Column {
             Text(state.headline(resources), style = KLineType.title, color = colors.ink, maxLines = 1)
@@ -305,20 +299,13 @@ private fun DeviceList(
     HorizontalRule()
     if (devices.isEmpty()) {
         if (selectedAddress != null && pinnedName != null) {
-            DeviceRow(pinnedName, selectedAddress, looksLikeObd = false, knownAppLocked = false, selected = true, onClick = {})
+            DeviceRow(BtDeviceInfo(pinnedName, selectedAddress, looksLikeObd = false), selected = true, onClick = {})
         }
         Hint(emptyText, Modifier.padding(top = Spacing.fieldPaddingVertical))
         return
     }
     devices.forEach { device ->
-        DeviceRow(
-            name = device.name,
-            address = device.address,
-            looksLikeObd = device.looksLikeObd,
-            knownAppLocked = device.knownAppLocked,
-            selected = device.address == selectedAddress,
-            onClick = { onSelect(device) },
-        )
+        DeviceRow(device, selected = device.address == selectedAddress, onClick = { onSelect(device) })
     }
 }
 
@@ -327,24 +314,17 @@ private fun DeviceList(
  * work only with its own app gets a caution caption but stays selectable: a device that answers is used.
  */
 @Composable
-private fun DeviceRow(
-    name: String,
-    address: String,
-    looksLikeObd: Boolean,
-    knownAppLocked: Boolean,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun DeviceRow(device: BtDeviceInfo, selected: Boolean, onClick: () -> Unit) {
     val colors = KLineTheme.colors
     SelectableRow(selected = selected, onClick = onClick) {
         Column(Modifier.weight(1f)) {
-            Text(name, style = KLineType.body, color = if (selected) colors.ink else colors.inkMuted, maxLines = 1)
-            if (knownAppLocked) {
+            Text(device.name, style = KLineType.body, color = if (selected) colors.ink else colors.inkMuted, maxLines = 1)
+            if (device.knownAppLocked) {
                 Text(stringResource(R.string.device_may_not_work), style = KLineType.caption, color = colors.caution, maxLines = 1)
             }
-            Text(address, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
+            Text(device.address, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
         }
-        if (looksLikeObd) {
+        if (device.looksLikeObd) {
             Text(stringResource(R.string.device_obd_badge), style = KLineType.caption, color = colors.inkMuted)
         }
     }
@@ -363,7 +343,7 @@ private fun WifiFields(initialHost: String, initialPort: Int, onChange: (String,
             value = host,
             onValueChange = { value ->
                 host = value
-                port.toValidPort()?.let { onChange(value.trim(), it) }
+                validPort(port)?.let { onChange(value.trim(), it) }
             },
             modifier = Modifier.weight(1f),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -373,9 +353,8 @@ private fun WifiFields(initialHost: String, initialPort: Int, onChange: (String,
         FormTextField(
             value = port,
             onValueChange = { value ->
-                val digits = value.filter { it.isDigit() }.take(MAX_PORT_DIGITS)
-                port = digits
-                digits.toValidPort()?.let { onChange(host.trim(), it) }
+                port = portDigits(value)
+                validPort(port)?.let { onChange(host.trim(), it) }
             },
             modifier = Modifier.weight(1f),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

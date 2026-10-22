@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +30,6 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val SoundCellWidth = 176.dp
-private val HeaderHeight = 56.dp
 
 /** Two buttons and the value between them, with the rules that separate the three cells. */
 private val StepperWidth = StepButtonWidth * 2 + StepValueWidth + Spacing.ruleThickness * 2
@@ -70,7 +68,7 @@ fun WarningsScreen() {
     val loaded by vm.settings.collectAsStateWithLifecycle()
     val settings = loaded ?: return
     Column(Modifier.fillMaxSize()) {
-        TableHeader()
+        WarningsHeader()
         HorizontalRule()
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
             WarningRows.forEach { row -> WarningRowView(row, settings, vm) }
@@ -83,20 +81,13 @@ fun WarningsScreen() {
 }
 
 @Composable
-private fun TableHeader() {
-    Row(Modifier.fillMaxWidth().height(HeaderHeight)) {
-        HeaderCell(R.string.warnings_column_warning, Modifier.weight(1f))
+private fun WarningsHeader() {
+    Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight)) {
+        HeaderCell(stringResource(R.string.warnings_column_warning), Modifier.weight(1f).fillMaxHeight())
         VerticalRule()
-        HeaderCell(R.string.warnings_column_sound, Modifier.width(SoundCellWidth))
+        HeaderCell(stringResource(R.string.warnings_column_sound), Modifier.width(SoundCellWidth).fillMaxHeight())
         VerticalRule()
-        HeaderCell(R.string.warnings_column_limits, Modifier.width(StepperWidth * SLOTS_PER_ROW + Spacing.ruleThickness))
-    }
-}
-
-@Composable
-private fun HeaderCell(@StringRes labelRes: Int, modifier: Modifier) {
-    Box(modifier.fillMaxHeight().padding(horizontal = Spacing.fieldPaddingHorizontal), contentAlignment = Alignment.CenterStart) {
-        Text(stringResource(labelRes).uppercase(), style = KLineType.fieldLabel, color = KLineTheme.colors.inkMuted, maxLines = 1)
+        HeaderCell(stringResource(R.string.warnings_column_limits), Modifier.width(StepperWidth * SLOTS_PER_ROW + Spacing.ruleThickness).fillMaxHeight())
     }
 }
 

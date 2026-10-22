@@ -7,6 +7,7 @@ import androidx.compose.ui.res.stringResource
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.data.Page
 import nl.stijnvdpol.klinedash.data.PageTemplate
+import nl.stijnvdpol.klinedash.data.WidgetType
 
 /**
  * The number that tells pages of the same template apart ("Grid 2"); null for a template that
@@ -29,6 +30,13 @@ internal fun templateLabelRes(template: PageTemplate): Int = when (template) {
     PageTemplate.MAIN -> R.string.page_main
     PageTemplate.GRID -> R.string.page_grid
     PageTemplate.TRACK -> R.string.page_track
+}
+
+/** What a grid cell shows, in the editor's words. */
+@StringRes
+internal fun widgetLabelRes(widget: WidgetType): Int = when (widget) {
+    WidgetType.NUMBER -> R.string.widget_number
+    WidgetType.GRAPH -> R.string.widget_graph
 }
 
 /** The name of every page: its template, numbered where the same template occurs more than once. */

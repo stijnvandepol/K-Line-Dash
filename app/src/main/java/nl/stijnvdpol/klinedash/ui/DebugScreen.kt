@@ -72,7 +72,8 @@ fun DebugScreen() {
         // Left: the log with its own controls underneath. Right: the adapter, what it is and what to send it.
         Column(Modifier.weight(LOG_WEIGHT).fillMaxHeight()) {
             LogPanel(lines, autoScroll, Modifier.weight(1f).fillMaxWidth())
-            notice?.let { Notice(it) }
+            // The result of an export, for a few seconds just above the toolbar.
+            notice?.let { NoticeLine(it, KLineTheme.colors.inkMuted) }
             HorizontalRule()
             LogToolbar(
                 vm = vm,
@@ -171,18 +172,6 @@ private fun LogToolbar(vm: DebugViewModel, paused: Boolean, autoScroll: Boolean,
         VerticalRule()
         SwitchRow(stringResource(R.string.debug_auto_scroll), autoScroll, vm::setAutoScroll, Modifier.weight(2f).fillMaxHeight())
     }
-}
-
-/** Result of an export, for a few seconds above the toolbar. */
-@Composable
-private fun Notice(text: String) {
-    HorizontalRule()
-    Text(
-        text,
-        style = KLineType.body,
-        color = KLineTheme.colors.inkMuted,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
-    )
 }
 
 @Composable

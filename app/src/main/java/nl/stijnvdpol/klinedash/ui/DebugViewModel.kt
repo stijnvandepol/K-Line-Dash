@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,8 +25,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
-import nl.stijnvdpol.klinedash.core.elm.AdapterInfo
-import nl.stijnvdpol.klinedash.core.elm.ChipFamily
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
@@ -65,11 +62,12 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
     private val _sending = MutableStateFlow(false)
     val sending: StateFlow<Boolean> = _sending.asStateFlow()
 
-    private val _notice = MutableStateFlow<String?>(null)
-    val notice: StateFlow<String?> = _notice.asStateFlow()
+    private val message = TimedMessage(viewModelScope, NOTICE_MS)
+
+    /** The result of the last export, for a few seconds. */
+    val notice: StateFlow<String?> = message.text
 
     private val clearTicks = MutableStateFlow(0)
-    private var noticeJob: Job? = null
 
     /**
      * Log lines for the debug screen. WhileSubscribed: the upstream (and its buffering work) only
@@ -194,7 +192,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
                         ?: error("No output stream")
                 }.onFailure { Log.w(TAG, "Log export to $uri failed", it) }.isSuccess
             }
-            showNotice(context.getString(if (ok) R.string.debug_export_ok else R.string.debug_export_failed))
+            message.show(context.getString(if (ok) R.string.debug_export_ok else R.string.debug_export_failed))
         }
     }
 
@@ -211,26 +209,17 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
                     File(dir, fileName).also { it.writeText(link?.log?.exportText().orEmpty()) }
                 }.onFailure { Log.w(TAG, "Log export to app folder ($fileName) failed", it) }.getOrNull()
             }
-            val message = when {
+            val text = when {
                 file == null -> context.getString(R.string.debug_export_failed)
                 pickerMissing -> context.getString(R.string.debug_export_no_picker, file.absolutePath)
                 else -> context.getString(R.string.debug_export_saved_to, file.absolutePath)
             }
-            showNotice(message)
+            message.show(text)
         }
     }
 
     private fun notConnectedReply(command: String) =
         CommandReply(command, context.getString(R.string.debug_reply_error), context.getString(R.string.debug_not_connected), false)
-
-    private fun showNotice(text: String) {
-        _notice.value = text
-        noticeJob?.cancel()
-        noticeJob = viewModelScope.launch {
-            delay(NOTICE_MS)
-            _notice.value = null
-        }
-    }
 
     private companion object {
         const val TAG = "DebugViewModel"
@@ -272,51 +261,4 @@ private fun ElmResult.toReply(command: String): CommandReply {
     }
     val text = if (this is ElmResult.Data) lines.joinToString("  |  ") else raw.trim().withVisibleControlChars()
     return CommandReply(command, type, text, isData = this is ElmResult.Data)
-}
-
-/** Rows of the Adapter section on Debug, in display order. */
-internal enum class AdapterField(val labelRes: Int) {
-    CHIP(R.string.label_chip),
-    FIRMWARE(R.string.label_firmware),
-    PROTOCOL(R.string.label_protocol),
-    CAN(R.string.label_can),
-    ADAPTIVE_TIMING(R.string.label_adaptive_timing),
-    SAVED_PROTOCOL(R.string.label_saved_protocol),
-    UNSUPPORTED_COMMANDS(R.string.label_unsupported),
-}
-
-/** The words the Adapter section is written in, passed in so [adapterValues] stays free of Android. */
-internal data class AdapterWords(
-    val yes: String,
-    val no: String,
-    val none: String,
-    val chipGenuine: String,
-    val chipStn: String,
-    val chipClone: String,
-    val timingAt1: String,
-    val timingAt2: String,
-)
-
-/**
- * What the Adapter section shows per field. A null value renders as "--": not connected, or the
- * adapter reported nothing conclusive (chip family unknown, no ATI answer).
- */
-internal fun adapterValues(info: AdapterInfo?, words: AdapterWords): Map<AdapterField, String?> {
-    val profile = info?.profile
-    return AdapterField.entries.associateWith { field ->
-        when (field) {
-            AdapterField.CHIP -> when (profile?.family) {
-                ChipFamily.GENUINE_ELM -> words.chipGenuine
-                ChipFamily.STN -> words.chipStn
-                ChipFamily.CLONE -> words.chipClone
-                ChipFamily.UNKNOWN, null -> null
-            }
-            AdapterField.FIRMWARE -> profile?.firmware
-            AdapterField.PROTOCOL -> info?.let { "${it.protocolName} (${it.protocolNumber})" }
-            AdapterField.CAN -> info?.let { if (it.isCan) words.yes else words.no }
-            AdapterField.ADAPTIVE_TIMING -> profile?.let { if (it.usesAdaptiveTiming2) words.timingAt2 else words.timingAt1 }
-            AdapterField.SAVED_PROTOCOL -> info?.let { if (it.usedSavedProtocol) words.yes else words.no }
-            AdapterField.UNSUPPORTED_COMMANDS -> info?.let { it.unsupportedCommands.sorted().joinToString().ifEmpty { words.none } }
-        }
-    }
 }

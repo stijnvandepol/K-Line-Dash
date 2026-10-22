@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -54,6 +53,7 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
 import nl.stijnvdpol.klinedash.ui.theme.NumeralFace
+import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.numeralStyle
 import kotlin.math.roundToInt
 
@@ -99,7 +99,7 @@ private const val SPEED_MINOR_STEP_KMH = 10
 private const val SPEED_MAJOR_STEP_KMH = 20
 private const val SPEED_LABEL_STEP_KMH = 40
 private val UnitSlotWidth = 48.dp
-private val ListRowGap = 8.dp
+private val ListRowGap = Spacing.grid
 
 /** What one ring shows: its scale and ticks, where its middle is, whether the rpm zones show on it, and its caption. */
 private class RingSpec(

@@ -21,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -40,7 +39,6 @@ private val UnitWidth = 40.dp
 private val UnitGap = 6.dp
 private val ColumnGap = 28.dp
 private val DeleteCellWidth = 120.dp
-private val HeaderHeight = 56.dp
 
 /** Widths of the two number columns: a slot for the value and, for distance, room for the unit. */
 private class TripColumns(val duration: Dp, val distance: Dp) {
@@ -74,7 +72,7 @@ internal fun TripList(rows: List<TripRow>?, isAutoRecord: Boolean, onOpen: (Long
 private fun TripTable(rows: List<TripRow>, onOpen: (Long) -> Unit, onDelete: (TripRow) -> Unit, modifier: Modifier) {
     val columns = rememberTripColumns()
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().height(HeaderHeight)) {
+        Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight)) {
             Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = Spacing.fieldPaddingHorizontal), contentAlignment = Alignment.CenterStart) {
                 HeaderLabel(R.string.trips_column_start, Modifier, TextAlign.Start)
             }
@@ -176,20 +174,8 @@ private fun UnitText(unit: String) {
     )
 }
 
-/** The question before a trip is removed. Cancel has the focus, so a D-pad press cannot delete by accident. */
+/** The question before a trip is removed; the list and the trip detail ask it the same way. */
 @Composable
 internal fun DeleteTripDialog(start: String, onCancel: () -> Unit, onDelete: () -> Unit) {
-    val focus = rememberInitialFocus()
-    RaceDialog(
-        title = stringResource(R.string.trips_delete_title),
-        onDismiss = onCancel,
-        accent = KLineTheme.colors.danger,
-        actions = {
-            PrimaryButton(stringResource(R.string.btn_cancel), onCancel, Modifier.weight(1f).focusRequester(focus))
-            DangerButton(stringResource(R.string.trips_delete), onDelete, Modifier.weight(1f))
-        },
-    ) {
-        HorizontalRule()
-        DialogText(deleteQuestion(start))
-    }
+    ConfirmDeleteDialog(stringResource(R.string.trips_delete_title), deleteQuestion(start), stringResource(R.string.trips_delete), onCancel, onDelete)
 }

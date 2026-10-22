@@ -1,5 +1,12 @@
 package nl.stijnvdpol.klinedash.ui.theme
 
+import androidx.compose.ui.graphics.Color
+
+private const val OPAQUE = 0xFF000000.toInt()
+
+/** The colour of an RGB value (0xRRGGBB) as the swatches and the accent override store it, fully opaque. */
+fun rgbColor(rgb: Int): Color = Color(OPAQUE or rgb)
+
 /**
  * The accent override choices, as RGB values (0xRRGGBB). Six hues of middle brightness read on
  * every built-in background, dark and light (a test keeps it that way); white and black are there

@@ -10,9 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.ui.DialogListMaxHeight
 import nl.stijnvdpol.klinedash.ui.DialogText
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.PrimaryButton
@@ -21,8 +21,6 @@ import nl.stijnvdpol.klinedash.ui.SelectableRow
 import nl.stijnvdpol.klinedash.ui.rememberInitialFocus
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
-
-private val ListMaxHeight = 360.dp
 
 /** The saved tracks as a list; a tap chooses the track for the next lap session and closes the dialog. */
 @Composable
@@ -39,7 +37,7 @@ internal fun ChooseTrackDialog(vm: SessionViewModel, onDismiss: () -> Unit) {
         if (tracks.isEmpty()) {
             DialogText(stringResource(R.string.session_no_tracks))
         } else {
-            Column(Modifier.heightIn(max = ListMaxHeight).verticalScroll(rememberScrollState())) {
+            Column(Modifier.heightIn(max = DialogListMaxHeight).verticalScroll(rememberScrollState())) {
                 tracks.forEach { track ->
                     SelectableRow(selected = track.id == chosen?.id, onClick = {
                         vm.pickTrack(track.id)

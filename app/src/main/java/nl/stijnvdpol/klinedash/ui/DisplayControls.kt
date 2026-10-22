@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -27,14 +26,14 @@ import nl.stijnvdpol.klinedash.ui.theme.AccentSwatches
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
+import nl.stijnvdpol.klinedash.ui.theme.rgbColor
 
-private val SwatchCell = 72.dp
+private val SwatchCell = Spacing.touchMin
 private val SwatchInset = 12.dp
 
 /** The colour square starts [SwatchInset] into its cell; this puts it on the 16 dp text edge. */
 private val SwatchGridStart = Spacing.fieldPaddingHorizontal - SwatchInset
-private val SelectionFrame = 4.dp
-private const val OPAQUE = 0xFF000000.toInt()
+private val SelectionFrame = Spacing.markerThickness
 private const val MAX_SWATCHES_PER_ROW = 8
 
 /** The 8 swatches as 72 dp cells (as many per row as fit), then "Theme default"; [chosen] is null for the default. */
@@ -74,7 +73,7 @@ private fun AccentSwatch(rgb: Int, selected: Boolean, onClick: () -> Unit) {
                 val inset = SwatchInset.toPx()
                 val swatchTopLeft = Offset(inset, inset)
                 val swatchSize = Size(size.width - inset * 2, size.height - inset * 2)
-                drawRect(Color(OPAQUE or rgb), swatchTopLeft, swatchSize)
+                drawRect(rgbColor(rgb), swatchTopLeft, swatchSize)
                 drawRect(colors.inkFaint, swatchTopLeft, swatchSize, style = Stroke(Spacing.ruleThickness.toPx()))
                 if (selected) {
                     val frame = SelectionFrame.toPx()

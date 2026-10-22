@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.service.GpsStatus
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -33,7 +34,7 @@ private val InfoRowHeight = 56.dp
 private val CellWidth = 128.dp
 private val InfoUnitWidth = 64.dp
 
-/** The widest value of the GPS rows with every digit as "8", so the values share one right edge. */
+/** The widest value of the GPS rows (the longest state word), so the values share one right edge. */
 private const val INFO_VALUE_SAMPLE = "Not allowed"
 
 /**
@@ -58,10 +59,10 @@ internal fun GpsTracksScreen(onAllowLocation: () -> Unit) {
         SectionTitle(stringResource(R.string.gps_title))
         InfoRow(stringResource(R.string.gps_state), info.state, null)
         InfoRow(stringResource(R.string.gps_satellites), info.satellites, null)
-        InfoRow(stringResource(R.string.gps_accuracy), info.accuracyM, "m")
-        InfoRow(stringResource(R.string.gps_rate), info.rateHz, "Hz")
+        InfoRow(stringResource(R.string.gps_accuracy), info.accuracyM, stringResource(R.string.unit_m))
+        InfoRow(stringResource(R.string.gps_rate), info.rateHz, stringResource(R.string.unit_hz))
         info.hint?.let { Hint(it) }
-        if (status == nl.stijnvdpol.klinedash.service.GpsStatus.NoPermission) {
+        if (status == GpsStatus.NoPermission) {
             PrimaryButton(
                 stringResource(R.string.gps_allow), onAllowLocation,
                 Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid).height(Spacing.touchMin),
@@ -83,10 +84,14 @@ internal fun GpsTracksScreen(onAllowLocation: () -> Unit) {
         })
     }
     deleting?.let { track ->
-        DeleteTrackDialog(track.name, onCancel = { deleting = null }, onDelete = {
-            vm.delete(track.id)
-            deleting = null
-        })
+        ConfirmDeleteDialog(
+            stringResource(R.string.gps_delete_title), deleteTrackQuestion(track.name), stringResource(R.string.trips_delete),
+            onCancel = { deleting = null },
+            onDelete = {
+                vm.delete(track.id)
+                deleting = null
+            },
+        )
     }
 }
 
@@ -178,22 +183,5 @@ private fun RenameTrackDialog(current: String, onCancel: () -> Unit, onSave: (St
             problem?.let { Text(it, style = KLineType.caption, color = KLineTheme.colors.danger) }
             FormTextField(name, { name = it }, Modifier.fillMaxWidth().focusRequester(focus))
         }
-    }
-}
-
-@Composable
-private fun DeleteTrackDialog(name: String, onCancel: () -> Unit, onDelete: () -> Unit) {
-    val focus = rememberInitialFocus()
-    RaceDialog(
-        title = stringResource(R.string.gps_delete_title),
-        onDismiss = onCancel,
-        accent = KLineTheme.colors.danger,
-        actions = {
-            PrimaryButton(stringResource(R.string.btn_cancel), onCancel, Modifier.weight(1f).focusRequester(focus))
-            DangerButton(stringResource(R.string.trips_delete), onDelete, Modifier.weight(1f))
-        },
-    ) {
-        HorizontalRule()
-        DialogText(deleteTrackQuestion(name))
     }
 }

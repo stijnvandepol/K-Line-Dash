@@ -32,11 +32,10 @@ import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.data.Page
 import nl.stijnvdpol.klinedash.data.PRIMARY_SLOT_COUNT
 import nl.stijnvdpol.klinedash.data.TrackPage
-import nl.stijnvdpol.klinedash.data.WidgetType
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.fieldLabel
-import nl.stijnvdpol.klinedash.ui.isAvailable
+import nl.stijnvdpol.klinedash.ui.isKnownAndSupported
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -45,9 +44,8 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 private const val PAGE_ASPECT_RATIO = 1280f / 648f
 
 private val BarBlockHeight = 48.dp
-private val SmallRowHeight = 72.dp
-private val PrimaryWeights = listOf(2f, 1.4f, 1f)
-private const val TRACK_RPM_WEIGHT = 2f
+/** The small fields of the sketch are cells to tap, so they keep the full touch height. */
+private val SmallRowHeight = Spacing.touchMin
 
 /**
  * A scaled sketch of [page] in the layout of the real one, each editable cell showing the signal it
@@ -77,7 +75,7 @@ private fun ColumnScope.MainPreview(page: MainPage, supportedPids: Set<Int>?, on
     Row(Modifier.weight(1f).fillMaxWidth()) {
         for (slot in 0 until PRIMARY_SLOT_COUNT) {
             if (slot > 0) VerticalRule()
-            SignalCell(page.primary[slot], null, supportedPids, { onEditSlot(slot) }, Modifier.weight(PrimaryWeights[slot]).fillMaxHeight())
+            SignalCell(page.primary[slot], null, supportedPids, { onEditSlot(slot) }, Modifier.weight(PrimaryFieldWeights[slot]).fillMaxHeight())
         }
     }
     HorizontalRule()
@@ -99,7 +97,7 @@ private fun ColumnScope.GridPreview(page: GridPage, supportedPids: Set<Int>?, on
                 if (column > 0) VerticalRule()
                 val index = row * page.size.columns + column
                 val cell: GridCell = page.cells[index]
-                val widget = stringResource(if (cell.widget == WidgetType.GRAPH) R.string.widget_graph else R.string.widget_number)
+                val widget = stringResource(widgetLabelRes(cell.widget))
                 SignalCell(cell.signalId, widget, supportedPids, { onEditSlot(index) }, Modifier.weight(1f).fillMaxHeight())
             }
         }
@@ -112,7 +110,7 @@ private fun ColumnScope.TrackPreview() {
     BarBlock()
     HorizontalRule()
     Row(Modifier.weight(1f).fillMaxWidth()) {
-        StaticCell(stringResource(R.string.track_preview_rpm), Modifier.weight(TRACK_RPM_WEIGHT).fillMaxHeight())
+        StaticCell(stringResource(R.string.track_preview_rpm), Modifier.weight(TRACK_RPM_COLUMN_WEIGHT).fillMaxHeight())
         VerticalRule()
         Column(Modifier.weight(1f).fillMaxHeight()) {
             StaticCell(stringResource(R.string.track_preview_coolant_speed), Modifier.weight(1f).fillMaxWidth())
@@ -141,7 +139,7 @@ private fun StaticCell(label: String, modifier: Modifier) {
 private fun SignalCell(signalId: String, detail: String?, supportedPids: Set<Int>?, onClick: () -> Unit, modifier: Modifier) {
     val colors = KLineTheme.colors
     val signal = Signals.byId(signalId)
-    val isUnsupported = signal == null || (supportedPids != null && !signal.isAvailable(supportedPids))
+    val isUnsupported = !isKnownAndSupported(signalId, supportedPids)
     Column(
         modifier.clickable(role = Role.Button, onClick = onClick).padding(Spacing.grid),
         verticalArrangement = Arrangement.Center,

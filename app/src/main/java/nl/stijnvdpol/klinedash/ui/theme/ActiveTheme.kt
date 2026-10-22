@@ -9,7 +9,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,7 +24,6 @@ import java.util.Locale
 const val SCHEDULE_STEP_MINUTES = 15
 private const val MINUTES_PER_HOUR = 60
 private const val MILLIS_PER_MINUTE = 60_000L
-private const val OPAQUE = 0xFF000000.toInt()
 
 /** Which theme applies right now: the pure rule behind day/night switching. */
 fun activeThemeId(settings: ThemeSettings, minuteOfDay: Int, isSystemNight: Boolean): String = when (settings.mode) {
@@ -76,7 +74,7 @@ fun resolveTheme(settings: ThemeSettings, catalog: ThemeCatalog, minuteOfDay: In
         ?: catalog.find(DEFAULT_THEME_ID)
         ?: ThemeDefinition(DEFAULT_THEME_ID, "Race", RaceColors, isBuiltIn = true)
     val withCluster = settings.clusterOverride?.let { base.copy(look = base.look.copy(style = it)) } ?: base
-    val accent = settings.accentOverride?.let { Color(OPAQUE or it) } ?: return withCluster
+    val accent = settings.accentOverride?.let(::rgbColor) ?: return withCluster
     val colors = withCluster.colors
     val needle = if (colors.needle == colors.accent) accent else colors.needle
     return withCluster.copy(colors = colors.copy(accent = accent, needle = needle))

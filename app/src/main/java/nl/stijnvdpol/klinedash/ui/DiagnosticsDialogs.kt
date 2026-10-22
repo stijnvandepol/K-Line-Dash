@@ -4,10 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import nl.stijnvdpol.klinedash.R
@@ -24,14 +21,6 @@ internal fun ClearDialogHost(dialog: ClearDialog, vm: DiagnosticsViewModel) {
         ClearDialog.INTRO -> ClearIntroDialog(onCancel = vm::dismissDialog, onContinue = vm::continueClear)
         ClearDialog.FINAL -> ClearFinalDialog(onCancel = vm::dismissDialog, onClear = vm::confirmClear)
     }
-}
-
-/** Focus starts on the safe answer, so a rotary or D-pad "press" on a head unit cancels rather than erases. */
-@Composable
-internal fun rememberInitialFocus(): FocusRequester {
-    val requester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { requester.requestFocus() }
-    return requester
 }
 
 @Composable
@@ -85,16 +74,6 @@ private fun ClearFinalDialog(onCancel: () -> Unit, onClear: () -> Unit) {
         HorizontalRule()
         DialogSection(stringResource(R.string.clear_requirements_label), stringResource(R.string.clear_requirements))
     }
-}
-
-@Composable
-internal fun DialogText(text: String) {
-    Text(
-        text,
-        style = KLineType.body,
-        color = KLineTheme.colors.ink,
-        modifier = Modifier.padding(Spacing.fieldPaddingHorizontal),
-    )
 }
 
 /** A caps label over a paragraph, like the labelled fields of the display. */

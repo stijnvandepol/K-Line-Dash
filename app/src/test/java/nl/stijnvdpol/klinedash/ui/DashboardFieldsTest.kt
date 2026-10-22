@@ -5,6 +5,8 @@ import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.GridCell
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.GridSize
+import nl.stijnvdpol.klinedash.data.MAX_SHIFT_RPM
+import nl.stijnvdpol.klinedash.data.MIN_SHIFT_RPM
 import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.data.TrackPage
 import org.junit.Assert.assertEquals
@@ -75,5 +77,24 @@ class DashboardFieldsTest {
         assertTrue(labelIsUnit("rpm"))
         assertTrue(labelIsUnit("speed"))
         assertFalse(labelIsUnit("coolant"))
+    }
+
+    @Test
+    fun `a signal counts as reported when it is known and the car supports it, or support is not known yet`() {
+        assertTrue(isKnownAndSupported("throttle", targetCarPids))
+        assertFalse(isKnownAndSupported("throttle", setOf(0x0C)))
+        assertTrue(isKnownAndSupported("throttle", null))
+        // An adapter command: there is no PID for the car to support.
+        assertTrue(isKnownAndSupported("battery", emptySet()))
+        assertFalse(isKnownAndSupported("hyperdrive", null))
+    }
+
+    @Test
+    fun `the shift point steps in its range and stops at both ends`() {
+        assertTrue(canStepShiftRpm(TrackPage(shiftRpm = 7_800), 1))
+        assertTrue(canStepShiftRpm(TrackPage(shiftRpm = 7_800), -1))
+        assertFalse(canStepShiftRpm(TrackPage(shiftRpm = MAX_SHIFT_RPM), 1))
+        assertTrue(canStepShiftRpm(TrackPage(shiftRpm = MAX_SHIFT_RPM), -1))
+        assertFalse(canStepShiftRpm(TrackPage(shiftRpm = MIN_SHIFT_RPM), -1))
     }
 }

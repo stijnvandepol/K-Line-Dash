@@ -174,7 +174,7 @@ private fun RowScope.SensorCell(
     val reading = rememberReading(readings, signal.id)
     val stale = rememberIsStale(reading, nowMs, signal)
     val tone = rememberValueTone(signal, reading, toneContext)
-    val rate by remember(signal) { derivedStateOf { stats.value.signalHz[signal.id]?.let { formatNumber(it, 1) } } }
+    val rate by remember(signal, stats) { derivedStateOf { stats.value.signalHz[signal.id]?.let { formatNumber(it, 1) } } }
     // All four texts share one baseline, so the row reads as a line.
     Text(signal.name, style = KLineType.body, color = colors.ink, maxLines = 1, modifier = Modifier.weight(1f).alignByBaseline())
     ValueText(signal, reading, stale, tone, KLineType.rowValue, Modifier.alignByBaseline(), sample = VALUE_COLUMN_SAMPLE)

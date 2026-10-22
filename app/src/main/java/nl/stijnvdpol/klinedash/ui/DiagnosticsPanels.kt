@@ -155,7 +155,7 @@ private fun ReadinessPanel(monitors: List<ReadinessMonitor>) {
     val summary = readinessSummary(monitors)
     PanelHeader(
         stringResource(R.string.diag_section_readiness),
-        if (monitors.isEmpty()) MISSING_VALUE else stringResource(R.string.diag_readiness_summary, summary.ready, summary.applicable),
+        if (monitors.isEmpty()) MISSING_VALUE else stringResource(R.string.diag_readiness_summary, summary.ready.toString(), summary.applicable.toString()),
     )
     if (monitors.isEmpty()) StateRow(stringResource(R.string.diag_readiness_none), KLineTheme.colors.inkMuted)
     GridRows(monitors) { monitor -> MonitorCell(monitor) }

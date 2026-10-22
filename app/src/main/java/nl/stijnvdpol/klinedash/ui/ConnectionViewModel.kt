@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
-import nl.stijnvdpol.klinedash.core.elm.FailureKind
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.service.ObdServiceState
@@ -26,6 +25,15 @@ import nl.stijnvdpol.klinedash.service.TransportFactory
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
 import nl.stijnvdpol.klinedash.transport.bondedDevices as queryBondedDevices
 import nl.stijnvdpol.klinedash.transport.scanBle
+
+private val ValidPorts = 1..65535
+private const val MAX_PORT_DIGITS = 5
+
+/** What the port field keeps of what was typed: digits only, at most five. */
+internal fun portDigits(typed: String): String = typed.filter { it.isDigit() }.take(MAX_PORT_DIGITS)
+
+/** The port typed so far, or null while it is not (yet) a usable TCP port; only a usable one is stored. */
+internal fun validPort(digits: String): Int? = digits.toIntOrNull()?.takeIf { it in ValidPorts }
 
 class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     // The application context: it lives as long as the process, so holding it leaks nothing.
@@ -51,12 +59,13 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
 
-    private val _notice = MutableStateFlow<String?>(null)
-    val notice: StateFlow<String?> = _notice.asStateFlow()
+    private val message = TimedMessage(viewModelScope, NOTICE_MS)
+
+    /** The answer to the last tap (a failed scan, a forgotten protocol), for a few seconds. */
+    val notice: StateFlow<String?> = message.text
 
     private var scanJob: Job? = null
     private var wifiJob: Job? = null
-    private var noticeJob: Job? = null
 
     fun refreshBonded() {
         _bondedDevices.value = try {
@@ -85,7 +94,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 // SecurityException (permission) or IllegalStateException (Bluetooth off), English message.
-                showNotice(context.getString(R.string.ble_scan_failed, e.message ?: e.javaClass.simpleName))
+                message.show(context.getString(R.string.ble_scan_failed, e.message ?: e.javaClass.simpleName))
             } finally {
                 _scanning.value = false
             }
@@ -126,21 +135,12 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
                 val key = TransportFactory.adapterKey(repository.connectionSettings.first())
                 graph.protocolStore.clearProtocol(key)
             }
-            showNotice(context.getString(R.string.notice_protocol_forgotten))
+            message.show(context.getString(R.string.notice_protocol_forgotten))
         }
     }
 
     private fun updateSettings(transform: (ConnectionSettings) -> ConnectionSettings) {
         viewModelScope.launch { repository.update(transform) }
-    }
-
-    private fun showNotice(text: String) {
-        _notice.value = text
-        noticeJob?.cancel()
-        noticeJob = viewModelScope.launch {
-            delay(NOTICE_MS)
-            _notice.value = null
-        }
     }
 
     private companion object {
@@ -150,27 +150,3 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         const val NOTICE_MS = 5_000L
     }
 }
-
-/** One line of the "Adapters that work" list: a brand and the models that were verified to work. */
-internal data class SupportedAdapter(val brand: String, val models: List<String> = emptyList()) {
-    val label: String get() = if (models.isEmpty()) brand else "$brand ${models.joinToString(", ")}"
-}
-
-/**
- * Shown when the link ends in "unsupported adapter". Keep in sync with "Works well" and "Works, with
- * caveats" in the README section "Supported adapters"; SupportedAdaptersTest fails when a name here
- * is missing from the README.
- */
-internal val SupportedAdapters = listOf(
-    SupportedAdapter("OBDLink", listOf("LX", "MX+", "CX")),
-    SupportedAdapter("Vgate vLinker", listOf("MC+", "BM+", "FS", "MS")),
-    SupportedAdapter("Vgate iCar Pro 2S"),
-    SupportedAdapter("Veepeak", listOf("OBDCheck BLE+", "VP11")),
-    SupportedAdapter("Konnwei", listOf("KW902", "KW905")),
-    SupportedAdapter("Viecar"),
-    SupportedAdapter("BAFX"),
-)
-
-/** True when retrying is pointless and the status block should list the adapters that do work. */
-internal fun ConnectionState.isUnsupportedAdapter(): Boolean =
-    this is ConnectionState.Failed && kind == FailureKind.UNSUPPORTED_ADAPTER

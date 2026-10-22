@@ -181,9 +181,19 @@ class LapPresentationTest {
     }
 
     @Test
-    fun `the sector times of a lap are listed in lap time format`() {
+    fun `the sector times of a lap are listed in lap time format, named S1 onwards`() {
         val rows = lapRows(listOf(stats(lap(1, 83_000, sectors = listOf(31_200, 28_100, 23_700)))))
-        assertEquals(listOf("0:31.200", "0:28.100", "0:23.700"), rows.single().sectors)
+        assertEquals(
+            listOf(SectorSplit("S1", "0:31.200"), SectorSplit("S2", "0:28.100"), SectorSplit("S3", "0:23.700")),
+            rows.single().sectors,
+        )
+    }
+
+    @Test
+    fun `full throttle is a share of the lap, missing without OBD data or without a lap time`() {
+        assertEquals(25.0, fullThrottleShare(fullThrottleMs = 20_000, durationMs = 80_000, hasObdData = true)!!, 1e-9)
+        assertNull(fullThrottleShare(fullThrottleMs = 0, durationMs = 80_000, hasObdData = false))
+        assertNull(fullThrottleShare(fullThrottleMs = 0, durationMs = 0, hasObdData = true))
     }
 
     @Test

@@ -47,13 +47,14 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
 import nl.stijnvdpol.klinedash.ui.theme.NumeralFace
+import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.numeralStyle
 import kotlin.math.roundToInt
 
-private val LightsMargin = 16.dp
+private val LightsMargin = Spacing.fieldPaddingHorizontal
 private val CornerFieldWidth = 220.dp
 private val CornerFieldHeight = 104.dp
-private val CornerFieldGap = 8.dp
+private val CornerFieldGap = Spacing.grid
 private const val LIGHT_GAP_SHARE = 0.3f
 private const val UNLIT_ALPHA = 0.25f
 private const val STROKE_SHARE = 0.075f
@@ -75,7 +76,8 @@ private const val RPM_SAMPLE = "8888"
 
 private val CornerLook = ValueLook(KLineType.fieldValue)
 
-private fun KLineColors.lightColour(index: Int): Color = when (shiftLightColour(index)) {
+/** The colour of shift light [index]: green, then amber, then red, in the status colours of the theme. */
+internal fun KLineColors.lightColour(index: Int): Color = when (shiftLightColour(index)) {
     ShiftLightColour.GREEN -> ok
     ShiftLightColour.AMBER -> caution
     ShiftLightColour.RED -> danger

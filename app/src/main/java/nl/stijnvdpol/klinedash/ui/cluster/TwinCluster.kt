@@ -12,13 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.ui.COOLANT_ID
 import nl.stijnvdpol.klinedash.ui.LiveState
 import nl.stijnvdpol.klinedash.ui.RPM_ID
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
+import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private val EdgeMargin = 16.dp
+private val EdgeMargin = Spacing.fieldPaddingHorizontal
 private const val RPM_READOUT_SAMPLE = "8888"
 private const val SPEED_READOUT_SAMPLE = "888"
 

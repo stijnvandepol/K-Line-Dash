@@ -11,6 +11,9 @@ import nl.stijnvdpol.klinedash.service.formatNumber
  * of the GPS in words, the saved tracks as rows, and the rules for renaming a track.
  */
 
+/** Location is off for the whole device: the GPS page and the gate buttons say the same. */
+internal const val LOCATION_OFF_HINT = "Location is switched off on this device. Switch it on in the system settings."
+
 /** Above this ground speed the car counts as driving: the rename field, a keyboard, stays off. */
 private const val PARKED_MAX_SPEED_MPS = 1.0
 
@@ -53,7 +56,7 @@ internal fun gpsInfo(status: GpsStatus): GpsInfo {
             GpsStatus.Searching -> "No fix yet. A clear view of the sky helps; the first fix can take a minute."
             GpsStatus.Idle -> "The GPS starts when this screen is in front."
             GpsStatus.NoPermission -> "K-Line Dash needs the location permission to time laps and to record where you drive."
-            GpsStatus.Disabled -> "Location is switched off on this device. Switch it on in the system settings."
+            GpsStatus.Disabled -> LOCATION_OFF_HINT
         },
     )
 }

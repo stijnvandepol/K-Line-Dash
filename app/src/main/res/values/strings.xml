@@ -49,7 +49,7 @@
     <string name="field_battery">Batt</string>
     <string name="field_maf">MAF</string>
     <string name="field_no_reading">no reading</string>
-    <string name="rpm_bar_description">Engine speed bar, %1$d rpm</string>
+    <string name="rpm_bar_description">Engine speed bar, %1$s rpm</string>
 
     <!-- Sensors -->
     <string name="sensors_not_connected">Not connected yet. Connect under Setup, Connection.</string>
@@ -73,7 +73,7 @@
     <string name="diag_codes_none">No codes</string>
     <string name="diag_codes_unsupported">Not supported by this car</string>
     <string name="diag_section_readiness">Readiness</string>
-    <string name="diag_readiness_summary">%1$d of %2$d ready</string>
+    <string name="diag_readiness_summary">%1$s of %2$s ready</string>
     <string name="diag_readiness_none">No monitors reported</string>
     <string name="diag_monitor_ready">Ready</string>
     <string name="diag_monitor_not_ready">Not ready</string>
@@ -88,7 +88,7 @@
     <string name="diag_not_connected">Not connected yet. Connect to the car under Setup, Connection, then read its fault codes.</string>
     <string name="diag_reading">Reading the car…</string>
     <string name="diag_reading_hint">Codes, readiness monitors and freeze frame. This takes several seconds on a K-line car. Keep the ignition on.</string>
-    <string name="diag_elapsed">%1$d s</string>
+    <string name="diag_elapsed">%1$s s</string>
     <string name="diag_clearing">Clearing codes…</string>
     <string name="diag_clearing_hint">Keep the ignition on until this is done.</string>
     <string name="diag_failed">The read did not finish. Check that the ignition is on and the adapter is connected, then read again.</string>
@@ -164,6 +164,8 @@
     <string name="trips_delete_title">Delete trip?</string>
     <string name="unit_km">km</string>
     <string name="unit_rpm">rpm</string>
+    <string name="unit_m">m</string>
+    <string name="unit_hz">Hz</string>
 
     <!-- Connection screen -->
     <string name="section_adapter_kind">Adapter type</string>
@@ -286,7 +288,7 @@
     <string name="startup_add_wake">Add as wake</string>
     <string name="startup_add_sleep">Add as sleep</string>
     <string name="startup_problem_empty">Type the action of the broadcast first.</string>
-    <string name="startup_problem_long">That action is too long (maximum length %1$d).</string>
+    <string name="startup_problem_long">That action is too long (maximum length %1$s).</string>
     <string name="startup_problem_chars">Use letters, digits, dots and underscores only.</string>
     <string name="startup_problem_duplicate">That action is already in the list.</string>
     <string name="startup_reset">Reset to defaults</string>
@@ -314,7 +316,7 @@
     <string name="track_reset_peaks">Reset peaks</string>
     <string name="graph_description">%1$s, graph of the last 60 seconds</string>
     <string name="dash_pages_title">Pages</string>
-    <string name="dash_page_row">%1$d  %2$s</string>
+    <string name="dash_page_row">%1$s  %2$s</string>
     <string name="dash_move_left">Move left</string>
     <string name="dash_move_right">Move right</string>
     <string name="dash_add_page">Add page</string>
@@ -328,7 +330,7 @@
     <string name="dash_hint_main">Tap a field to choose its signal.</string>
     <string name="dash_hint_grid">Tap a cell to choose its signal and whether it shows a number or a graph.</string>
     <string name="dash_hint_track">The RPM bar and the frame of the page flash from the shift point.</string>
-    <string name="dash_grid_size">%1$d x %2$d</string>
+    <string name="dash_grid_size">%1$s x %2$s</string>
     <string name="dash_shift_point">Shift point</string>
     <string name="dash_pick_title">Choose a signal</string>
     <string name="dash_pick_not_connected">Not connected, so every signal is listed. The ones the car does not report stay empty.</string>
@@ -366,6 +368,18 @@
     <string name="detail_route_description">The driven route, north up</string>
     <string name="detail_no_gps">This trip has no GPS data, so there is no route.</string>
     <string name="detail_lap_unavailable">Could not read this lap. Select it again.</string>
+    <string name="lap_column_lap">Lap</string>
+    <string name="lap_column_time">Time</string>
+    <string name="lap_column_delta">Delta</string>
+    <string name="lap_column_max_speed">Max km/h</string>
+    <string name="lap_column_max_rpm">Max rpm</string>
+    <string name="lap_column_full_throttle" formatted="false">Full thr. %</string>
+    <string name="lap_mark_best">Best</string>
+    <string name="lap_mark_no_gps">No GPS</string>
+    <string name="lap_caption">Lap %1$s</string>
+    <string name="lap_graph_description">%1$s over the lap</string>
+    <string name="lap_graph_max">Max %1$s</string>
+    <string name="lap_graph_no_data">No %1$s data in this lap.</string>
     <string name="gps_mark">GPS</string>
     <string name="gps_title">GPS</string>
     <string name="gps_state">Status</string>

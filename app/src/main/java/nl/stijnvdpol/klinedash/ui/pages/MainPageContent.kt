@@ -45,7 +45,8 @@ private val SmallFieldRowHeight = 104.dp
 private const val RPM_MAX_GROWTH = 1.75f
 private const val PRIMARY_MAX_GROWTH = 1.6f
 
-private val PrimaryWeights = listOf(RPM_FIELD_WEIGHT, SPEED_FIELD_WEIGHT, COOLANT_FIELD_WEIGHT)
+/** The widths of the three primary fields, also used by the editor's sketch of the page. */
+internal val PrimaryFieldWeights = listOf(RPM_FIELD_WEIGHT, SPEED_FIELD_WEIGHT, COOLANT_FIELD_WEIGHT)
 private val PrimaryLooks = listOf(
     ValueLook(KLineType.heroValue, RPM_MAX_GROWTH),
     ValueLook(KLineType.primaryValue, PRIMARY_MAX_GROWTH),
@@ -88,7 +89,7 @@ private fun BarCluster(page: MainPage, live: LiveState, modifier: Modifier) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
             page.primary.forEachIndexed { slot, id ->
                 if (slot > 0) VerticalRule()
-                DataField(id, PrimaryLooks[slot], live, Modifier.weight(PrimaryWeights[slot]).fillMaxHeight())
+                DataField(id, PrimaryLooks[slot], live, Modifier.weight(PrimaryFieldWeights[slot]).fillMaxHeight())
             }
         }
     }

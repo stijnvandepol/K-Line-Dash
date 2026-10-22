@@ -40,6 +40,7 @@ private const val STORED_WEIGHT = 1f
 private const val LAST_READ_WEIGHT = 1.4f
 private const val READ_WEIGHT = 1f
 private const val CLEAR_WEIGHT = 1.1f
+private val StripLook = ValueLook(KLineType.fieldValue)
 
 /**
  * Fault codes of the car: a strip with the check-engine lamp and the two actions, the code lists
@@ -112,23 +113,13 @@ private fun TopStrip(ui: DiagnosticsUiState, onRead: () -> Unit, onClear: () -> 
         StripField(
             label = stringResource(R.string.diag_label_mil),
             value = report?.let { if (it.isMilOn) words.on.uppercase() else words.off.uppercase() },
-            valueColor = if (report?.isMilOn == true) colors.danger else colors.ink,
             modifier = Modifier.weight(MIL_WEIGHT),
+            color = if (report?.isMilOn == true) colors.danger else colors.ink,
         )
         VerticalRule()
-        StripField(
-            label = stringResource(R.string.diag_label_stored),
-            value = report?.stored?.codes?.size?.toString(),
-            valueColor = colors.ink,
-            modifier = Modifier.weight(STORED_WEIGHT),
-        )
+        StripField(stringResource(R.string.diag_label_stored), report?.stored?.codes?.size?.toString(), Modifier.weight(STORED_WEIGHT))
         VerticalRule()
-        StripField(
-            label = stringResource(R.string.diag_label_last_read),
-            value = report?.let { formatClockTime(it.readAtMs) },
-            valueColor = colors.ink,
-            modifier = Modifier.weight(LAST_READ_WEIGHT),
-        )
+        StripField(stringResource(R.string.diag_label_last_read), report?.let { formatClockTime(it.readAtMs) }, Modifier.weight(LAST_READ_WEIGHT))
         VerticalRule()
         ActionCell(Modifier.weight(READ_WEIGHT)) {
             PrimaryButton(
@@ -146,24 +137,11 @@ private fun TopStrip(ui: DiagnosticsUiState, onRead: () -> Unit, onClear: () -> 
     }
 }
 
-/** Label top-left, value right-aligned at the bottom: the arrangement of the dashboard fields. */
+/** A field of the strip like the dashboard's; "--" until the first read. */
 @Composable
-internal fun StripField(label: String, value: String?, valueColor: Color, modifier: Modifier) {
-    Column(
-        modifier.fillMaxHeight().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        FieldCaption(label.uppercase())
-        Text(
-            value ?: MISSING_VALUE,
-            style = KLineType.fieldValue,
-            color = if (value == null) KLineTheme.colors.inkFaint else valueColor,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.fillMaxWidth().capHeightBox(KLineType.fieldValue.fontSize),
-        )
-    }
+private fun StripField(label: String, value: String?, modifier: Modifier, color: Color = KLineTheme.colors.ink) {
+    val shown = value ?: MISSING_VALUE
+    ValueField(label, unit = null, shown, StripLook, slotSample = shown, modifier.fillMaxHeight(), color)
 }
 
 @Composable
@@ -183,7 +161,7 @@ private fun BusyPane(title: String, hint: String) {
         verticalArrangement = Arrangement.spacedBy(Spacing.grid * 2, Alignment.CenterVertically),
     ) {
         Text(title, style = KLineType.title, color = colors.ink)
-        Text(stringResource(R.string.diag_elapsed, elapsedSeconds(startMs, nowMs)), style = KLineType.fieldValue, color = colors.inkMuted)
+        Text(stringResource(R.string.diag_elapsed, elapsedSeconds(startMs, nowMs).toString()), style = KLineType.fieldValue, color = colors.inkMuted)
         Text(hint, style = KLineType.body, color = colors.inkMuted, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = StateTextMaxWidth))
     }
 }

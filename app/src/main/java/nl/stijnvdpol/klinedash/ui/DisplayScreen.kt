@@ -42,7 +42,6 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalog
 import nl.stijnvdpol.klinedash.ui.theme.formatMinuteOfDay
 
-private val HeaderHeight = 56.dp
 private val ThemeColumnWidth = 440.dp
 private val SwatchStripCell = 20.dp
 private val SwatchStripGap = 4.dp
@@ -78,9 +77,7 @@ internal fun DisplayScreen() {
 
 @Composable
 private fun ColumnHeader(@StringRes textRes: Int) {
-    Box(Modifier.fillMaxWidth().height(HeaderHeight).padding(horizontal = Spacing.fieldPaddingHorizontal), contentAlignment = Alignment.CenterStart) {
-        Text(stringResource(textRes).uppercase(), style = KLineType.fieldLabel, color = KLineTheme.colors.inkMuted, maxLines = 1)
-    }
+    HeaderCell(stringResource(textRes), Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight))
     HorizontalRule()
 }
 
@@ -230,7 +227,7 @@ private fun ClusterStyle.labelRes(): Int = when (this) {
 @Composable
 private fun NowShowing() {
     Row(
-        Modifier.fillMaxWidth().height(HeaderHeight).padding(horizontal = Spacing.fieldPaddingHorizontal),
+        Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight).padding(horizontal = Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(stringResource(R.string.display_now_showing).uppercase(), style = KLineType.fieldLabel, color = KLineTheme.colors.inkMuted, modifier = Modifier.weight(1f))

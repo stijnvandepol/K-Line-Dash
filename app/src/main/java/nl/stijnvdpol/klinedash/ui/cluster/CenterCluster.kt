@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.ui.BATTERY_ID
 import nl.stijnvdpol.klinedash.ui.COOLANT_ID
 import nl.stijnvdpol.klinedash.ui.DataField
@@ -27,9 +26,10 @@ import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
+import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.numeralStyle
 
-private val DialGutter = 16.dp
+private val DialGutter = Spacing.fieldPaddingHorizontal
 private const val SIDE_MAX_GROWTH = 1.6f
 private const val RPM_READOUT_SAMPLE = "8888"
 

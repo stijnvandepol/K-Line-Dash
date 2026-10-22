@@ -38,7 +38,8 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-internal val StepButtonWidth = 72.dp
+/** The − and + cells are square touch targets. */
+internal val StepButtonWidth = Spacing.touchMin
 internal val StepValueWidth = 104.dp
 
 /** Holding a step button repeats it, so a limit 20 degrees away is not 20 taps. */

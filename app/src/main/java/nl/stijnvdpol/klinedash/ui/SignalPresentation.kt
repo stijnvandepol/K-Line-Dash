@@ -51,6 +51,15 @@ internal fun slotSample(signal: Signal): String {
 /** The ECU answers it (or it is an adapter command such as the battery voltage). */
 internal fun Signal.isAvailable(supportedPids: Set<Int>): Boolean = pid == null || pid in supportedPids
 
+/**
+ * A signal this version knows and the car reports; while the supported PIDs are unknown (null) every
+ * known signal counts. What the poller fetches and what the editor shows undimmed.
+ */
+internal fun isKnownAndSupported(signalId: String, supportedPids: Set<Int>?): Boolean {
+    val signal = Signals.byId(signalId) ?: return false
+    return supportedPids == null || signal.isAvailable(supportedPids)
+}
+
 internal fun supportedSignals(supportedPids: Set<Int>): List<Signal> =
     Signals.all.filter { it.isAvailable(supportedPids) }
 

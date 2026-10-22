@@ -24,11 +24,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.service.RecordingState
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
+import nl.stijnvdpol.klinedash.ui.NoticeLine
 import nl.stijnvdpol.klinedash.ui.PrimaryButton
 import nl.stijnvdpol.klinedash.ui.RecordingHint
 import nl.stijnvdpol.klinedash.ui.SecondaryButton
 import nl.stijnvdpol.klinedash.ui.StatusDot
+import nl.stijnvdpol.klinedash.ui.StatusDotTitleInset
 import nl.stijnvdpol.klinedash.ui.TextActionButton
+import nl.stijnvdpol.klinedash.ui.ValueField
 import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
@@ -36,7 +39,6 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
 private val StatusHeight = 80.dp
-private val StatusDotTopInset = 10.dp
 private val GridRowHeight = 96.dp
 private val HeroRowHeight = 136.dp
 private val SplitsHeight = 48.dp
@@ -72,20 +74,9 @@ internal fun SessionPanel(vm: SessionViewModel, hint: RecordingHint, onChooseTra
             isLapSession -> LapSessionPanel(vm, recording as RecordingState.Recording)
             else -> TripPanel(vm, recording as RecordingState.Recording)
         }
-        error?.let { Note(it, KLineTheme.colors.danger) }
-        message?.let { Note(it, KLineTheme.colors.ink) }
+        error?.let { NoticeLine(it, KLineTheme.colors.danger) }
+        message?.let { NoticeLine(it, KLineTheme.colors.ink) }
     }
-}
-
-@Composable
-private fun Note(text: String, color: Color) {
-    HorizontalRule()
-    Text(
-        text,
-        style = KLineType.body,
-        color = color,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
-    )
 }
 
 /** Lamp and state like the Connection status block; under it [detail]. */
@@ -96,7 +87,7 @@ private fun SessionStatus(isRecording: Boolean, title: String, detail: String) {
         Modifier.fillMaxWidth().height(StatusHeight)
             .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
     ) {
-        StatusDot(if (isRecording) colors.danger else colors.inkFaint, Modifier.padding(top = StatusDotTopInset))
+        StatusDot(if (isRecording) colors.danger else colors.inkFaint, Modifier.padding(top = StatusDotTitleInset))
         Spacer(Modifier.width(Spacing.fieldPaddingHorizontal))
         Column {
             Text(title, style = KLineType.title, color = colors.ink, maxLines = 1)
@@ -228,12 +219,12 @@ private fun LapTimer(panel: LapPanel) {
     )
     HorizontalRule()
     FieldRow(
-        stringResource(R.string.session_last), panel.last, LAP_TIME_SAMPLE, colors.ink,
-        stringResource(R.string.session_best), panel.best, LAP_TIME_SAMPLE, colors.ink,
+        FieldSpec(stringResource(R.string.session_last), panel.last, LAP_TIME_SAMPLE, colors.ink),
+        FieldSpec(stringResource(R.string.session_best), panel.best, LAP_TIME_SAMPLE, colors.ink),
     )
     FieldRow(
-        stringResource(R.string.session_delta), panel.delta, DELTA_SAMPLE, panel.deltaTone.color(),
-        stringResource(R.string.session_laps), "${panel.lapCount}", COUNT_SAMPLE, colors.ink,
+        FieldSpec(stringResource(R.string.session_delta), panel.delta, DELTA_SAMPLE, panel.deltaTone.color()),
+        FieldSpec(stringResource(R.string.session_laps), "${panel.lapCount}", COUNT_SAMPLE, colors.ink),
     )
     SectorSplits(panel.splits)
 }
@@ -276,15 +267,15 @@ private fun RowScope.SplitCell(split: SectorSplit, isCompact: Boolean) {
     )
 }
 
+/** One field of a [FieldRow]: its label, the value, the widest text the value can be, and its colour. */
+private class FieldSpec(val label: String, val value: String, val sample: String, val color: Color)
+
 @Composable
-private fun FieldRow(
-    leftLabel: String, leftValue: String, leftSample: String, leftColor: Color,
-    rightLabel: String, rightValue: String, rightSample: String, rightColor: Color,
-) {
+private fun FieldRow(left: FieldSpec, right: FieldSpec) {
     Row(Modifier.fillMaxWidth().height(GridRowHeight)) {
-        ValueField(leftLabel, null, leftValue, FieldLook, leftSample, Modifier.weight(1f).fillMaxHeight(), leftColor)
+        ValueField(left.label, null, left.value, FieldLook, left.sample, Modifier.weight(1f).fillMaxHeight(), left.color)
         VerticalRule()
-        ValueField(rightLabel, null, rightValue, FieldLook, rightSample, Modifier.weight(1f).fillMaxHeight(), rightColor)
+        ValueField(right.label, null, right.value, FieldLook, right.sample, Modifier.weight(1f).fillMaxHeight(), right.color)
     }
     HorizontalRule()
 }

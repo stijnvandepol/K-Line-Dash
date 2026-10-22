@@ -27,30 +27,39 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private val ButtonHorizontalPadding = 8.dp
+private val ButtonHorizontalPadding = Spacing.grid
 private val ToggleWidth = 64.dp
 private val ToggleHeight = 32.dp
 private val ToggleThumbInset = 5.dp
 private val DialogWidth = 720.dp
 private const val ScrimAlpha = 0.8f
 
-/** Section title on the Connection and Debug pages, aligned with the text of the rows below it. */
+/** A list in a dialog is never taller than this (about five rows); it scrolls. */
+internal val DialogListMaxHeight = 360.dp
+
+/** The title of a section or a column, in `title`, aligned with the text of the rows below it. */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -62,6 +71,29 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
             horizontal = Spacing.fieldPaddingHorizontal,
             vertical = Spacing.fieldPaddingVertical,
         ),
+    )
+}
+
+/**
+ * A caps label in `inkMuted` that heads a column, a table or a group of rows: 16 dp from the edge,
+ * centred in the height [modifier] gives it.
+ */
+@Composable
+fun HeaderCell(text: String, modifier: Modifier = Modifier) {
+    Box(modifier.padding(horizontal = Spacing.fieldPaddingHorizontal), contentAlignment = Alignment.CenterStart) {
+        Text(text.uppercase(), style = KLineType.fieldLabel, color = KLineTheme.colors.inkMuted, maxLines = 1)
+    }
+}
+
+/** A line of feedback under a rule, across the whole width: an export result, a refused tap, an error. */
+@Composable
+fun NoticeLine(text: String, color: Color) {
+    HorizontalRule()
+    Text(
+        text,
+        style = KLineType.body,
+        color = color,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
     )
 }
 
@@ -293,5 +325,45 @@ fun RaceDialog(
                 content = actions,
             )
         }
+    }
+}
+
+/** Focus starts on the safe answer, so a rotary or D-pad "press" on a head unit cancels rather than erases. */
+@Composable
+internal fun rememberInitialFocus(): FocusRequester {
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { requester.requestFocus() }
+    return requester
+}
+
+/** The paragraph of a [RaceDialog]. */
+@Composable
+internal fun DialogText(text: String) {
+    Text(
+        text,
+        style = KLineType.body,
+        color = KLineTheme.colors.ink,
+        modifier = Modifier.padding(Spacing.fieldPaddingHorizontal),
+    )
+}
+
+/**
+ * The one question before something is erased: [question] in a dialog with the danger bar, Cancel
+ * filled and focused, so a D-pad press cannot delete by accident, and [deleteLabel] outlined in danger.
+ */
+@Composable
+internal fun ConfirmDeleteDialog(title: String, question: String, deleteLabel: String, onCancel: () -> Unit, onDelete: () -> Unit) {
+    val focus = rememberInitialFocus()
+    RaceDialog(
+        title = title,
+        onDismiss = onCancel,
+        accent = KLineTheme.colors.danger,
+        actions = {
+            PrimaryButton(stringResource(R.string.btn_cancel), onCancel, Modifier.weight(1f).focusRequester(focus))
+            DangerButton(deleteLabel, onDelete, Modifier.weight(1f))
+        },
+    ) {
+        HorizontalRule()
+        DialogText(question)
     }
 }

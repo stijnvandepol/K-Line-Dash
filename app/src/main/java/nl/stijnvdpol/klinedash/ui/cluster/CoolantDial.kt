@@ -16,14 +16,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
-import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
 import nl.stijnvdpol.klinedash.ui.ValueText
@@ -59,8 +57,13 @@ private const val POINTER_OUTSET = 5f
 private const val POINTER_WIDTH = 4.5f
 private const val VALUE_BASELINE = 308f
 private const val VALUE_SIZE = 62f
+private const val VALUE_SAMPLE = "888"
 private const val CAPTION_BASELINE = 344f
 private const val CAPTION_SIZE = 17f
+
+/** The ends of the scale, as on a car's temperature gauge. */
+private const val COLD_LETTER = "C"
+private const val HOT_LETTER = "H"
 
 /** Where the arc sits in a column of [size]: everything scales with its height. */
 private class CoolantFrame(val size: Size) {
@@ -85,7 +88,7 @@ private class CoolantStatic(
     private val ticks = dialTicks(CoolantScale, TICK_STEP_C, MAJOR_TICK_STEP_C, MAJOR_TICK_STEP_C)
     private val letterStyle = with(density) { numeralStyle(numerals, (END_LETTER_SIZE * unit).toSp()) }
     private val captionStyle = with(density) { numeralStyle(numerals, (CAPTION_SIZE * unit).toSp()) }
-    private val letters = listOf("C" to CoolantScale.min, "H" to CoolantScale.max).map { (letter, value) ->
+    private val letters = listOf(COLD_LETTER to CoolantScale.min, HOT_LETTER to CoolantScale.max).map { (letter, value) ->
         val layout = measurer.measure(letter, letterStyle)
         val middle = polar(pivot.x, pivot.y, radius + END_LETTER_RADIUS * unit, CoolantScale.angleDeg(value))
         val capHeight = END_LETTER_SIZE * unit * CAP_HEIGHT_EM
@@ -122,7 +125,6 @@ private class CoolantStatic(
         letters.forEach { (layout, at) -> drawText(layout, colors.inkMuted, at) }
         drawText(captionLayout, colors.inkMuted, captionTopLeft)
     }
-
 }
 
 private class CoolantPointer(private val frame: CoolantFrame, private val colors: KLineColors) {
@@ -173,7 +175,7 @@ internal fun CoolantDial(feed: GaugeFeed, limits: AlertSettings, modifier: Modif
         ValueText(
             feed.signal, feed.reading, feed.stale, feed.tone, style,
             Modifier.align(Alignment.TopCenter).offset { IntOffset(0, (VALUE_BASELINE * unit).roundToInt() - capHeight) },
-            sample = "888", align = TextAlign.Center,
+            sample = VALUE_SAMPLE, align = TextAlign.Center,
         )
     }
 }
