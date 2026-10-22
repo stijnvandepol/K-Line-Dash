@@ -22,7 +22,7 @@ fun ConnectionState.describe(res: Resources): String = when (this) {
         }
     }
     is ConnectionState.Reconnecting ->
-        res.getString(R.string.state_reconnecting, ceil(delayMs / MILLIS_PER_SECOND).toInt(), attempt)
+        res.getString(R.string.state_reconnecting, ceil(delayMs / MILLIS_PER_SECOND).toInt().toString(), attempt.toString())
     is ConnectionState.Failed -> res.getString(R.string.state_failed, reason)
 }
 
@@ -53,7 +53,7 @@ fun ConnectionState.detail(res: Resources): String = when (this) {
         }
     }
     is ConnectionState.Reconnecting ->
-        res.getString(R.string.detail_reconnecting, attempt, ceil(delayMs / MILLIS_PER_SECOND).toInt())
+        res.getString(R.string.detail_reconnecting, attempt.toString(), ceil(delayMs / MILLIS_PER_SECOND).toInt().toString())
     // Retrying cannot help with an unsupported adapter, so no "tap Connect" advice.
     is ConnectionState.Failed ->
         if (kind == FailureKind.UNSUPPORTED_ADAPTER) reason else res.getString(R.string.detail_failed, reason.trimEnd('.'))

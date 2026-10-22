@@ -8,12 +8,6 @@ class StringResourcesTest {
     private val strings = File("src/main/res/values/strings.xml").readText()
 
     /**
-     * Still formatted with `%d` by service/ConnectionStateText.kt, which passes numbers; they move to
-     * text arguments together with that caller.
-     */
-    private val serviceFormatted = setOf("state_reconnecting", "detail_reconnecting")
-
-    /**
      * `%d` is formatted in the system locale, which on an Arabic or Persian head unit writes the digits
      * as ٠١٢; the display always shows ASCII digits (docs/design-system.md, "Numbers never move"). The
      * screens pass numbers as text into `%s`, formatted by service/ValueFormat.kt or plain digits.
@@ -23,7 +17,6 @@ class StringResourcesTest {
         val localized = Regex("""<string name="(\w+)"[^>]*>[^<]*%(\d+\$)?[dfe][^<]*</string>""")
             .findAll(strings)
             .map { it.groupValues[1] }
-            .filterNot { it in serviceFormatted }
             .toList()
         assertEquals(emptyList<String>(), localized)
     }

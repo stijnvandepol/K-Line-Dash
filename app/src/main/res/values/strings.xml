@@ -16,7 +16,7 @@
     <string name="state_initializing">Initializing: %1$s</string>
     <string name="state_connected">Connected – %1$s</string>
     <string name="state_connected_voltage">Connected – %1$s – %2$s V</string>
-    <string name="state_reconnecting">Reconnecting in %1$d s (attempt %2$d)</string>
+    <string name="state_reconnecting">Reconnecting in %1$s s (attempt %2$s)</string>
     <string name="state_failed">Failed: %1$s</string>
     <string name="headline_connecting">Connecting</string>
     <string name="headline_initializing">Initializing</string>
@@ -27,7 +27,7 @@
     <string name="detail_idle">Choose an adapter and tap Connect.</string>
     <string name="detail_connecting">To %1$s</string>
     <string name="detail_connected_voltage">%1$s, battery %2$s V</string>
-    <string name="detail_reconnecting">Attempt %1$d, next in %2$d s</string>
+    <string name="detail_reconnecting">Attempt %1$s, next in %2$s s</string>
     <string name="detail_failed">%1$s. Check the adapter and tap Connect.</string>
 
     <!-- Service / notification -->
