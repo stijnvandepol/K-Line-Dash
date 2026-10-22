@@ -96,6 +96,23 @@ class TripAnalyzerTest {
     }
 
     @Test
+    fun aLapDroppedAtASourceSwitchLeavesNothingInTheNextLapsStatistics() {
+        val samples = loopSamples().mapIndexed { second, sample ->
+            if (second == 30) sample.copy(values = sample.values + ("rpm" to 8_000.0)) else sample
+        }
+        val analyzer = TripAnalyzer(gates)
+        samples.take(41).forEach(analyzer::add)
+        // The lap in progress (started at 4.9 s, with the 8000 rpm peak) is dropped here.
+        analyzer.startNewGpsSegment()
+        samples.drop(41).forEach(analyzer::add)
+
+        val laps = analyzer.lapStats()
+        assertEquals(2, laps.size)
+        assertEquals(listOf(7_000.0, 2_000.0), laps.map { it.maxRpm })
+        assertEquals(listOf(5_000L, 0L), laps.map { it.fullThrottleTimeMs })
+    }
+
+    @Test
     fun samplesWithoutAFixStillCountForTheTripButNotForTheDetector() {
         val analyzer = TripAnalyzer(gates)
         analyzer.add(TripSample(t0, mapOf("speed" to 50.0)))

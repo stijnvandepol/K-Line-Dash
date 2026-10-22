@@ -1,4 +1,4 @@
-package nl.stijnvdpol.klinedash.core.diag
+package nl.stijnvdpol.klinedash.core.obd
 
 /**
  * Turns the hex lines of an [nl.stijnvdpol.klinedash.core.elm.ElmResult.Data] (headers off) into
@@ -14,7 +14,6 @@ package nl.stijnvdpol.klinedash.core.diag
 internal object ObdMessages {
 
     private const val HEX_RADIX = 16
-    private const val CHARS_PER_BYTE = 2
 
     private val HEX_BYTES = Regex("(?:[0-9A-F]{2})+")
     private val LENGTH_LINE = Regex("[0-9A-F]{3}")
@@ -28,7 +27,7 @@ internal object ObdMessages {
         fun finishPending() {
             val hex = pending?.toString().orEmpty()
             if (hex.isNotEmpty()) {
-                val bytes = toBytes(hex)
+                val bytes = bytesOf(hex)
                 val length = announcedLength
                 // Fewer bytes than announced: frames went missing, so the message is not whole.
                 if (length == null) messages += bytes else if (bytes.size >= length) messages += bytes.copyOf(length)
@@ -53,7 +52,7 @@ internal object ObdMessages {
                 }
                 HEX_BYTES.matches(line) -> {
                     finishPending()
-                    messages += toBytes(line)
+                    messages += bytesOf(line)
                 }
             }
         }
@@ -61,7 +60,6 @@ internal object ObdMessages {
         return messages
     }
 
-    private fun toBytes(hex: String): IntArray = IntArray(hex.length / CHARS_PER_BYTE) {
-        hex.substring(it * CHARS_PER_BYTE, (it + 1) * CHARS_PER_BYTE).toInt(HEX_RADIX)
-    }
+    /** [hex] has been matched against whole hex bytes already, so it always converts. */
+    private fun bytesOf(hex: String): IntArray = checkNotNull(ObdHex.toBytes(hex)) { "not hex bytes: $hex" }
 }

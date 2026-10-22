@@ -1,5 +1,8 @@
 package nl.stijnvdpol.klinedash.core.diag
 
+import nl.stijnvdpol.klinedash.core.obd.isMilOn
+import nl.stijnvdpol.klinedash.core.obd.storedCodeCount
+
 /** What service 01 PID 01 says about the engine: MIL, code count and the readiness monitors. */
 data class EngineStatus(
     val isMilOn: Boolean,
@@ -20,8 +23,6 @@ data class EngineStatus(
 object ReadinessDecoder {
 
     private const val STATUS_BYTES = 4
-    private const val MIL_BIT = 0x80
-    private const val DTC_COUNT_MASK = 0x7F
     private const val COMPRESSION_IGNITION_BIT = 0x08
     private const val CONTINUOUS_INCOMPLETE_SHIFT = 4
 
@@ -69,8 +70,8 @@ object ReadinessDecoder {
             monitor(it.id, available and (1 shl it.bit) != 0, incomplete and (1 shl it.bit) != 0)
         }
         return EngineStatus(
-            isMilOn = statusA and MIL_BIT != 0,
-            dtcCount = statusA and DTC_COUNT_MASK,
+            isMilOn = isMilOn(statusA),
+            dtcCount = storedCodeCount(statusA),
             isSparkIgnition = !isCompression,
             monitors = continuous + others,
         )

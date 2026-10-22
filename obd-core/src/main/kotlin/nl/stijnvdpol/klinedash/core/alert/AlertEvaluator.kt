@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.core.alert
 
 import nl.stijnvdpol.klinedash.core.obd.PollTier
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 import nl.stijnvdpol.klinedash.core.obd.Signals
 
 /**
@@ -48,21 +49,14 @@ object AlertEvaluator : AlertRules {
     private const val MEMORY_CONNECTED_ONCE = "connected_once"
     private const val FLAG_SET = 1.0
 
-    private const val SIGNAL_COOLANT = "coolant"
-    private const val SIGNAL_BATTERY = "battery"
-    private const val SIGNAL_RPM = "rpm"
-    private const val SIGNAL_SPEED = "speed"
-    private const val SIGNAL_DTC_COUNT = "dtc_count"
-    private const val SIGNAL_MIL = "mil_on"
-
     override fun requiredSignals(settings: AlertSettings): Set<String> =
         settings.enabled.flatMapTo(mutableSetOf()) { signalsFor(it) }
 
     private fun signalsFor(kind: AlertKind): Set<String> = when (kind) {
-        AlertKind.COOLANT_HIGH -> setOf(SIGNAL_COOLANT)
-        AlertKind.VOLTAGE_LOW, AlertKind.VOLTAGE_HIGH -> setOf(SIGNAL_BATTERY, SIGNAL_RPM)
-        AlertKind.NEW_DTC -> setOf(SIGNAL_DTC_COUNT, SIGNAL_SPEED)
-        AlertKind.MIL_ON -> setOf(SIGNAL_MIL)
+        AlertKind.COOLANT_HIGH -> setOf(SignalIds.COOLANT)
+        AlertKind.VOLTAGE_LOW, AlertKind.VOLTAGE_HIGH -> setOf(SignalIds.BATTERY, SignalIds.RPM)
+        AlertKind.NEW_DTC -> setOf(SignalIds.DTC_COUNT, SignalIds.SPEED)
+        AlertKind.MIL_ON -> setOf(SignalIds.MIL_ON)
         AlertKind.CONNECTION_LOST -> emptySet()
     }
 
@@ -121,7 +115,7 @@ object AlertEvaluator : AlertRules {
         }
 
         private fun evaluateCoolant() {
-            val celsius = freshValue(SIGNAL_COOLANT) ?: return
+            val celsius = freshValue(SignalIds.COOLANT) ?: return
             val before = previousAlert(AlertKind.COOLANT_HIGH)
             val dangerLimit = settings.coolantDangerC -
                 if (before?.severity == AlertSeverity.DANGER) COOLANT_HYSTERESIS_C else 0.0
@@ -137,8 +131,8 @@ object AlertEvaluator : AlertRules {
         /** Battery voltage: the limits depend on whether the engine is running (fresh rpm). */
         private fun evaluateVoltage(kind: AlertKind) {
             val timerKey = if (kind == AlertKind.VOLTAGE_LOW) MEMORY_VOLTAGE_LOW_SINCE else MEMORY_VOLTAGE_HIGH_SINCE
-            val volts = freshValue(SIGNAL_BATTERY)
-            val rpm = freshValue(SIGNAL_RPM)
+            val volts = freshValue(SignalIds.BATTERY)
+            val rpm = freshValue(SignalIds.RPM)
             if (volts == null || rpm == null) {
                 memory.remove(timerKey)
                 return
@@ -204,7 +198,7 @@ object AlertEvaluator : AlertRules {
          */
         private fun evaluateMil() {
             val before = previousAlert(AlertKind.MIL_ON)
-            val milValue = freshValue(SIGNAL_MIL)
+            val milValue = freshValue(SignalIds.MIL_ON)
             when {
                 milValue == null -> before?.let { alerts += it }
                 milValue >= MIL_ON_THRESHOLD -> raise(AlertKind.MIL_ON, AlertSeverity.CAUTION, null, before?.sinceMs)
@@ -224,7 +218,7 @@ object AlertEvaluator : AlertRules {
                 return
             }
             val before = previousAlert(AlertKind.NEW_DTC)
-            val count = freshValue(SIGNAL_DTC_COUNT)
+            val count = freshValue(SignalIds.DTC_COUNT)
             if (count == null) {
                 before?.let { alerts += it }
                 return
@@ -234,7 +228,7 @@ object AlertEvaluator : AlertRules {
                 memory[MEMORY_DTC_BASELINE] = count
                 return
             }
-            val isDriving = (freshValue(SIGNAL_SPEED) ?: 0.0) > 0.0
+            val isDriving = (freshValue(SignalIds.SPEED) ?: 0.0) > 0.0
             if (count > baseline && (before != null || isDriving)) {
                 raise(AlertKind.NEW_DTC, AlertSeverity.CAUTION, null, before?.sinceMs)
             }

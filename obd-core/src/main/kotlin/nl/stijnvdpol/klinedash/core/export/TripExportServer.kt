@@ -28,6 +28,7 @@ fun interface TripFileSource {
     fun files(): List<File>
 }
 
+/** Settings of one export run; [pin] is the one-time PIN shown on the head unit. */
 data class ExportServerConfig(
     /** 0 picks a free port; the app passes a fixed one so the address stays the same. */
     val port: Int = 8080,

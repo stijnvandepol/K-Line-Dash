@@ -1,6 +1,5 @@
 package nl.stijnvdpol.klinedash.core.obd
 
-import nl.stijnvdpol.klinedash.core.diag.ObdMessages
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
 
 /**
@@ -18,7 +17,8 @@ import nl.stijnvdpol.klinedash.core.elm.ElmResult
  */
 object MultiPidResponse {
 
-    private const val RESPONSE_CURRENT_DATA = 0x41
+    private const val MODE_CURRENT_DATA = 0x01
+    private val RESPONSE_CURRENT_DATA = ObdHex.responseService(MODE_CURRENT_DATA)
 
     /**
      * PID to data bytes for every PID of the messages in [data] that split exactly. When several

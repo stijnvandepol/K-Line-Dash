@@ -59,19 +59,12 @@ class CsvTripWriter(
                 .orEmpty()
         }
         val gpsCells = if (includeGps) GpsColumns.cells(gps, nowMs) else emptyList()
-        writeLine(listOf(TripCsvFormat.formatTime(nowMs), formatElapsedSeconds(nowMs - origin)) + cells + gpsCells)
+        writeLine(listOf(TripCsvFormat.formatTime(nowMs), TripCsvFormat.formatElapsedSeconds(nowMs - origin)) + cells + gpsCells)
     }
 
     private fun gpsHeader(): List<String> = if (includeGps) GpsColumns.header else emptyList()
 
     private fun writeLine(fields: List<String>) {
         out.append(fields.joinToString(TripCsvFormat.SEPARATOR)).append(TripCsvFormat.LINE_END)
-    }
-
-    private fun formatElapsedSeconds(elapsedMs: Long): String =
-        TripCsvFormat.formatFixed(elapsedMs / MS_PER_SECOND, 1)
-
-    private companion object {
-        const val MS_PER_SECOND = 1000.0
     }
 }

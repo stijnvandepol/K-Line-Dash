@@ -1,6 +1,8 @@
 package nl.stijnvdpol.klinedash.core.diag
 
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
+import nl.stijnvdpol.klinedash.core.obd.ObdHex
+import nl.stijnvdpol.klinedash.core.obd.ObdMessages
 
 /**
  * Decodes service 09 replies (headers off) into text. Pure.
@@ -12,7 +14,8 @@ import nl.stijnvdpol.klinedash.core.elm.ElmResult
  */
 object VehicleInfoParser {
 
-    private const val RESPONSE_VEHICLE_INFO = 0x49
+    private const val SERVICE_VEHICLE_INFO = 0x09
+    private val RESPONSE_VEHICLE_INFO = ObdHex.responseService(SERVICE_VEHICLE_INFO)
     private const val HEADER_BYTES = 3 // response, PID, counter
     private const val MIN_PRINTABLE = 0x20
     private const val MAX_PRINTABLE = 0x7E

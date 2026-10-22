@@ -12,7 +12,7 @@ sealed interface ElmResult {
      * "BUS INIT: ...OK" and similar status noise removed. For OBD responses each line is
      * normalised to upper-case hex with spaces removed (e.g. "410C1AF8"). CAN multi-frame replies
      * keep the ELM layout needed to reassemble them: a three-digit length line ("00A") and
-     * numbered frames ("0:43040171..."); see diag.ObdMessages.
+     * numbered frames ("0:43040171..."); see obd.ObdMessages.
      * For AT commands lines are trimmed text (e.g. "ELM327 v1.5", "12.4V", "OK").
      */
     data class Data(val lines: List<String>, override val raw: String) : ElmResult

@@ -19,7 +19,7 @@ interface TripWriter {
 }
 
 /**
- * Running totals of a trip, updated per sample; stored with the trip when it ends.
+ * The totals of a trip that are stored with it, taken from its [TripStats].
  * [distanceKm] comes from GPS where fixes exist and from integrated vehicle speed elsewhere.
  */
 data class TripSummary(

@@ -35,7 +35,7 @@ object SupportedPidDetector {
         val supported = HashSet<Int>()
         var base = 0
         while (base <= LAST_BLOCK_BASE) {
-            val command = "%02X%02X".format(MODE_CURRENT_DATA, base)
+            val command = ObdHex.request(MODE_CURRENT_DATA, base)
             val result = execute(command)
             val merged = mergeBitmaps(result, base)
             if (merged == null) {

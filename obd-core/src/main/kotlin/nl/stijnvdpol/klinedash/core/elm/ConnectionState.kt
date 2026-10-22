@@ -1,8 +1,5 @@
 package nl.stijnvdpol.klinedash.core.elm
 
-import nl.stijnvdpol.klinedash.core.diag.DtcFormat
-import nl.stijnvdpol.klinedash.core.diag.DtcParser
-
 /** Lifecycle of the adapter link as shown in the UI and used by the service. */
 sealed interface ConnectionState {
     data object Idle : ConnectionState
@@ -38,6 +35,7 @@ enum class FailureKind {
     UNSUPPORTED_ADAPTER,
 }
 
+/** What the init sequence found out about the adapter and the protocol the ECU answered on. */
 data class AdapterInfo(
     /** As reported by ATI, e.g. "ELM327 v1.5". Clones lie; informational only. */
     val elmVersion: String,
@@ -64,7 +62,9 @@ data class AdapterInfo(
 
 /** True for ELM protocol numbers 6-9 (also in the "A6" auto-detected spelling): ISO 15765-4 CAN. */
 internal fun isCanProtocol(protocolNumber: String): Boolean =
-    ElmParser.parseProtocolNumber(protocolNumber)?.let(DtcParser::formatFor) == DtcFormat.CAN
+    ElmParser.parseProtocolNumber(protocolNumber)?.single() in CAN_PROTOCOLS
+
+private val CAN_PROTOCOLS = '6'..'9'
 
 /** Persists the detected protocol per adapter, so the next start can skip ATSP0 searching. */
 interface ProtocolStore {

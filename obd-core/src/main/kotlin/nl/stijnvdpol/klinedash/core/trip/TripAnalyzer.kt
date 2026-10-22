@@ -23,12 +23,10 @@ data class LapStats(
     val distanceKm: Double get() = lap.distanceM / METRES_PER_KM
 
     /** Distance over lap time; null for a zero-length lap. */
-    val averageSpeedKmh: Double?
-        get() = lap.lapTimeMs.takeIf { it > 0 }?.let { distanceKm / (it / MS_PER_HOUR) }
+    val averageSpeedKmh: Double? get() = averageKmh(distanceKm, lap.lapTimeMs)
 
     private companion object {
         const val METRES_PER_KM = 1_000.0
-        const val MS_PER_HOUR = 3_600_000.0
     }
 }
 
@@ -58,7 +56,12 @@ class TripAnalyzer(
             finishedLaps += lapStatsOf(lap, currentLap)
             currentLap = TripStatsAccumulator()
         }
-        if (detector.state.isTiming) currentLap.add(sample)
+        if (detector.state.isTiming) {
+            currentLap.add(sample)
+        } else {
+            // A lap the detector dropped (another location source or clock) takes its samples along.
+            currentLap = TripStatsAccumulator()
+        }
     }
 
     /** The location source changed: the next fix starts a new GPS segment for the trip and the laps. */

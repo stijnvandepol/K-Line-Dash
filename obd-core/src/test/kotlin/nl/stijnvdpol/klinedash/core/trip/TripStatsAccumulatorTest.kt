@@ -268,4 +268,50 @@ class TripStatsAccumulatorTest {
         )
         assertEquals(mapOf("rpm" to 2000.0), tripSampleOf(t0, readings).values)
     }
+
+    @Test
+    fun changingSpeedUsesTheAverageOfTheTwoSamples() {
+        assertEquals(0.1, statsOf(sample(0, speed = 0.0), sample(10, speed = 72.0)).distanceKm, 1e-9)
+    }
+
+    @Test
+    fun intervalExactlyAtTheMaximumGapStillCounts() {
+        val accumulator = TripStatsAccumulator(maxGapMs = 10_000)
+        accumulator.add(sample(0, speed = 36.0))
+        accumulator.add(sample(10, speed = 36.0))
+        assertEquals(0.1, accumulator.stats()!!.distanceKm, 1e-9)
+    }
+
+    @Test
+    fun sampleOlderThanThePreviousAddsNothing() {
+        val stats = statsOf(sample(5, speed = 36.0), sample(0, speed = 36.0))
+        assertEquals(0.0, stats.distanceKm, 0.0)
+        assertEquals(0L, stats.movingTimeMs)
+    }
+
+    @Test
+    fun maximaStayNullWhenNothingWasPolled() {
+        val stats = statsOf(sample(0), sample(1))
+        assertNull(stats.maxRpm)
+        assertNull(stats.maxSpeedKmh)
+        assertNull(stats.maxCoolantC)
+        assertEquals(0.0, stats.distanceKm, 0.0)
+    }
+
+    @Test
+    fun aStaleLiveSpeedIsUnknownNotZero() {
+        val accumulator = TripStatsAccumulator()
+        fun live(second: Int, speedAgeMs: Long) {
+            val nowMs = t0 + second * 1_000L
+            val readings = mapOf("speed" to nl.stijnvdpol.klinedash.core.obd.Reading("speed", 36.0, nowMs - speedAgeMs))
+            accumulator.add(tripSampleOf(nowMs, readings, freshnessMs = 5_000))
+        }
+        live(0, speedAgeMs = 0)
+        live(5, speedAgeMs = 5_001)
+        live(10, speedAgeMs = 0)
+        live(15, speedAgeMs = 0)
+        // Only 10 s to 15 s has a fresh speed at both ends: 36 km/h for 5 s.
+        assertEquals(0.05, accumulator.stats()!!.distanceKm, 1e-9)
+        assertEquals(36.0, accumulator.stats()!!.maxSpeedKmh!!, 0.0)
+    }
 }

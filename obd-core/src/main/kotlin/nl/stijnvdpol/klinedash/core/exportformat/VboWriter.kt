@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import nl.stijnvdpol.klinedash.core.geo.KMH_PER_MPS
 import nl.stijnvdpol.klinedash.core.trip.TripCsvFormat
 import nl.stijnvdpol.klinedash.core.trip.TripColumn
 
@@ -37,7 +38,6 @@ import nl.stijnvdpol.klinedash.core.trip.TripColumn
 object VboWriter {
     private const val LINE_END = "\r\n"
     private const val MINUTES_PER_DEGREE = 60.0
-    private const val KMH_PER_MPS = 3.6
     private const val NO_UNIT = "-"
     private const val COMMENT =
         "Times are UTC. Height is not recorded (always 0). A missing OBD value repeats the last known one."

@@ -1,6 +1,9 @@
 package nl.stijnvdpol.klinedash.core.diag
 
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
+import nl.stijnvdpol.klinedash.core.elm.isCanProtocol
+import nl.stijnvdpol.klinedash.core.obd.ObdHex
+import nl.stijnvdpol.klinedash.core.obd.ObdMessages
 
 /** How an ECU lays out a code list reply; depends on the bus. */
 enum class DtcFormat {
@@ -18,13 +21,10 @@ enum class DtcFormat {
  */
 object DtcParser {
 
-    private const val RESPONSE_SERVICE_OFFSET = 0x40
     private const val SERVICE_STORED = 0x03
     private const val SERVICE_PENDING = 0x07
     private const val SERVICE_PERMANENT = 0x0A
     private const val BYTES_PER_CODE = 2
-    private const val CAN_FIRST_PROTOCOL = '6'
-    private const val CAN_LAST_PROTOCOL = '9'
     private const val LETTER_SHIFT = 6
     private const val LETTER_MASK = 0x03
     private const val DIGIT_SHIFT = 4
@@ -34,13 +34,9 @@ object DtcParser {
     private const val CODE_LETTERS = "PCBU"
     private const val HEX_DIGITS = "0123456789ABCDEF"
 
-    /** The layout for an ELM protocol number (ATDPN without the "A" prefix): 6-9 are CAN, the rest K-line/J1850. */
+    /** The layout for an ELM protocol number: CAN for ISO 15765 (6-9), K-line/J1850 for everything else. */
     fun formatFor(protocolNumber: String): DtcFormat =
-        if (protocolNumber.length == 1 && protocolNumber[0] in CAN_FIRST_PROTOCOL..CAN_LAST_PROTOCOL) {
-            DtcFormat.CAN
-        } else {
-            DtcFormat.KLINE
-        }
+        if (isCanProtocol(protocolNumber)) DtcFormat.CAN else DtcFormat.KLINE
 
     /** The OBD service number requested for [kind]: 03, 07 or 0A. */
     fun serviceFor(kind: DtcKind): Int = when (kind) {
@@ -56,7 +52,7 @@ object DtcParser {
      * answered and has no codes.
      */
     fun parse(data: ElmResult.Data, kind: DtcKind, format: DtcFormat): List<Dtc>? {
-        val responseByte = serviceFor(kind) + RESPONSE_SERVICE_OFFSET
+        val responseByte = ObdHex.responseService(serviceFor(kind))
         val answers = ObdMessages.fromLines(data.lines)
             .filter { it.isNotEmpty() && it[0] == responseByte }
             .mapNotNull { codeBytes(it, format) }

@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
+import nl.stijnvdpol.klinedash.core.geo.KMH_PER_MPS
 import nl.stijnvdpol.klinedash.core.geo.isValidPosition
 
 /** Text conventions shared by every CSV this module writes or reads: UTC, '.' decimals, `\n` ends. */
@@ -16,6 +17,8 @@ internal object TripCsvFormat {
     const val LINE_END = "\n"
 
     private const val SEPARATOR_CHAR = ','
+    private const val MS_PER_SECOND = 1_000.0
+    private const val ELAPSED_DECIMALS = 1
     private const val QUOTE = '"'
     private val TIME_FORMAT: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).withZone(ZoneOffset.UTC)
@@ -32,6 +35,9 @@ internal object TripCsvFormat {
     }
 
     fun formatFixed(value: Double, decimals: Int): String = String.format(Locale.US, "%.${decimals}f", value)
+
+    /** The `elapsed_s` cell: [elapsedMs] in seconds with one decimal. */
+    fun formatElapsedSeconds(elapsedMs: Long): String = formatFixed(elapsedMs / MS_PER_SECOND, ELAPSED_DECIMALS)
 
     /** `<id> (<unit>)`, or just the id for a signal without a unit. */
     fun columnName(id: String, unit: String): String = if (unit.isEmpty()) id else "$id ($unit)"
@@ -95,7 +101,6 @@ internal object GpsColumns {
 
     private const val POSITION_DECIMALS = 7
     private const val METRIC_DECIMALS = 1
-    private const val KMH_PER_MPS = 3.6
 
     fun cells(gps: GeoFix?, rowTimeMs: Long): List<String> {
         if (gps == null) return List(header.size) { "" }

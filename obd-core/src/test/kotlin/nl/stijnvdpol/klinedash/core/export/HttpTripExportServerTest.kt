@@ -150,6 +150,46 @@ class HttpTripExportServerTest {
     }
 
     @Test
+    fun `a client that stops reading is let go after the write stall timeout`() {
+        // Far larger than the loopback socket buffers, so the server blocks in write().
+        val big = temp.newFile("big.csv").apply { writeBytes(ByteArray(64 * 1024 * 1024)) }
+        val client = startServer(source = TripFileSource { listOf(big) })
+        val cookie = client.login(pin)
+        val running = server!!
+        java.net.Socket(java.net.InetAddress.getLoopbackAddress(), running.start()).use { stalled ->
+            stalled.getOutputStream().apply {
+                write("GET /download/0 HTTP/1.1\r\nHost: localhost\r\nCookie: $cookie\r\n\r\n".toByteArray())
+                flush()
+            }
+            awaitTrue("download started") { running.activeConnectionCount == 1 }
+            Thread.sleep(STALL_SETTLE_MS) // let the server fill the buffers and block
+
+            running.closeStalledResponses()
+            assertEquals("still within the timeout", 1, running.activeConnectionCount)
+
+            now += WRITE_STALL_TIMEOUT_MS
+            running.closeStalledResponses()
+            awaitTrue("stalled response closed") { running.activeConnectionCount == 0 }
+        }
+    }
+
+    private fun awaitTrue(what: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AWAIT_SECONDS)
+        while (!condition()) {
+            check(System.nanoTime() < deadline) { "Timed out waiting for: $what" }
+            Thread.sleep(POLL_MS)
+        }
+    }
+
+    @Test
+    fun `accept backoff doubles up to its cap and resets`() {
+        val backoff = AcceptBackoff(initialMs = 50, maxMs = 300)
+        assertEquals(listOf(50L, 100L, 200L, 300L, 300L), List(5) { backoff.nextDelayMs() })
+        backoff.reset()
+        assertEquals(50L, backoff.nextDelayMs())
+    }
+
+    @Test
     fun `download without a session redirects to the PIN page`() {
         val client = startServer()
         listOf("/download/0", "/download/all.zip").forEach { path ->
@@ -322,5 +362,11 @@ class HttpTripExportServerTest {
         assertEquals("nosniff", response.header("x-content-type-options"))
         assertEquals("close", response.header("connection"))
         assertTrue(response.header("content-security-policy")!!.contains("default-src 'none'"))
+    }
+
+    private companion object {
+        const val STALL_SETTLE_MS = 500L
+        const val AWAIT_SECONDS = 10L
+        const val POLL_MS = 20L
     }
 }

@@ -8,6 +8,9 @@ internal const val MAX_HEADER_BYTES = 8 * 1024
 internal const val MAX_BODY_BYTES = 1024
 private const val MAX_REQUEST_READ_NANOS = 15_000_000_000L
 private const val MAX_METHOD_LENGTH = 16
+
+/** Enough digits for any length up to [MAX_BODY_BYTES] and few enough that the number fits an Int. */
+private const val MAX_CONTENT_LENGTH_DIGITS = 9
 private const val HEADER_TERMINATOR = "\r\n\r\n"
 private const val CRLF_CRLF = 0x0D0A0D0A
 
@@ -87,7 +90,7 @@ internal object RequestReader {
 
     private fun readBody(input: InputStream, headers: Map<String, String>, deadline: Long): ByteArray {
         val raw = headers["content-length"] ?: throw RequestRejected(411)
-        if (raw.isEmpty() || raw.length > 9 || !raw.all { it in '0'..'9' }) throw RequestRejected(400)
+        if (raw.isEmpty() || raw.length > MAX_CONTENT_LENGTH_DIGITS || !raw.all { it in '0'..'9' }) throw RequestRejected(400)
         val length = raw.toInt()
         if (length > MAX_BODY_BYTES) throw RequestRejected(413)
         val body = ByteArray(length)

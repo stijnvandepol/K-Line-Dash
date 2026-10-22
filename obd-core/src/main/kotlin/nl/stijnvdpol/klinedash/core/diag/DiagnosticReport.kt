@@ -8,9 +8,6 @@ data class Dtc(val code: String) {
         require(DTC_FORMAT.matches(code)) { "Not a DTC: \"$code\"" }
     }
 
-    /** True for manufacturer-specific codes (P1xxx, P3xxx and the other second-digit 1/3 ranges). */
-    val isManufacturerSpecific: Boolean get() = code[1] == '1' || code[1] == '3'
-
     override fun toString(): String = code
 
     private companion object {
@@ -37,6 +34,7 @@ data class DtcList(
     val codes: List<Dtc>,
 )
 
+/** State of one readiness monitor: complete, still incomplete, or not present on this engine. */
 enum class MonitorStatus { READY, NOT_READY, NOT_APPLICABLE }
 
 /** One OBD readiness monitor from service 01 PID 01, e.g. "Catalyst", "Oxygen sensor". */

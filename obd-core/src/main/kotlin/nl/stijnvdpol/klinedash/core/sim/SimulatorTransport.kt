@@ -11,9 +11,9 @@ import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
 
 /**
- * A fake ELM327 on a K-line car that speaks the real text protocol (echo, spaces, linefeeds,
- * headers, "SEARCHING...", "NO DATA", prompts), so the whole stack above [Transport] runs
- * unmodified against it. Latencies are realised with coroutine `delay()`, which makes virtual
+ * A fake ELM327 on a K-line car (or a CAN car, see [SimulatorConfig.carProtocol]) that speaks the
+ * real text protocol (echo, spaces, linefeeds, headers, "SEARCHING...", "NO DATA", prompts), so the
+ * whole stack above [Transport] runs unmodified against it. Latencies are realised with coroutine `delay()`, which makes virtual
  * time in `runTest` work.
  *
  * Replies are pushed through a real [PromptBuffer] (as a byte transport would), so injected NUL
@@ -48,7 +48,7 @@ class SimulatorTransport(
     private var linefeeds = true
     private var protocol = "0"
     private var detectedProtocol: String? = null
-    private var busReady = false
+    private var isBusReady = false
 
     private var commandCount = 0
     private var pending: Reply? = null
@@ -58,11 +58,11 @@ class SimulatorTransport(
      * that arrived too late). Any character sent now aborts that work: the adapter prints
      * "STOPPED" and a prompt, like a real ELM327 does.
      */
-    private var busy = false
+    private var isBusy = false
 
     /** True while a read is waiting out its latency; a write now would mean overlapping commands. */
     @Volatile
-    private var reading = false
+    private var isReading = false
 
     /** Engine on/off for the debug screen: off = ignition on, engine stopped (rpm 0). */
     fun setEngineRunning(running: Boolean) = engine.setRunning(running, clock())
@@ -74,14 +74,14 @@ class SimulatorTransport(
         resetAdapterState()
         commandCount = 0
         pending = null
-        busy = false
+        isBusy = false
         connected = true
     }
 
     override suspend fun write(data: String) {
         if (!connected) throw TransportException("Simulator: not connected")
         // The real adapter would abort the running command ("STOPPED"); flag it loudly in tests instead.
-        check(!reading) { "Simulator: command written while another is still in flight" }
+        check(!isReading) { "Simulator: command written while another is still in flight" }
         commandCount++
         val dropAfter = config.dropConnectionAfterCommands
         if (dropAfter != null && commandCount > dropAfter) {
@@ -97,18 +97,18 @@ class SimulatorTransport(
         if (!connected) throw TransportException("Simulator: not connected")
         val reply = pending
         pending = null
-        reading = true
+        isReading = true
         try {
             if (reply == null || reply.latencyMs > timeoutMs) {
                 delay(timeoutMs)
                 // A hung adapter (NEVER) does not react to anything; a slow one is merely busy.
-                busy = reply != null && reply.latencyMs != NEVER
+                isBusy = reply != null && reply.latencyMs != NEVER
                 throw TransportTimeoutException(reply?.partial ?: "", timeoutMs)
             }
             delay(reply.latencyMs)
             return viaWire(reply.text)
         } finally {
-            reading = false
+            isReading = false
         }
     }
 
@@ -119,7 +119,7 @@ class SimulatorTransport(
     override suspend fun close() {
         connected = false
         pending = null
-        busy = false
+        isBusy = false
     }
 
     // ---------------------------------------------------------------- reply construction
@@ -135,12 +135,12 @@ class SimulatorTransport(
         linefeeds = true
         protocol = "0"
         detectedProtocol = null
-        busReady = false
+        isBusReady = false
     }
 
     private fun buildReply(received: String): Reply {
-        if (busy) {
-            busy = false
+        if (isBusy) {
+            isBusy = false
             return textReply("", listOf("STOPPED"), config.atLatencyMs)
         }
         val echoText = if (echo) received + eol else ""
@@ -218,7 +218,7 @@ class SimulatorTransport(
             cmd.length == 5 && cmd.startsWith("ATSP") && cmd[4] in "0123456789ABC" -> {
                 protocol = cmd.substring(4)
                 detectedProtocol = null
-                busReady = false
+                isBusReady = false
                 say("OK")
             }
             cmd.startsWith("ATST") && isHex(cmd.substring(4)) -> say("OK")
@@ -263,7 +263,7 @@ class SimulatorTransport(
         }
         var status: String? = null
 
-        if (!busReady) {
+        if (!isBusReady) {
             val auto = protocol == "0"
             val reachable = !config.initFails &&
                 (if (auto) !config.autoDetectFails else protocol == config.carProtocol)
@@ -274,7 +274,7 @@ class SimulatorTransport(
                 if (auto || protocol !in K_LINE_PROTOCOLS) lines.add("UNABLE TO CONNECT")
                 return textReply(echoText, lines, config.busInitMs, partial = echoText + lines.first() + eol)
             }
-            busReady = true
+            isBusReady = true
             if (auto) detectedProtocol = config.carProtocol
             status = if (auto) "SEARCHING..." else "BUS INIT: ...OK"
             latency += if (config.isCanCar) config.canBusInitMs else config.busInitMs
@@ -325,14 +325,15 @@ class SimulatorTransport(
     private fun formatFrame(frame: List<Int>): String {
         val bytes = ArrayList<Int>(frame.size + 4)
         if (headers) {
-            if (config.carProtocol == "3") {
-                bytes.add(0x48); bytes.add(0x6B); bytes.add(0x10)
+            if (config.carProtocol == ISO_9141_PROTOCOL) {
+                bytes.addAll(ISO_9141_HEADER)
             } else {
-                bytes.add(0x80 or frame.size); bytes.add(0xF1); bytes.add(0x11)
+                bytes.add(KWP_FORMAT_BYTE or frame.size)
+                bytes.addAll(KWP_ADDRESSES)
             }
         }
         bytes.addAll(frame)
-        if (headers) bytes.add(bytes.sum() and 0xFF)
+        if (headers) bytes.add(bytes.sum() and BYTE_MASK)
         return hexText(bytes)
     }
 
@@ -366,6 +367,15 @@ class SimulatorTransport(
         private const val HEX = "0123456789ABCDEF"
         private const val STRAY_CHARS = "#@%*"
         private val K_LINE_PROTOCOLS = setOf("3", "4", "5")
+        private const val ISO_9141_PROTOCOL = "3"
+        private const val BYTE_MASK = 0xFF
+
+        /** ISO 9141-2 response header: priority 0x48, target 0x6B, ECU address 0x10. */
+        private val ISO_9141_HEADER = listOf(0x48, 0x6B, 0x10)
+
+        /** KWP2000 response header: format byte (0x80 plus the data length), then tester 0xF1 and ECU 0x11. */
+        private const val KWP_FORMAT_BYTE = 0x80
+        private val KWP_ADDRESSES = listOf(0xF1, 0x11)
 
         /** A request of service plus one PID; anything longer is a multi-PID request. */
         private const val SINGLE_PID_REQUEST_SIZE = 2

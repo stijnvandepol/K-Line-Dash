@@ -18,6 +18,7 @@ enum class AlertKind {
     CONNECTION_LOST,
 }
 
+/** How urgent an [Alert] is; DANGER outranks CAUTION, so a rise from one to the other is raised anew. */
 enum class AlertSeverity { CAUTION, DANGER }
 
 /** One active warning. [value] is the reading that triggered it (null for MIL/DTC/connection). */

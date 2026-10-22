@@ -2,6 +2,27 @@ package nl.stijnvdpol.klinedash.core.obd
 
 import nl.stijnvdpol.klinedash.core.elm.ElmParser
 
+/** Ids of the catalog signals that rules elsewhere refer to by name (poller, warnings, trip statistics). */
+object SignalIds {
+    const val RPM = "rpm"
+    const val SPEED = "speed"
+    const val THROTTLE = "throttle"
+    const val COOLANT = "coolant"
+    const val MAF = "maf"
+    const val MIL_ON = "mil_on"
+    const val DTC_COUNT = "dtc_count"
+    const val BATTERY = "battery"
+}
+
+/** PID 01 byte A (SAE J1979): bit 7 is the malfunction indicator lamp. */
+internal fun isMilOn(statusByteA: Int): Boolean = statusByteA and MIL_BIT != 0
+
+/** PID 01 byte A (SAE J1979): bits 0-6 count the stored trouble codes. */
+internal fun storedCodeCount(statusByteA: Int): Int = statusByteA and DTC_COUNT_MASK
+
+private const val MIL_BIT = 0x80
+private const val DTC_COUNT_MASK = 0x7F
+
 /**
  * Catalog of everything the dashboard can show: Mode 01 PIDs per SAE J1979 (formulas as in the
  * J1979 "data parameter" tables) plus the adapter's own battery voltage reading.
@@ -24,8 +45,6 @@ object Signals {
     private const val FUEL_PRESSURE_KPA_PER_STEP = 3.0
     private const val MILLIVOLTS_PER_VOLT = 1000.0
     private const val FUEL_RATE_STEPS_PER_LITER_HOUR = 20.0
-    private const val MIL_BIT = 0x80
-    private const val DTC_COUNT_MASK = 0x7F
 
     private const val PID_MONITOR_STATUS = 0x01
     private const val PID_FIRST_O2_SENSOR = 0x14
@@ -67,19 +86,19 @@ object Signals {
 
     private fun engineSignals(): List<Signal> = listOf(
         pidSignal(
-            "rpm", 0x0C, PollTier.FAST, 2,
+            SignalIds.RPM, 0x0C, PollTier.FAST, 2,
             Display("Engine speed", "RPM", "rpm", 0.0, 9000.0, 0),
         ) { word(it[0], it[1]) / RPM_STEPS_PER_RPM },
         pidSignal(
-            "speed", 0x0D, PollTier.FAST, 1,
+            SignalIds.SPEED, 0x0D, PollTier.FAST, 1,
             Display("Vehicle speed", "Speed", "km/h", 0.0, 240.0, 0),
         ) { it[0].toDouble() },
         pidSignal(
-            "throttle", 0x11, PollTier.FAST, 1,
+            SignalIds.THROTTLE, 0x11, PollTier.FAST, 1,
             Display("Throttle position", "Throttle", "%", 0.0, 100.0, 0),
         ) { percentOfByte(it[0]) },
         pidSignal(
-            "coolant", 0x05, PollTier.MEDIUM, 1,
+            SignalIds.COOLANT, 0x05, PollTier.MEDIUM, 1,
             Display("Coolant temperature", "Coolant", "°C", 40.0, 130.0, 0),
         ) { celsius(it[0]) },
         pidSignal(
@@ -95,7 +114,7 @@ object Signals {
             Display("Timing advance", "Timing", "°", -20.0, 60.0, 1),
         ) { it[0] / 2.0 - 64.0 },
         pidSignal(
-            "maf", 0x10, PollTier.MEDIUM, 2,
+            SignalIds.MAF, 0x10, PollTier.MEDIUM, 2,
             Display("Mass air flow", "MAF", "g/s", 0.0, 200.0, 1),
         ) { word(it[0], it[1]) / MAF_STEPS_PER_GRAM_SECOND },
         pidSignal(
@@ -144,13 +163,13 @@ object Signals {
 
     private fun statusAndEnvironmentSignals(): List<Signal> = listOf(
         pidSignal(
-            "mil_on", PID_MONITOR_STATUS, PollTier.SLOW, 1,
+            SignalIds.MIL_ON, PID_MONITOR_STATUS, PollTier.SLOW, 1,
             Display("Malfunction indicator lamp", "MIL", "", 0.0, 1.0, 0),
-        ) { if (it[0] and MIL_BIT != 0) 1.0 else 0.0 },
+        ) { if (isMilOn(it[0])) 1.0 else 0.0 },
         pidSignal(
-            "dtc_count", PID_MONITOR_STATUS, PollTier.SLOW, 1,
+            SignalIds.DTC_COUNT, PID_MONITOR_STATUS, PollTier.SLOW, 1,
             Display("Stored fault code count", "Fault codes", "", 0.0, 127.0, 0),
-        ) { (it[0] and DTC_COUNT_MASK).toDouble() },
+        ) { storedCodeCount(it[0]).toDouble() },
         pidSignal(
             "run_time", 0x1F, PollTier.SLOW, 2,
             Display("Engine run time", "Run time", "s", 0.0, 3600.0, 0),
@@ -187,7 +206,7 @@ object Signals {
 
     /** Adapter-side battery voltage (ATRV): always available, not an ECU PID. */
     private fun batterySignal(): Signal = Signal(
-        id = "battery",
+        id = SignalIds.BATTERY,
         command = BATTERY_COMMAND,
         pid = null,
         name = "Battery voltage",
@@ -215,7 +234,7 @@ object Signals {
         val decodePayload: (IntArray) -> Double? = { bytes -> bytes.takeIf { it.size >= minBytes }?.let(formula) }
         return Signal(
             id = id,
-            command = "%02X%02X".format(MODE_CURRENT_DATA, pid),
+            command = ObdHex.request(MODE_CURRENT_DATA, pid),
             pid = pid,
             name = display.name,
             shortName = display.shortName,

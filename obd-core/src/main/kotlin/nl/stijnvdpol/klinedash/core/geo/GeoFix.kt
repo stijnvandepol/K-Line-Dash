@@ -1,5 +1,8 @@
 package nl.stijnvdpol.klinedash.core.geo
 
+/** Kilometres per hour in one metre per second. */
+internal const val KMH_PER_MPS = 3.6
+
 private const val MAX_LATITUDE = 90.0
 private const val MAX_LONGITUDE = 180.0
 

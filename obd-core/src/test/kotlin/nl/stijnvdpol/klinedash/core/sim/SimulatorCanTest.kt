@@ -12,7 +12,6 @@ import nl.stijnvdpol.klinedash.core.elm.ElmParser
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
 import nl.stijnvdpol.klinedash.core.obd.MultiPidResponse
 import nl.stijnvdpol.klinedash.core.obd.Signals
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -229,6 +228,7 @@ class SimulatorCanTest {
     fun `default simulator is still the k-line car`() = runTest {
         assertFalse(SimulatorConfig().isCanCar)
         assertTrue(canConfig().isCanCar)
-        assertArrayEquals(arrayOf("6", "7", "8", "9"), SimulatorConfig.CAN_PROTOCOLS.sorted().toTypedArray())
+        for (protocol in listOf("6", "7", "8", "9")) assertTrue(SimulatorConfig().apply { carProtocol = protocol }.isCanCar)
+        for (protocol in listOf("1", "3", "4", "5", "A")) assertFalse(SimulatorConfig().apply { carProtocol = protocol }.isCanCar)
     }
 }

@@ -77,59 +77,75 @@ class EngineModel(
 
     @Synchronized
     fun snapshot(nowMs: Long): Snapshot {
-        val dt = if (lastMs < 0) 0.0 else (nowMs - lastMs).coerceAtLeast(0L) / 1000.0
-        val first = lastMs < 0
+        val isFirst = lastMs < 0
+        val dt = if (isFirst) 0.0 else (nowMs - lastMs).coerceAtLeast(0L) / MS_PER_SECOND
         lastMs = nowMs
-        val t = nowMs / 1000.0
+        val t = nowMs / MS_PER_SECOND
         if (scriptStartMs == UNSET) scriptStartMs = nowMs
+        updateCoolant(dt)
+        val input = driverInput(nowMs)
+        val rpm = updateRpm(input, t, dt, isFirst)
+        return derivedReadings(input, rpm, t)
+    }
 
-        val ambient = config.ambientC
+    /** What the scripted driver does at one moment. */
+    private class DriverInput(val speedKmh: Double, val gear: Int, val throttlePct: Double)
+
+    /** Warms up towards the thermostat temperature while running, cools towards ambient (slower) when not. */
+    private fun updateCoolant(dt: Double) {
         val tau = config.warmupTimeConstantS.coerceAtLeast(1.0)
         if (running) {
             coolant += (COOLANT_TARGET_C - coolant) * (1.0 - exp(-dt / tau))
         } else {
-            coolant += (ambient - coolant) * (1.0 - exp(-dt / (tau * COOL_DOWN_FACTOR)))
+            coolant += (config.ambientC - coolant) * (1.0 - exp(-dt / (tau * COOL_DOWN_FACTOR)))
         }
+    }
 
-        // --- Driver inputs from the script ---
-        var speed = 0.0
-        var gear = 0
-        var throttle = IDLE_THROTTLE
-        if (running && config.scenario == Scenario.DRIVE_CYCLE) {
-            val scriptT = (((nowMs - scriptStartMs) / 1000.0) % TOTAL_S).coerceAtLeast(0.0)
-            var start = 0.0
-            for (seg in SCRIPT) {
-                if (scriptT < start + seg.durationS) {
-                    val f = (scriptT - start) / seg.durationS
-                    speed = seg.speedStart + (seg.speedEnd - seg.speedStart) * f
-                    gear = seg.gear
-                    throttle = seg.throttleStart + (seg.throttleEnd - seg.throttleStart) * f
-                    break
-                }
-                start += seg.durationS
+    /** Speed, gear and throttle from the drive script; standing at idle outside [Scenario.DRIVE_CYCLE]. */
+    private fun driverInput(nowMs: Long): DriverInput {
+        val idle = DriverInput(0.0, 0, IDLE_THROTTLE)
+        if (!running || config.scenario != Scenario.DRIVE_CYCLE) return idle
+        val scriptT = (((nowMs - scriptStartMs) / MS_PER_SECOND) % TOTAL_S).coerceAtLeast(0.0)
+        var start = 0.0
+        for (seg in SCRIPT) {
+            if (scriptT < start + seg.durationS) {
+                val f = (scriptT - start) / seg.durationS
+                return DriverInput(
+                    speedKmh = seg.speedStart + (seg.speedEnd - seg.speedStart) * f,
+                    gear = seg.gear,
+                    throttlePct = seg.throttleStart + (seg.throttleEnd - seg.throttleStart) * f,
+                )
             }
+            start += seg.durationS
         }
+        return idle
+    }
 
-        // --- rpm ---
+    /** Engine speed from gear and road speed (idle when declutched), smoothed so it does not jump. */
+    private fun updateRpm(input: DriverInput, t: Double, dt: Double, isFirst: Boolean): Double {
+        val ambient = config.ambientC
         val idleRpm = IDLE_RPM_WARM + ((COOLANT_TARGET_C - coolant) / (COOLANT_TARGET_C - ambient).coerceAtLeast(10.0))
             .coerceIn(0.0, 1.0) * IDLE_RPM_COLD_EXTRA
+        val gear = input.gear
         val targetRpm = when {
             !running -> 0.0
             gear == 0 -> idleRpm + noise(t, 0) * 12.0
             else -> {
-                var r = max(idleRpm, speed * GEAR_RPM_PER_KMH[gear - 1])
-                if (gear == 1 && throttle > 15.0) r = max(r, LAUNCH_RPM) // clutch slip
+                var r = max(idleRpm, input.speedKmh * GEAR_RPM_PER_KMH[gear - 1])
+                if (gear == 1 && input.throttlePct > 15.0) r = max(r, LAUNCH_RPM) // clutch slip
                 min(r, REV_LIMIT_RPM)
             }
         }
-        if (first) rpmSmoothed = targetRpm
+        if (isFirst) rpmSmoothed = targetRpm
         rpmSmoothed += (targetRpm - rpmSmoothed) * (1.0 - exp(-dt / RPM_TAU_S))
         if (!running && rpmSmoothed < 5.0) rpmSmoothed = 0.0
-        val rpm = rpmSmoothed.coerceAtLeast(0.0)
+        return rpmSmoothed.coerceAtLeast(0.0)
+    }
 
-        // --- Derived readings ---
-        val overrun = running && gear > 0 && throttle <= IDLE_THROTTLE + 1.0 && speed > 15.0
-        val thr = if (running) (throttle + noise(t, 2) * 0.6).coerceIn(0.0, 100.0) else IDLE_THROTTLE
+    private fun derivedReadings(input: DriverInput, rpm: Double, t: Double): Snapshot {
+        val speed = input.speedKmh
+        val overrun = running && input.gear > 0 && input.throttlePct <= IDLE_THROTTLE + 1.0 && speed > 15.0
+        val thr = if (running) (input.throttlePct + noise(t, 2) * 0.6).coerceIn(0.0, 100.0) else IDLE_THROTTLE
         val rel = ((thr - IDLE_THROTTLE) / (100.0 - IDLE_THROTTLE)).coerceIn(0.0, 1.0)
         val load = when {
             !running -> 0.0
@@ -150,44 +166,39 @@ class EngineModel(
             else -> 2
         }
         val closedLoop = fuelStatus == 2
-
-        val timing = if (running) {
-            10.0 + 0.002 * rpm + 0.06 * (100.0 - load) + noise(t, 4) * 0.5
-        } else 0.0
-
-        val stft = if (closedLoop) 3.0 * sin(2.0 * PI * t / 1.3 + phases[5]) + noise(t, 6) * 0.5 else 0.0
-        val o2Up = when {
-            !running -> 0.0
-            closedLoop -> 0.45 + 0.42 * tanh(4.0 * sin(2.0 * PI * t / 1.1 + phases[7]))
-            overrun -> 0.05
-            else -> 0.88
-        }
-        val o2Down = when {
-            !running -> 0.0
-            overrun -> 0.2
-            else -> 0.65 + 0.04 * noise(t, 1)
-        }
-
-        val intake = ambient + (coolant - ambient) * 0.25 - speed * 0.03
+        val timing = if (running) 10.0 + 0.002 * rpm + 0.06 * (100.0 - load) + noise(t, 4) * 0.5 else 0.0
+        val ambient = config.ambientC
 
         return Snapshot(
             running = running,
             rpm = rpm.toInt(),
             speedKmh = if (running) (speed + noise(t, 1) * 0.3).coerceAtLeast(0.0).toInt() else 0,
-            gear = gear,
+            gear = input.gear,
             coolantC = coolant + if (running) noise(t, 0) * 0.3 else 0.0,
-            intakeC = intake,
+            intakeC = ambient + (coolant - ambient) * 0.25 - speed * 0.03,
             loadPct = load,
             throttlePct = thr,
             mafGs = maf,
             timingDeg = timing,
-            shortTrimPct = stft,
+            shortTrimPct = if (closedLoop) 3.0 * sin(2.0 * PI * t / 1.3 + phases[5]) + noise(t, 6) * 0.5 else 0.0,
             longTrimPct = LONG_TERM_TRIM_PCT,
-            o2UpstreamV = o2Up,
-            o2DownstreamV = o2Down,
+            o2UpstreamV = upstreamO2Volts(closedLoop, overrun, t),
+            o2DownstreamV = when {
+                !running -> 0.0
+                overrun -> 0.2
+                else -> 0.65 + 0.04 * noise(t, 1)
+            },
             fuelSystemStatus = fuelStatus,
             vvtlActive = vvtl,
         )
+    }
+
+    /** The upstream sensor switches rich/lean in closed loop, reads lean on overrun and rich at full load. */
+    private fun upstreamO2Volts(closedLoop: Boolean, overrun: Boolean, t: Double): Double = when {
+        !running -> 0.0
+        closedLoop -> 0.45 + 0.42 * tanh(4.0 * sin(2.0 * PI * t / 1.1 + phases[7]))
+        overrun -> 0.05
+        else -> 0.88
     }
 
     /** Smooth pseudo-noise in [-1, 1], deterministic in time per channel. */
@@ -199,6 +210,7 @@ class EngineModel(
 
     private companion object {
         const val UNSET = Long.MIN_VALUE
+        const val MS_PER_SECOND = 1000.0
         const val PHASE_COUNT = 10
         const val COOLANT_TARGET_C = 90.0
         const val COOL_DOWN_FACTOR = 20.0

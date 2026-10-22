@@ -38,8 +38,10 @@ interface Transport {
     suspend fun close()
 }
 
+/** The link to the adapter failed or dropped; [message] is fit for the user and the log. */
 open class TransportException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+/** No '>' prompt arrived in time; [partial] is what did arrive before it. */
 class TransportTimeoutException(val partial: String, timeoutMs: Long) :
     TransportException("No prompt within ${timeoutMs}ms (partial: \"${partial.take(80)}\")")
 

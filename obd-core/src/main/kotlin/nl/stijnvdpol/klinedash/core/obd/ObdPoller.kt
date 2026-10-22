@@ -5,8 +5,8 @@ import nl.stijnvdpol.klinedash.core.elm.ElmLink
 
 /**
  * Polls live data over an [ElmLink] for whatever is currently demanded, with priority tiers.
- * Implemented by [ObdPollScheduler]. The Android service owns one per link; screens and
- * (later) warnings register what they need via [demand].
+ * Implemented by [ObdPollScheduler]. The Android service owns one per link; screens, warnings and
+ * the trip recorder register what they need via [demand].
  *
  * Only signals that are demanded AND supported by the ECU are polled. Nothing demanded means
  * nothing is sent (apart from engine-off detection, see [PollStats.mode]).
@@ -39,6 +39,7 @@ interface ObdPoller {
     suspend fun <T> withPollingPaused(block: suspend (ElmLink) -> T): T
 }
 
+/** What the poller is doing, shown with [PollStats]. */
 enum class PollMode {
     /** Link not connected / supported PIDs not yet known. */
     WAITING,
@@ -50,6 +51,7 @@ enum class PollMode {
     ENGINE_OFF,
 }
 
+/** Throughput of the poller and what it could not poll; reset to the defaults while [PollMode.WAITING]. */
 data class PollStats(
     val mode: PollMode = PollMode.WAITING,
     /** OBD requests completed per second over the last few seconds (all signals together). */

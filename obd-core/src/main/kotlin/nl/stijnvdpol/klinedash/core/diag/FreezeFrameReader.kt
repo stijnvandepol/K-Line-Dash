@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.core.diag
 
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
+import nl.stijnvdpol.klinedash.core.obd.ObdHex
 import nl.stijnvdpol.klinedash.core.obd.ObdReply
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
@@ -62,7 +63,7 @@ class FreezeFrameReader(
     private fun frameData(payloads: List<IntArray>): IntArray? =
         payloads.firstOrNull { it.isNotEmpty() && it[0] == FRAME_NUMBER }?.let { it.copyOfRange(1, it.size) }
 
-    private fun request(pid: Int): String = "%02X%02X%02X".format(MODE_FREEZE_FRAME, pid, FRAME_NUMBER)
+    private fun request(pid: Int): String = ObdHex.request(MODE_FREEZE_FRAME, pid, FRAME_NUMBER)
 
     private companion object {
         const val MODE_FREEZE_FRAME = 2

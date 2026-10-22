@@ -1,6 +1,5 @@
 package nl.stijnvdpol.klinedash.core.geo
 
-private const val KMH_PER_MPS = 3.6
 private const val MS_PER_SECOND = 1_000.0
 
 /**

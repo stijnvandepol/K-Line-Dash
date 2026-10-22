@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.core.sim
 
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CopyOnWriteArraySet
+import nl.stijnvdpol.klinedash.core.elm.isCanProtocol
 
 /** What the simulated engine does while running. */
 enum class Scenario {
@@ -48,7 +49,7 @@ class SimulatorConfig {
     @Volatile var carProtocol: String = "3"
 
     /** True when [carProtocol] is one of the ISO 15765-4 CAN variants (6-9). */
-    val isCanCar: Boolean get() = carProtocol in CAN_PROTOCOLS
+    val isCanCar: Boolean get() = isCanProtocol(carProtocol)
 
     /** What ATI answers. Real clones claim "ELM327 v1.5" or "v2.1" regardless of hardware. */
     @Volatile var elmVersion: String = "ELM327 v1.5"
@@ -203,9 +204,6 @@ class SimulatorConfig {
         /** A CAN car answers a request in tens of milliseconds. */
         const val CAN_LATENCY_MIN_MS = 40L
         const val CAN_LATENCY_MAX_MS = 60L
-
-        /** ELM protocol numbers of ISO 15765-4 CAN. */
-        val CAN_PROTOCOLS = setOf("6", "7", "8", "9")
 
         /** SAE J1979: at most six PIDs in one Mode 01 request. */
         const val MAX_CAN_PIDS_PER_REQUEST = 6

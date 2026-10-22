@@ -3,6 +3,8 @@ package nl.stijnvdpol.klinedash.core.trip
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.core.geo.GpsSegment
+import nl.stijnvdpol.klinedash.core.geo.KMH_PER_MPS
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 
 /**
  * What one sample says about the car, with GPS speed preferred over vehicle speed. Only a fix that
@@ -10,13 +12,13 @@ import nl.stijnvdpol.klinedash.core.geo.GpsSegment
  */
 private class SampleMetrics(sample: TripSample) {
     val timeMs = sample.timeMs
-    val obdSpeedKmh: Double? = sample.values[TripSignalIds.SPEED]
+    val obdSpeedKmh: Double? = sample.values[SignalIds.SPEED]
     val usableFix: GeoFix? = sample.gps?.takeIf { sample.timeMs - it.timeMs <= FRESH_FIX_AGE_MS && GpsSegment.isAccurate(it) }
     val hasFreshFix: Boolean = usableFix != null
     val speedKmh: Double? = usableFix?.speedMps?.times(KMH_PER_MPS) ?: obdSpeedKmh
-    val rpm: Double? = sample.values[TripSignalIds.RPM]
-    val throttlePercent: Double? = sample.values[TripSignalIds.THROTTLE]
-    val airFlowGramsPerSecond: Double? = sample.values[TripSignalIds.MAF]
+    val rpm: Double? = sample.values[SignalIds.RPM]
+    val throttlePercent: Double? = sample.values[SignalIds.THROTTLE]
+    val airFlowGramsPerSecond: Double? = sample.values[SignalIds.MAF]
 }
 
 /** A GPS fix pair further apart in time than this is a dropout, not driving (research: 3 s). */
@@ -24,7 +26,6 @@ private const val MAX_FIX_GAP_MS = 3_000L
 
 /** A fix older than this at sample time no longer stands for the car's position or speed. */
 private const val FRESH_FIX_AGE_MS = 2_000L
-private const val KMH_PER_MPS = 3.6
 private const val MS_PER_HOUR = 3_600_000.0
 private const val MOVING_SPEED_KMH = 2.0
 private const val STANDSTILL_SPEED_MPS = 0.5
@@ -81,7 +82,7 @@ class TripStatsAccumulator(private val maxGapMs: Long = DEFAULT_MAX_GAP_MS) {
         maxSpeedKmh = maxOfNullable(maxSpeedKmh, metrics.speedKmh)
         minSpeedKmh = minOfNullable(minSpeedKmh, metrics.speedKmh)
         maxRpm = maxOfNullable(maxRpm, metrics.rpm)
-        maxCoolantC = maxOfNullable(maxCoolantC, sample.values[TripSignalIds.COOLANT])
+        maxCoolantC = maxOfNullable(maxCoolantC, sample.values[SignalIds.COOLANT])
     }
 
     /** The next fix starts a new GPS segment: nothing is added between the last fix and it. */

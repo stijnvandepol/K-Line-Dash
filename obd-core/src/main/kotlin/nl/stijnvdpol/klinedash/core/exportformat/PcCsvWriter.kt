@@ -40,7 +40,7 @@ object PcCsvWriter {
             }
             val leading = listOf(
                 TripCsvFormat.formatTime(sample.timeMs),
-                TripCsvFormat.formatFixed((sample.timeMs - origin) / MS_PER_SECOND, 1),
+                TripCsvFormat.formatElapsedSeconds(sample.timeMs - origin),
                 lapIndex.numberAt(sample.timeMs)?.toString().orEmpty(),
             )
             out.row(leading + signalCells + GpsColumns.cells(sample.gps, sample.timeMs))

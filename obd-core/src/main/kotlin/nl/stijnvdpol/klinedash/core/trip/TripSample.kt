@@ -3,15 +3,6 @@ package nl.stijnvdpol.klinedash.core.trip
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.obd.Reading
 
-/** Signal ids the statistics rely on; they are the ids of the OBD signal catalog. */
-internal object TripSignalIds {
-    const val SPEED = "speed"
-    const val RPM = "rpm"
-    const val THROTTLE = "throttle"
-    const val COOLANT = "coolant"
-    const val MAF = "maf"
-}
-
 /**
  * One row of a trip: what was known at [timeMs], whether it comes live from the poller or from a
  * parsed CSV. [values] holds the fresh OBD values by signal id (missing = unknown), [gps] the latest

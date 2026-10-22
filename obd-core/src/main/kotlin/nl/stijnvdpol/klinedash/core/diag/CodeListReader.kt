@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.core.diag
 
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
+import nl.stijnvdpol.klinedash.core.obd.ObdHex
 
 /**
  * Reads the code lists of services 03, 07 and 0A over [link]; the caller must hold the bus.
@@ -25,7 +26,7 @@ internal class CodeListReader(
 ) {
 
     suspend fun read(kind: DtcKind): DtcList {
-        val result = link.executeRead("%02X".format(DtcParser.serviceFor(kind)))
+        val result = link.executeRead(ObdHex.request(DtcParser.serviceFor(kind)))
         return when (result) {
             is ElmResult.Data -> DtcParser.parse(result, kind, format)
                 ?.let { DtcList(kind, isSupported = true, codes = it) }

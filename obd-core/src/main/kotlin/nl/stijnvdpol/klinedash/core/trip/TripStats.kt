@@ -1,5 +1,11 @@
 package nl.stijnvdpol.klinedash.core.trip
 
+private const val MS_PER_HOUR = 3_600_000.0
+
+/** [distanceKm] covered in [durationMs], in km/h; null for a duration of zero (or less). */
+internal fun averageKmh(distanceKm: Double, durationMs: Long): Double? =
+    durationMs.takeIf { it > 0 }?.let { distanceKm / (it / MS_PER_HOUR) }
+
 /**
  * Statistics of a trip (or of one lap), from [TripStatsAccumulator].
  *
@@ -32,17 +38,16 @@ data class TripStats(
     val durationMs: Long get() = endMs - startMs
 
     /** Distance over total duration; null for a zero-length trip. */
-    val averageSpeedKmh: Double? get() = durationMs.takeIf { it > 0 }?.let { distanceKm / (it / MS_PER_HOUR) }
+    val averageSpeedKmh: Double? get() = averageKmh(distanceKm, durationMs)
 
     /** Distance over moving time; null when the car never moved. */
-    val averageMovingSpeedKmh: Double? get() = movingTimeMs.takeIf { it > 0 }?.let { distanceKm / (it / MS_PER_HOUR) }
+    val averageMovingSpeedKmh: Double? get() = averageKmh(distanceKm, movingTimeMs)
 
     /** Estimated litres per 100 km; null without a fuel estimate or below [MIN_KM_FOR_CONSUMPTION]. */
     val estimatedFuelLitersPer100Km: Double?
         get() = estimatedFuelLiters?.takeIf { distanceKm >= MIN_KM_FOR_CONSUMPTION }?.let { it * KM_PER_100 / distanceKm }
 
     private companion object {
-        const val MS_PER_HOUR = 3_600_000.0
         const val MIN_KM_FOR_CONSUMPTION = 0.5
         const val KM_PER_100 = 100.0
     }

@@ -8,7 +8,7 @@ import nl.stijnvdpol.klinedash.core.log.CommLog
  * keeps the link alive with automatic reconnect + backoff, and serialises commands.
  *
  * Implemented by [ElmConnectionManager] in obd-core. The Android foreground service holds one
- * instance; UI and (later) the OBD poller only use this interface.
+ * instance; the UI, the OBD poller and the diagnostics only use this interface.
  */
 interface ElmLink {
     val state: StateFlow<ConnectionState>

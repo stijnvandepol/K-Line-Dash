@@ -24,6 +24,9 @@ private const val DRAIN_CHUNK_BYTES = 4096
 private const val MAX_DRAIN_BYTES = 64 * 1024
 private const val IDLE_CHECK_INTERVAL_MS = 5_000L
 
+/** A response that sends nothing for this long is given up: the client stopped reading. */
+internal const val WRITE_STALL_TIMEOUT_MS = 30_000L
+
 /**
  * Plain-HTTP trip export server (approved exception to guidelines §6, see [TripExportServer]).
  * Short-lived `Connection: close` requests on a small fixed worker pool; nothing about the PIN or
@@ -45,6 +48,7 @@ class HttpTripExportServer(
     private val lifecycleLock = Any()
     @Volatile private var running: Running? = null
     private val openSockets = ConcurrentHashMap.newKeySet<Socket>()
+    private val responses = ConcurrentHashMap<Socket, ProgressOutputStream>()
     private val activeConnections = AtomicInteger(0)
     @Volatile private var lastRequestMs = 0L
 
@@ -63,6 +67,9 @@ class HttpTripExportServer(
         lastRequestMs = clock()
         running = Running(serverSocket, workers, scheduler, handler)
         scheduler.scheduleWithFixedDelay(::checkIdle, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS)
+        scheduler.scheduleWithFixedDelay(
+            ::closeStalledResponses, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS,
+        )
         daemonThreads("trip-export-accept").newThread { acceptLoop(serverSocket, workers, handler) }.start()
         serverSocket.localPort
     }
@@ -86,12 +93,26 @@ class HttpTripExportServer(
         if (clock() - lastRequestMs >= config.idleTimeoutMs) stop()
     }
 
+    /** Closes connections whose response has not moved for [WRITE_STALL_TIMEOUT_MS]; frees their workers. */
+    internal fun closeStalledResponses() {
+        val now = clock()
+        responses.forEach { (socket, response) ->
+            if (now - response.lastProgressMs >= WRITE_STALL_TIMEOUT_MS) closeQuietly(socket)
+        }
+    }
+
+    /** Number of requests being served; for tests that check a stalled one was let go. */
+    internal val activeConnectionCount: Int get() = activeConnections.get()
+
     private fun acceptLoop(serverSocket: ServerSocket, workers: ThreadPoolExecutor, handler: ExportRequestHandler) {
+        val backoff = AcceptBackoff()
         while (!serverSocket.isClosed) {
             val socket = try {
-                serverSocket.accept()
+                serverSocket.accept().also { backoff.reset() }
             } catch (_: IOException) {
-                // Closed by stop(), or a failed handshake; the loop condition decides which.
+                // Closed by stop() (the loop condition ends it), or a real failure: pause so the
+                // thread does not spin while the failure lasts.
+                if (!pauseAfterFailedAccept(serverSocket, backoff)) return
                 continue
             }
             try {
@@ -103,6 +124,18 @@ class HttpTripExportServer(
         }
     }
 
+    /** Returns false when the accept thread should end (server closed or thread interrupted). */
+    private fun pauseAfterFailedAccept(serverSocket: ServerSocket, backoff: AcceptBackoff): Boolean {
+        if (serverSocket.isClosed) return false
+        return try {
+            Thread.sleep(backoff.nextDelayMs())
+            true
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
     private fun serve(socket: Socket, handler: ExportRequestHandler) {
         activeConnections.incrementAndGet()
         openSockets.add(socket)
@@ -111,7 +144,9 @@ class HttpTripExportServer(
             if (running == null) return
             val request = RequestReader.read(socket.getInputStream())
             lastRequestMs = clock()
-            handler.handle(request, socket.getOutputStream())
+            val response = ProgressOutputStream(socket.getOutputStream(), clock)
+            responses[socket] = response
+            handler.handle(request, response)
         } catch (rejected: RequestRejected) {
             replyError(socket, rejected.status)
         } catch (_: IOException) {
@@ -120,6 +155,7 @@ class HttpTripExportServer(
             replyError(socket, 500)
             throw bug
         } finally {
+            responses.remove(socket)
             openSockets.remove(socket)
             closeQuietly(socket)
             lastRequestMs = clock()

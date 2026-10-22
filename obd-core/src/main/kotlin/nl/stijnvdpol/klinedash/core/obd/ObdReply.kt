@@ -13,10 +13,7 @@ import nl.stijnvdpol.klinedash.core.elm.ElmResult
  */
 object ObdReply {
 
-    private const val RESPONSE_SERVICE_OFFSET = 0x40
     private const val HEADER_BYTES = 2 // response service + PID echo
-    private const val HEX_RADIX = 16
-    private const val CHARS_PER_BYTE = 2
 
     /** Data bytes of the first line answering ([mode], [pid]); null if no line does. */
     fun payload(data: ElmResult.Data, mode: Int, pid: Int): IntArray? =
@@ -30,22 +27,9 @@ object ObdReply {
         data.lines.mapNotNull { dataBytes(it, mode, pid) }
 
     private fun dataBytes(line: String, mode: Int, pid: Int): IntArray? {
-        val bytes = toBytes(line) ?: return null
+        val bytes = ObdHex.toBytes(line) ?: return null
         if (bytes.size < HEADER_BYTES) return null
-        if (bytes[0] != mode + RESPONSE_SERVICE_OFFSET || bytes[1] != pid) return null
+        if (bytes[0] != ObdHex.responseService(mode) || bytes[1] != pid) return null
         return bytes.copyOfRange(HEADER_BYTES, bytes.size)
-    }
-
-    /** Null when [line] has an odd length or a non-hex character. */
-    private fun toBytes(line: String): IntArray? {
-        if (line.length % CHARS_PER_BYTE != 0) return null
-        val bytes = IntArray(line.length / CHARS_PER_BYTE)
-        for (i in bytes.indices) {
-            val high = Character.digit(line[i * CHARS_PER_BYTE], HEX_RADIX)
-            val low = Character.digit(line[i * CHARS_PER_BYTE + 1], HEX_RADIX)
-            if (high < 0 || low < 0) return null
-            bytes[i] = high * HEX_RADIX + low
-        }
-        return bytes
     }
 }
