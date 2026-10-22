@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.alert.AlertKind
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -67,11 +68,12 @@ fun WarningsScreen() {
     val vm = graphViewModel { WarningsViewModel(it.alertSettingsRepository) }
     val loaded by vm.settings.collectAsStateWithLifecycle()
     val settings = loaded ?: return
+    val units = LocalUnitSystem.current
     Column(Modifier.fillMaxSize()) {
         WarningsHeader()
         HorizontalRule()
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            WarningRows.forEach { row -> WarningRowView(row, settings, vm) }
+            WarningRows.forEach { row -> WarningRowView(row, settings, units, vm) }
         }
         TextActionButton(
             stringResource(R.string.warnings_reset), vm::resetToDefaults,
@@ -92,7 +94,7 @@ private fun WarningsHeader() {
 }
 
 @Composable
-private fun WarningRowView(row: WarningRow, settings: AlertSettings, vm: WarningsViewModel) {
+private fun WarningRowView(row: WarningRow, settings: AlertSettings, units: UnitSystem, vm: WarningsViewModel) {
     val isOn = row.kind in settings.enabled
     Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
         SwitchRow(stringResource(row.nameRes), isOn, { vm.setEnabled(row.kind, it) }, Modifier.weight(1f).fillMaxHeight())
@@ -106,7 +108,7 @@ private fun WarningRowView(row: WarningRow, settings: AlertSettings, vm: Warning
             VerticalRule()
             Box(Modifier.width(StepperWidth).fillMaxHeight()) {
                 row.limits.getOrNull(slot)?.let { (limit, labelRes) ->
-                    Stepper(limit, stringResource(labelRes), settings, isOn) { direction -> vm.step(limit, direction) }
+                    Stepper(limit, stringResource(labelRes), settings, units, isOn) { direction -> vm.step(limit, direction, units) }
                 }
             }
         }
@@ -116,10 +118,10 @@ private fun WarningRowView(row: WarningRow, settings: AlertSettings, vm: Warning
 
 /** [-] value [+]: the word for the limit in small capitals over the value and its unit. */
 @Composable
-private fun Stepper(limit: AlertLimit, label: String, settings: AlertSettings, isOn: Boolean, onStep: (direction: Int) -> Unit) {
+private fun Stepper(limit: AlertLimit, label: String, settings: AlertSettings, units: UnitSystem, isOn: Boolean, onStep: (direction: Int) -> Unit) {
     val colors = KLineTheme.colors
     Row(Modifier.fillMaxSize()) {
-        StepButton(MINUS, "$label, ${stringResource(R.string.step_lower)}", isOn && settings.canStep(limit, -1)) { onStep(-1) }
+        StepButton(MINUS, "$label, ${stringResource(R.string.step_lower)}", isOn && settings.canStep(limit, -1, units)) { onStep(-1) }
         VerticalRule()
         Column(
             Modifier.width(StepValueWidth).fillMaxHeight(),
@@ -129,16 +131,16 @@ private fun Stepper(limit: AlertLimit, label: String, settings: AlertSettings, i
             Text(label.uppercase(), style = KLineType.fieldLabel, color = if (isOn) colors.inkMuted else colors.inkFaint, maxLines = 1, softWrap = false)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.grid / 2), verticalAlignment = Alignment.Bottom) {
                 Text(
-                    formatNumber(settings.valueOf(limit), limit.decimals),
+                    formatNumber(settings.shownValue(limit, units), limit.decimalsIn(units)),
                     style = KLineType.rowValue,
                     color = if (isOn) colors.ink else colors.inkFaint,
                     textAlign = TextAlign.End,
                     maxLines = 1,
                 )
-                Text(limit.unit, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
+                Text(limit.unitIn(units), style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
             }
         }
         VerticalRule()
-        StepButton(PLUS, "$label, ${stringResource(R.string.step_raise)}", isOn && settings.canStep(limit, 1)) { onStep(1) }
+        StepButton(PLUS, "$label, ${stringResource(R.string.step_raise)}", isOn && settings.canStep(limit, 1, units)) { onStep(1) }
     }
 }

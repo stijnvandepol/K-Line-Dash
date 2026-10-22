@@ -23,9 +23,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
+import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.service.Quantity
+import nl.stijnvdpol.klinedash.service.fromMetric
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.fieldLabel
+import nl.stijnvdpol.klinedash.ui.unitOf
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.LocalClusterLook
@@ -50,6 +55,8 @@ private const val MAJOR_TICK_WIDTH = 3f
 private const val MINOR_TICK_WIDTH = 1.5f
 private const val TICK_STEP_C = 10
 private const val MAJOR_TICK_STEP_C = 30
+private const val TICK_STEP_F = 10
+private const val MAJOR_TICK_STEP_F = 50
 private const val END_LETTER_RADIUS = 30f
 private const val END_LETTER_SIZE = 20f
 private const val POINTER_INSET = 20f
@@ -77,20 +84,26 @@ private class CoolantStatic(
     density: Density,
     private val colors: KLineColors,
     private val limits: AlertSettings,
+    private val units: UnitSystem,
     measurer: TextMeasurer,
     caption: String,
     numerals: NumeralFace,
 ) {
+    private val scale = coolantScale(units)
     private val size = frame.size
     private val unit = frame.unit
     private val pivot = frame.pivot
     private val radius = frame.radius
-    private val ticks = dialTicks(CoolantScale, TICK_STEP_C, MAJOR_TICK_STEP_C, MAJOR_TICK_STEP_C)
+    private val ticks = if (units == UnitSystem.METRIC) {
+        dialTicks(scale, TICK_STEP_C, MAJOR_TICK_STEP_C, MAJOR_TICK_STEP_C)
+    } else {
+        dialTicks(scale, TICK_STEP_F, MAJOR_TICK_STEP_F, MAJOR_TICK_STEP_F)
+    }
     private val letterStyle = with(density) { numeralStyle(numerals, (END_LETTER_SIZE * unit).toSp()) }
     private val captionStyle = with(density) { numeralStyle(numerals, (CAPTION_SIZE * unit).toSp()) }
-    private val letters = listOf(COLD_LETTER to CoolantScale.min, HOT_LETTER to CoolantScale.max).map { (letter, value) ->
+    private val letters = listOf(COLD_LETTER to scale.min, HOT_LETTER to scale.max).map { (letter, value) ->
         val layout = measurer.measure(letter, letterStyle)
-        val middle = polar(pivot.x, pivot.y, radius + END_LETTER_RADIUS * unit, CoolantScale.angleDeg(value))
+        val middle = polar(pivot.x, pivot.y, radius + END_LETTER_RADIUS * unit, scale.angleDeg(value))
         val capHeight = END_LETTER_SIZE * unit * CAP_HEIGHT_EM
         layout to Offset(middle.x - layout.size.width / 2f, middle.y + capHeight / 2f - layout.firstBaseline)
     }
@@ -105,12 +118,14 @@ private class CoolantStatic(
         val arcSize = Size(radius * 2, radius * 2)
         val track = Stroke(TRACK_WIDTH * unit)
         fun band(from: Double, to: Double, color: Color) {
-            val start = CoolantScale.angleDeg(from)
-            drawArc(color, start, CoolantScale.angleDeg(to) - start, false, topLeft, arcSize, style = track)
+            val start = scale.angleDeg(from)
+            drawArc(color, start, scale.angleDeg(to) - start, false, topLeft, arcSize, style = track)
         }
-        band(CoolantScale.min, CoolantScale.max, colors.inkFaint)
-        band(limits.coolantCautionC, limits.coolantDangerC, colors.caution)
-        band(limits.coolantDangerC, CoolantScale.max, colors.danger)
+        val caution = units.fromMetric(Quantity.TEMPERATURE, limits.coolantCautionC)
+        val danger = units.fromMetric(Quantity.TEMPERATURE, limits.coolantDangerC)
+        band(scale.min, scale.max, colors.inkFaint)
+        band(caution, danger, colors.caution)
+        band(danger, scale.max, colors.danger)
         ticks.forEach { tick ->
             val isMajor = tick.kind == TickKind.MAJOR
             val inner = radius + (TRACK_WIDTH / 2 + TICK_GAP) * unit
@@ -127,9 +142,10 @@ private class CoolantStatic(
     }
 }
 
-private class CoolantPointer(private val frame: CoolantFrame, private val colors: KLineColors) {
-    fun draw(scope: DrawScope, celsius: Float) = with(scope) {
-        val angle = CoolantScale.angleDeg(celsius.toDouble())
+private class CoolantPointer(private val frame: CoolantFrame, private val colors: KLineColors, private val scale: ArcScale) {
+    /** [shown] is the temperature in the unit of the scale. */
+    fun draw(scope: DrawScope, shown: Float) = with(scope) {
+        val angle = scale.angleDeg(shown.toDouble())
         drawLine(
             colors.needle,
             polar(frame.pivot.x, frame.pivot.y, frame.radius - POINTER_INSET * frame.unit, angle),
@@ -148,7 +164,8 @@ internal fun CoolantDial(feed: GaugeFeed, limits: AlertSettings, modifier: Modif
     val colors = KLineTheme.colors
     val numerals = LocalClusterLook.current.numerals
     val measurer = rememberTextMeasurer()
-    val caption = "${fieldLabel(feed.signal)} ${feed.signal.unit}"
+    val units = LocalUnitSystem.current
+    val caption = "${fieldLabel(feed.signal)} ${unitOf(feed.signal, units)}"
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val dialPx = with(density) { maxHeight.toPx() }
@@ -158,7 +175,7 @@ internal fun CoolantDial(feed: GaugeFeed, limits: AlertSettings, modifier: Modif
                 .fillMaxSize()
                 .graphicsLayer()
                 .drawWithCache {
-                    val painter = CoolantStatic(CoolantFrame(size), this, colors, limits, measurer, caption, numerals)
+                    val painter = CoolantStatic(CoolantFrame(size), this, colors, limits, units, measurer, caption, numerals)
                     onDrawBehind { painter.draw(this) }
                 },
         )
@@ -166,7 +183,7 @@ internal fun CoolantDial(feed: GaugeFeed, limits: AlertSettings, modifier: Modif
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val painter = CoolantPointer(CoolantFrame(size), colors)
+                    val painter = CoolantPointer(CoolantFrame(size), colors, coolantScale(units))
                     onDrawBehind { painter.draw(this, feed.drawnValue()) }
                 },
         )

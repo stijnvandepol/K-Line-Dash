@@ -6,8 +6,13 @@ import kotlinx.coroutines.flow.Flow
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.WifiTransport
 
+/**
+ * Which adapter the app talks to. The default is Bluetooth Classic with no device chosen, the most
+ * common cheap adapter: a fresh install has no adapter yet ([hasAdapter] is false) and does not
+ * pretend to have one, the simulator is something the user picks.
+ */
 data class ConnectionSettings(
-    val kind: TransportKind = TransportKind.SIMULATOR,
+    val kind: TransportKind = TransportKind.BT_CLASSIC,
     val btAddress: String? = null,
     val btName: String? = null,
     val bleAddress: String? = null,
@@ -15,7 +20,16 @@ data class ConnectionSettings(
     val wifiHost: String = WifiTransport.DEFAULT_HOST,
     val wifiPort: Int = WifiTransport.DEFAULT_PORT,
     val autoConnect: Boolean = true,
-)
+) {
+    /** True when [kind] has what it needs to connect: the simulator always, a device or an address for the rest. */
+    val hasAdapter: Boolean
+        get() = when (kind) {
+            TransportKind.SIMULATOR -> true
+            TransportKind.BT_CLASSIC -> btAddress != null
+            TransportKind.BLE -> bleAddress != null
+            TransportKind.WIFI -> wifiHost.isNotBlank()
+        }
+}
 
 class SettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
     private val store = TypedSettings(dao, { it.toConnectionSettings() }, { it.toRows() }, decodeDispatcher)

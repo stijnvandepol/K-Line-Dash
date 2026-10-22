@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import org.junit.Assert.assertEquals
@@ -27,33 +28,33 @@ class SignalPresentationTest {
 
     @Test
     fun `slot sample has the width of the widest value`() {
-        assertEquals("8888", slotSample(signal("rpm")))
-        assertEquals("888", slotSample(signal("coolant")))
-        assertEquals("-88", slotSample(signal("intake_temp")))
-        assertEquals("88.8", slotSample(signal("battery")))
+        assertEquals("8888", slotSample(signal("rpm"), UnitSystem.METRIC))
+        assertEquals("888", slotSample(signal("coolant"), UnitSystem.METRIC))
+        assertEquals("-88", slotSample(signal("intake_temp"), UnitSystem.METRIC))
+        assertEquals("88.8", slotSample(signal("battery"), UnitSystem.METRIC))
     }
 
     @Test
     fun `readings are formatted with the decimals of the signal`() {
-        assertEquals("88", formatReading(signal("coolant"), 88.0, words))
-        assertEquals("14.5", formatReading(signal("timing"), 14.5, words))
+        assertEquals("88", formatReading(signal("coolant"), 88.0, words, UnitSystem.METRIC))
+        assertEquals("14.5", formatReading(signal("timing"), 14.5, words, UnitSystem.METRIC))
     }
 
     @Test
     fun `thousands are not grouped, so a value reads as one number`() {
-        assertEquals("8175", formatReading(signal("rpm"), 8175.0, words))
-        assertEquals("830", formatReading(signal("rpm"), 830.0, words))
+        assertEquals("8175", formatReading(signal("rpm"), 8175.0, words, UnitSystem.METRIC))
+        assertEquals("830", formatReading(signal("rpm"), 830.0, words, UnitSystem.METRIC))
     }
 
     @Test
     fun `the warning lamp reads on or off instead of a number`() {
-        assertEquals("On", formatReading(signal("mil_on"), 1.0, words))
-        assertEquals("Off", formatReading(signal("mil_on"), 0.0, words))
+        assertEquals("On", formatReading(signal("mil_on"), 1.0, words, UnitSystem.METRIC))
+        assertEquals("Off", formatReading(signal("mil_on"), 0.0, words, UnitSystem.METRIC))
     }
 
     @Test
     fun `counts stay numbers even when they are 0 or 1`() {
-        assertEquals("1", formatReading(signal("dtc_count"), 1.0, words))
+        assertEquals("1", formatReading(signal("dtc_count"), 1.0, words, UnitSystem.METRIC))
     }
 
     private val defaults = AlertSettings()
@@ -128,5 +129,34 @@ class SignalPresentationTest {
     fun `sensor list holds exactly the supported signals`() {
         val ids = supportedSignals(setOf(0x05, 0x0C)).map { it.id }.toSet()
         assertEquals(setOf("rpm", "coolant", "battery"), ids)
+    }
+
+    // --- imperial ---------------------------------------------------------------------------------
+
+    @Test
+    fun `readings are shown in the chosen units, and only those that have another unit change`() {
+        val imperial = UnitSystem.IMPERIAL
+        assertEquals("62", formatReading(signal("speed"), 100.0, words, imperial))
+        assertEquals("190", formatReading(signal("coolant"), 88.0, words, imperial))
+        assertEquals("14.6", formatReading(signal("map"), 101.0, words, imperial))
+        assertEquals("8175", formatReading(signal("rpm"), 8175.0, words, imperial))
+        assertEquals("13.9", formatReading(signal("battery"), 13.9, words, imperial))
+        assertEquals("On", formatReading(signal("mil_on"), 1.0, words, imperial))
+    }
+
+    @Test
+    fun `the unit next to a value follows the system`() {
+        assertEquals("km/h", unitOf(signal("speed"), UnitSystem.METRIC))
+        assertEquals("mph", unitOf(signal("speed"), UnitSystem.IMPERIAL))
+        assertEquals("°F", unitOf(signal("coolant"), UnitSystem.IMPERIAL))
+        assertEquals("rpm", unitOf(signal("rpm"), UnitSystem.IMPERIAL))
+    }
+
+    @Test
+    fun `an imperial slot is as wide as its widest value`() {
+        assertEquals("888", slotSample(signal("speed"), UnitSystem.IMPERIAL))
+        assertEquals("888", slotSample(signal("coolant"), UnitSystem.IMPERIAL))
+        assertEquals("888", slotSample(signal("intake_temp"), UnitSystem.IMPERIAL))
+        assertEquals("888.8", slotSample(signal("fuel_pressure"), UnitSystem.IMPERIAL))
     }
 }

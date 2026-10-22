@@ -3,7 +3,11 @@ package nl.stijnvdpol.klinedash.ui
 import nl.stijnvdpol.klinedash.core.alert.Alert
 import nl.stijnvdpol.klinedash.core.alert.AlertKind
 import nl.stijnvdpol.klinedash.core.alert.AlertSeverity
+import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.service.Quantity
+import nl.stijnvdpol.klinedash.service.format
 import nl.stijnvdpol.klinedash.service.formatNumber
+import nl.stijnvdpol.klinedash.service.label
 
 /*
  * What the warnings overlay shows, as plain functions: the colour of the frame, which alert the
@@ -12,7 +16,6 @@ import nl.stijnvdpol.klinedash.service.formatNumber
 
 private const val COOLANT_LABEL = "Water"
 private const val BATTERY_LABEL = "Battery"
-private const val COOLANT_UNIT = "°C"
 private const val VOLTAGE_UNIT = "V"
 private const val NEW_DTC_TEXT = "New fault code: check DIAG"
 private const val MIL_ON_TEXT = "Check engine light on"
@@ -54,14 +57,17 @@ internal fun alertOverlay(alerts: List<Alert>, dismissals: Dismissals): AlertOve
     return AlertOverlay(frame = alerts.maxOfOrNull { it.severity }, banner = banner)
 }
 
-/** "WATER 106 °C", "BATTERY 11.4 V", ...; a reading that is missing is left out instead of invented. */
-internal fun bannerText(alert: Alert): String = when (alert.kind) {
-    AlertKind.COOLANT_HIGH -> withValue(COOLANT_LABEL, alert.value, COOLANT_DECIMALS, COOLANT_UNIT)
-    AlertKind.VOLTAGE_LOW, AlertKind.VOLTAGE_HIGH -> withValue(BATTERY_LABEL, alert.value, VOLTAGE_DECIMALS, VOLTAGE_UNIT)
+/** "WATER 106 °C" (or "223 °F" in [units]), "BATTERY 11.4 V", ...; a reading that is missing is left out instead of invented. */
+internal fun bannerText(alert: Alert, units: UnitSystem): String = when (alert.kind) {
+    AlertKind.COOLANT_HIGH -> withValue(
+        COOLANT_LABEL, alert.value?.let { units.format(Quantity.TEMPERATURE, it, COOLANT_DECIMALS) }, units.label(Quantity.TEMPERATURE),
+    )
+    AlertKind.VOLTAGE_LOW, AlertKind.VOLTAGE_HIGH ->
+        withValue(BATTERY_LABEL, alert.value?.let { formatNumber(it, VOLTAGE_DECIMALS) }, VOLTAGE_UNIT)
     AlertKind.NEW_DTC -> NEW_DTC_TEXT
     AlertKind.MIL_ON -> MIL_ON_TEXT
     AlertKind.CONNECTION_LOST -> CONNECTION_LOST_TEXT
 }.uppercase()
 
-private fun withValue(label: String, value: Double?, decimals: Int, unit: String): String =
-    if (value == null) label else "$label ${formatNumber(value, decimals)} $unit"
+private fun withValue(label: String, value: String?, unit: String): String =
+    if (value == null) label else "$label $value $unit"

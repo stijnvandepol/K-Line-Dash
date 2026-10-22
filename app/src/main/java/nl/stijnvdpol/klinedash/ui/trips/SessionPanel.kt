@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.service.RecordingState
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.NoticeLine
 import nl.stijnvdpol.klinedash.ui.PrimaryButton
 import nl.stijnvdpol.klinedash.ui.RecordingHint
@@ -131,7 +132,7 @@ private fun RecordingHint.textRes(): Int = when (this) {
 private fun TripPanel(vm: SessionViewModel, recording: RecordingState.Recording) {
     val live by vm.live.collectAsStateWithLifecycle()
     SessionStatus(true, stringResource(R.string.trips_state_recording), recording.fileName)
-    val cells = liveStatCells(live.stats)
+    val cells = liveStatCells(live.stats, LocalUnitSystem.current)
     cells.chunked(2).forEach { pair ->
         Row(Modifier.fillMaxWidth().height(GridRowHeight)) {
             pair.forEachIndexed { index, cell ->

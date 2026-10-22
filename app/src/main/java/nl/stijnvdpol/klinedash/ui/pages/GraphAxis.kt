@@ -1,6 +1,6 @@
 package nl.stijnvdpol.klinedash.ui.pages
 
-import nl.stijnvdpol.klinedash.core.obd.Signal
+import nl.stijnvdpol.klinedash.service.SignalDisplay
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -8,8 +8,8 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 /**
- * A graph never spans less than this share of its signal's display range ([Signal.min] to
- * [Signal.max]), so coolant moving between 85 and 87 °C reads as the small change it is.
+ * A graph never spans less than this share of its signal's display range ([SignalDisplay.min] to
+ * [SignalDisplay.max]), so coolant moving between 85 and 87 °C reads as the small change it is.
  */
 internal const val MIN_AXIS_SPAN_SHARE = 0.15
 
@@ -24,6 +24,7 @@ private const val STEP_EPSILON = 1e-9
 
 /**
  * The value axis of a graph cell: the bottom and the top of the plot, which are also its two labels.
+ * [data] and the axis are in the unit the signal is shown in ([signal]).
  *
  * - At least [MIN_AXIS_SPAN_SHARE] of the signal's display range (and one display step) high,
  *   centred on [data], so noise on a steady signal does not fill the cell.
@@ -32,7 +33,7 @@ private const val STEP_EPSILON = 1e-9
  * - Widened to whole multiples of a 1-2-5 step: the labels read "78" and "94", not "79.25".
  * - Never past an end of the display range that the data stays within ("9000", not "10000").
  */
-internal fun graphAxis(data: ValueRange, signal: Signal): ValueRange {
+internal fun graphAxis(data: ValueRange, signal: SignalDisplay): ValueRange {
     val displayStep = 10.0.pow(-signal.decimals)
     val minSpan = maxOf((signal.max - signal.min) * MIN_AXIS_SPAN_SHARE, displayStep)
     val isLowInside = data.low >= signal.min

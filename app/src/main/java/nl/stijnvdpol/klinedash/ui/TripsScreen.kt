@@ -77,7 +77,8 @@ private fun TripsOverview(onOpenTrip: (Long) -> Unit) {
     var isChoosingTrack by remember { mutableStateOf(false) }
     // Only the file name decides which row is "Recording": the sample count changes every second.
     val recordingFileName by remember(recording) { derivedStateOf { (recording.value as? RecordingState.Recording)?.fileName } }
-    val rows = remember(trips, recordingFileName, trackNames) { trips?.let { tripRows(it, recordingFileName, trackNames) } }
+    val units = LocalUnitSystem.current
+    val rows = remember(trips, recordingFileName, trackNames, units) { trips?.let { tripRows(it, recordingFileName, units, trackNames) } }
 
     DisposableEffect(vm) { onDispose(vm::clearCopyResult) }
 

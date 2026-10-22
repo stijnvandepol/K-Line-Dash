@@ -72,8 +72,8 @@ internal fun placeGateAt(fix: GeoFix?, widthM: Double = Gate.DEFAULT_WIDTH_M): G
     val heading = fix.bearingDeg
     val speed = fix.speedMps
     if (heading == null || speed == null || speed < GATE_MIN_SPEED_MPS) {
-        val minimumKmh = String.format(Locale.US, "%.0f", GATE_MIN_SPEED_MPS * KMH_PER_MPS)
-        return GatePlacement.Rejected("The driving direction is not known. Set the line while driving at $minimumKmh km/h or faster.")
+        // No number here: this text is shown in km/h and mph users alike, and "faster than walking" says it.
+        return GatePlacement.Rejected("The driving direction is not known. Set the line while driving, faster than walking pace.")
     }
     return GatePlacement.Ready(GateSpec(fix.lat, fix.lon, Geodesy.normalizeDegrees(heading), widthM))
 }

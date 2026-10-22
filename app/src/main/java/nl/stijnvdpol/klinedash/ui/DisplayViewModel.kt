@@ -2,12 +2,15 @@ package nl.stijnvdpol.klinedash.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import nl.stijnvdpol.klinedash.AppGraph
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.data.ClusterStyle
 import nl.stijnvdpol.klinedash.data.DayNightMode
+import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.data.ThemeSettings
 import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
 import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalog
@@ -29,6 +32,7 @@ internal enum class ScheduleTime { DAY_START, NIGHT_START }
 internal class DisplayViewModel(
     private val repository: ThemeSettingsRepository,
     private val catalogSource: ThemeCatalogSource,
+    private val generalSettings: GeneralSettingsRepository,
 ) : ViewModel() {
     /** Null until the first read from the database. */
     val settings: StateFlow<ThemeSettings?> = repository.settings
@@ -59,6 +63,13 @@ internal class DisplayViewModel(
         }
     }
 
+    /** One theme, always: leaves the day and night modes. The setup wizard offers exactly this. */
+    fun chooseOnlyTheme(themeId: String) = update { it.copy(mode = DayNightMode.MANUAL, manualThemeId = themeId) }
+
+    fun setUnits(units: UnitSystem) {
+        viewModelScope.launch { generalSettings.update { it.copy(unitSystem = units) } }
+    }
+
     /** [rgb] is 0xRRGGBB; null goes back to the accent of the theme itself. */
     fun setAccent(rgb: Int?) = update { it.copy(accentOverride = rgb) }
 
@@ -67,5 +78,9 @@ internal class DisplayViewModel(
 
     private fun update(transform: (ThemeSettings) -> ThemeSettings) {
         viewModelScope.launch { repository.update(transform) }
+    }
+
+    companion object {
+        fun forGraph(graph: AppGraph) = DisplayViewModel(graph.themeSettingsRepository, graph.themeCatalog, graph.generalSettingsRepository)
     }
 }

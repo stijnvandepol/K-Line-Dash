@@ -45,14 +45,25 @@ private const val PAGE_NAME_MS = 1_000L
 /**
  * The dashboard: the pages of the layout side by side, swiped horizontally. Asks the poller for
  * exactly what the current page shows, while the dashboard is visible, and names the page for a
- * second after each swipe.
+ * second after each swipe. While no adapter is chosen (and the simulator is not either) it shows
+ * [DashEmptyState] instead: a wall of "--" tells a new user nothing.
+ *
+ * @param onSetUpAdapter opens the first-run setup.
+ * @param onTrySimulator switches to the simulator and connects.
  */
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(onSetUpAdapter: () -> Unit, onTrySimulator: () -> Unit) {
     val live = graphViewModel { LiveDataViewModel.forGraph(it) }
     val dashboard = graphViewModel { DashboardViewModel.forGraph(it) }
+    val connection = graphViewModel { ConnectionViewModel(it) }
     val layout by dashboard.layout.collectAsStateWithLifecycle()
-    layout?.let { DashboardPager(it, live, dashboard) }
+    val adapter by connection.settings.collectAsStateWithLifecycle()
+    val loadedAdapter = adapter ?: return
+    if (!loadedAdapter.hasAdapter) {
+        DashEmptyState(onSetUpAdapter, onTrySimulator)
+    } else {
+        layout?.let { DashboardPager(it, live, dashboard) }
+    }
 }
 
 @Composable

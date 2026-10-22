@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +28,8 @@ internal enum class SetupSection(@StringRes val labelRes: Int) {
     Display(R.string.setup_display),
     Startup(R.string.setup_startup),
     GpsTracks(R.string.setup_gps_tracks),
+    Help(R.string.setup_help),
+    About(R.string.setup_about),
     Debug(R.string.setup_debug),
 }
 
@@ -35,6 +39,8 @@ private val MenuWidth = 240.dp
  * SETUP: a 240 dp menu on the left and the chosen section on the right. [section] is kept by the
  * caller, so the page opens on the section the user last used.
  *
+ * @param help the Help section; it needs to open other sections and to run the setup again, which the caller owns.
+ * @param about the About section.
  * @param connection the Connection section; it needs the permission handling of the activity, so the
  *   caller supplies it.
  * @param onAllowLocation asks for the location permission (GPS & Tracks); the activity owns that dialog.
@@ -44,6 +50,8 @@ internal fun SetupScreen(
     section: SetupSection,
     onSelect: (SetupSection) -> Unit,
     onAllowLocation: () -> Unit,
+    help: @Composable () -> Unit,
+    about: @Composable () -> Unit,
     connection: @Composable () -> Unit,
 ) {
     Row(Modifier.fillMaxSize()) {
@@ -58,6 +66,8 @@ internal fun SetupScreen(
                 SetupSection.Startup -> StartupSettingsScreen()
                 SetupSection.GpsTracks -> GpsTracksScreen(onAllowLocation)
                 SetupSection.Debug -> DebugScreen()
+                SetupSection.Help -> help()
+                SetupSection.About -> about()
             }
         }
     }
@@ -68,14 +78,17 @@ private fun SetupMenu(section: SetupSection, onSelect: (SetupSection) -> Unit, m
     Column(modifier) {
         SectionTitle(stringResource(R.string.nav_setup), Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
-        SetupSection.entries.forEach { entry ->
-            val isSelected = entry == section
-            SelectableRow(selected = isSelected, onClick = { onSelect(entry) }) {
-                Text(
-                    stringResource(entry.labelRes),
-                    style = KLineType.body,
-                    color = if (isSelected) KLineTheme.colors.ink else KLineTheme.colors.inkMuted,
-                )
+        // Nine rows are taller than a 720 dp screen minus the bottom bar, so the menu scrolls.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            SetupSection.entries.forEach { entry ->
+                val isSelected = entry == section
+                SelectableRow(selected = isSelected, onClick = { onSelect(entry) }) {
+                    Text(
+                        stringResource(entry.labelRes),
+                        style = KLineType.body,
+                        color = if (isSelected) KLineTheme.colors.ink else KLineTheme.colors.inkMuted,
+                    )
+                }
             }
         }
     }

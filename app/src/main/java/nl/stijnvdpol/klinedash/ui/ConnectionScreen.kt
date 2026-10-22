@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
@@ -151,7 +152,7 @@ private fun StatusBlock(state: ConnectionState, modifier: Modifier) {
 
 /** "Adapters that work" as a caps label and the README's list in two columns of `caption`. */
 @Composable
-private fun SupportedAdaptersList(modifier: Modifier) {
+internal fun SupportedAdaptersList(modifier: Modifier) {
     val colors = KLineTheme.colors
     Column(modifier) {
         Text(stringResource(R.string.adapters_that_work).uppercase(), style = KLineType.fieldLabel, color = colors.inkMuted)
@@ -242,6 +243,7 @@ private fun TransportDetails(
 
             TransportKind.WIFI -> {
                 SectionTitle(stringResource(R.string.section_network))
+                Hint(stringResource(R.string.wifi_hint))
                 WifiFields(s.wifiHost, s.wifiPort, vm::setWifi)
             }
         }
@@ -250,7 +252,7 @@ private fun TransportDetails(
 
 /** Muted guidance under a section title; [modifier] adds a top inset where it follows a rule. */
 @Composable
-private fun Hint(text: String, modifier: Modifier = Modifier) {
+internal fun Hint(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = KLineType.body,
@@ -260,12 +262,24 @@ private fun Hint(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ButtonRow(content: @Composable RowScope.() -> Unit) {
+internal fun ButtonRow(content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(Spacing.fieldPaddingHorizontal),
         horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
         content = content,
     )
+}
+
+/**
+ * Opens a screen of Android's own settings ([action], e.g. [Settings.ACTION_BLUETOOTH_SETTINGS]).
+ * Some head units strip the stock settings app; false then, and the caller says so.
+ */
+internal fun openSystemSettings(context: Context, action: String): Boolean = try {
+    context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    true
+} catch (e: ActivityNotFoundException) {
+    Log.w(TAG, "No settings screen for $action on this device", e)
+    false
 }
 
 @Composable
@@ -274,14 +288,7 @@ private fun BluetoothSettingsRow(onRefresh: () -> Unit) {
     ButtonRow {
         SecondaryButton(
             stringResource(R.string.btn_open_bt_settings),
-            onClick = {
-                try {
-                    context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                } catch (e: ActivityNotFoundException) {
-                    // Some head units strip the stock settings app; nothing sensible to fall back to.
-                    Log.w(TAG, "No Bluetooth settings screen on this device", e)
-                }
-            },
+            onClick = { openSystemSettings(context, Settings.ACTION_BLUETOOTH_SETTINGS) },
             modifier = Modifier.weight(1f),
         )
         SecondaryButton(stringResource(R.string.btn_refresh), onRefresh, Modifier.weight(1f))
@@ -289,7 +296,7 @@ private fun BluetoothSettingsRow(onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun DeviceList(
+internal fun DeviceList(
     devices: List<BtDeviceInfo>,
     selectedAddress: String?,
     emptyText: String,
@@ -314,7 +321,7 @@ private fun DeviceList(
  * work only with its own app gets a caution caption but stays selectable: a device that answers is used.
  */
 @Composable
-private fun DeviceRow(device: BtDeviceInfo, selected: Boolean, onClick: () -> Unit) {
+internal fun DeviceRow(device: BtDeviceInfo, selected: Boolean, onClick: () -> Unit) {
     val colors = KLineTheme.colors
     SelectableRow(selected = selected, onClick = onClick) {
         Column(Modifier.weight(1f)) {
@@ -332,12 +339,11 @@ private fun DeviceRow(device: BtDeviceInfo, selected: Boolean, onClick: () -> Un
 
 /** Two fields with one fixed label width, so the fields start at the same x. */
 @Composable
-private fun WifiFields(initialHost: String, initialPort: Int, onChange: (String, Int) -> Unit) {
+internal fun WifiFields(initialHost: String, initialPort: Int, onChange: (String, Int) -> Unit) {
     // Local state is the source of truth while typing; the database write is debounced in the ViewModel.
     var host by remember { mutableStateOf(initialHost) }
     var port by remember { mutableStateOf(initialPort.toString()) }
 
-    Hint(stringResource(R.string.wifi_hint))
     FieldRow(stringResource(R.string.wifi_host)) {
         FormTextField(
             value = host,

@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui
 
 import nl.stijnvdpol.klinedash.data.Trip
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.service.CopyFailure
 import nl.stijnvdpol.klinedash.service.CopyProgress
 import nl.stijnvdpol.klinedash.service.StartResult
@@ -72,7 +73,7 @@ class TripPresentationTest {
 
     @Test
     fun `a finished trip shows its summary in fixed formats`() {
-        val row = tripRows(listOf(trip()), recordingFileName = null, zone = zone).single()
+        val row = tripRows(listOf(trip()), recordingFileName = null, units = UnitSystem.METRIC, zone = zone).single()
         assertEquals("21 Oct 14:05", row.start)
         assertEquals("25:00", row.duration)
         assertEquals("12.3", row.distance)
@@ -83,7 +84,7 @@ class TripPresentationTest {
     @Test
     fun `the trip being recorded has no summary yet`() {
         val running = trip(id = 2, endMs = null, distanceKm = 0.0, maxRpm = null, fileName = "trip-running.csv")
-        val rows = tripRows(listOf(running, trip(id = 1)), recordingFileName = "trip-running.csv", zone = zone)
+        val rows = tripRows(listOf(running, trip(id = 1)), recordingFileName = "trip-running.csv", units = UnitSystem.METRIC, zone = zone)
         assertTrue(rows[0].isRecording)
         assertEquals(listOf(MISSING_VALUE, MISSING_VALUE), listOf(rows[0].duration, rows[0].distance))
         assertFalse(rows[1].isRecording)
@@ -92,16 +93,22 @@ class TripPresentationTest {
     @Test
     fun `a trip cut off by a power loss shows dashes for what is unknown`() {
         val cutOff = trip(endMs = null, maxRpm = null)
-        val row = tripRows(listOf(cutOff), recordingFileName = null, zone = zone).single()
+        val row = tripRows(listOf(cutOff), recordingFileName = null, units = UnitSystem.METRIC, zone = zone).single()
         assertFalse(row.isRecording)
         assertEquals(MISSING_VALUE, row.duration)
         assertEquals(MISSING_VALUE, row.distance)
     }
 
     @Test
+    fun `the distance of the list follows the unit system`() {
+        val row = tripRows(listOf(trip()), recordingFileName = null, units = UnitSystem.IMPERIAL, zone = zone).single()
+        assertEquals("7.7", row.distance)
+    }
+
+    @Test
     fun `a lap session shows its track, laps and best lap on a second line`() {
         val lapTrip = trip(trackId = 7, lapCount = 8, bestLapMs = 131_345)
-        val row = tripRows(listOf(lapTrip), null, mapOf(7L to "Spa-Francorchamps"), zone).single()
+        val row = tripRows(listOf(lapTrip), null, UnitSystem.METRIC, mapOf(7L to "Spa-Francorchamps"), zone).single()
         assertEquals("Spa-Francorchamps, 8 laps, best 2:11.345", row.lapSummary)
     }
 
@@ -117,7 +124,7 @@ class TripPresentationTest {
 
     @Test
     fun `the order of the list is kept`() {
-        val rows = tripRows(listOf(trip(id = 3), trip(id = 2), trip(id = 1)), null, zone = zone)
+        val rows = tripRows(listOf(trip(id = 3), trip(id = 2), trip(id = 1)), null, UnitSystem.METRIC, zone = zone)
         assertEquals(listOf(3L, 2L, 1L), rows.map { it.id })
     }
 

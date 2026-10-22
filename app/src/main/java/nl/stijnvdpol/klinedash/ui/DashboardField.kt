@@ -64,7 +64,6 @@ internal class ValueLook(val style: TextStyle, val maxGrowth: Float = 1f)
 /** The labels of the short race-display vocabulary; signals without one use their short name. */
 private val FieldLabelRes = mapOf(
     RPM_ID to R.string.field_rpm,
-    SPEED_ID to R.string.field_speed,
     COOLANT_ID to R.string.field_coolant,
     INTAKE_ID to R.string.field_intake,
     THROTTLE_ID to R.string.field_throttle,
@@ -74,10 +73,15 @@ private val FieldLabelRes = mapOf(
     MAF_ID to R.string.field_maf,
 )
 
-/** The caps label of a signal's field. */
+/** The caps label of a signal's field. The speed's label is its unit ("KM/H", "MPH"), so it follows the unit system. */
 @Composable
-internal fun fieldLabel(signal: Signal): String =
-    (FieldLabelRes[signal.id]?.let { stringResource(it) } ?: signal.shortName).uppercase()
+internal fun fieldLabel(signal: Signal): String {
+    val label = when {
+        signal.id == SPEED_ID -> unitOf(signal, LocalUnitSystem.current)
+        else -> FieldLabelRes[signal.id]?.let { stringResource(it) } ?: signal.shortName
+    }
+    return label.uppercase()
+}
 
 /** Label or unit of a field: muted capitals, boxed to their cap height so they sit 12 dp from the rule. */
 @Composable
@@ -163,13 +167,15 @@ private fun KnownSignalField(signal: Signal, look: ValueLook, live: LiveState, m
     val tone = rememberValueTone(signal, reading, live.toneContext)
     val noReading = stringResource(R.string.field_no_reading)
     val words = rememberOnOffWords()
+    val units = LocalUnitSystem.current
+    val unit = unitOf(signal, units)
     FieldFrame(
         label = fieldLabel(signal),
-        unit = signal.unit.takeUnless { labelIsUnit(signal.id) },
+        unit = unit.takeUnless { labelIsUnit(signal.id) },
         look = look,
-        slotSample = slotSample(signal),
+        slotSample = slotSample(signal, units),
         modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = reading.value?.let { "${signal.name}: ${formatReading(signal, it.value, words)} ${signal.unit}" }
+            contentDescription = reading.value?.let { "${signal.name}: ${formatReading(signal, it.value, words, units)} $unit" }
                 ?: "${signal.name}: $noReading"
         },
     ) { style -> ValueText(signal, reading, stale, tone, style) }

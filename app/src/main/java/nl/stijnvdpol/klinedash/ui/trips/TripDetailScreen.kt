@@ -32,6 +32,7 @@ import nl.stijnvdpol.klinedash.ui.DangerTextButton
 import nl.stijnvdpol.klinedash.ui.DeleteTripDialog
 import nl.stijnvdpol.klinedash.ui.EmptyState
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.TextActionButton
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.formatTripStart
@@ -164,7 +165,7 @@ private fun DetailBody(vm: TripDetailViewModel, detail: TripDetail) {
         }
         VerticalRule()
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            StatsTable(statCells(detail.stats))
+            StatsTable(statCells(detail.stats, LocalUnitSystem.current))
             LapSection(detail, selected, trace, vm::selectLap)
         }
     }
@@ -182,7 +183,8 @@ private fun LapSection(detail: TripDetail, selected: Int?, trace: LapTraceState,
         )
         return
     }
-    val rows = remember(detail) { lapRows(detail.laps) }
+    val units = LocalUnitSystem.current
+    val rows = remember(detail, units) { lapRows(detail.laps, units) }
     LapTable(rows, selected, onSelect)
     rows.firstOrNull { it.number == selected }?.takeIf { it.sectors.isNotEmpty() }?.let { SectorTimes(it.number, it.sectors) }
     when (trace) {

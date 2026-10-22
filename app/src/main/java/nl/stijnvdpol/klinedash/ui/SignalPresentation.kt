@@ -4,6 +4,8 @@ import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.PollTier
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
+import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.service.display
 import nl.stijnvdpol.klinedash.service.formatNumber
 
 /** Shown in a value slot when there is no reading yet; same slot, so nothing shifts. */
@@ -33,18 +35,23 @@ internal fun isStale(signal: Signal, readingTimestampMs: Long, nowMs: Long): Boo
 /** The words for an on/off signal; string resources in the UI. */
 internal class OnOffWords(val on: String, val off: String)
 
-internal fun formatReading(signal: Signal, value: Double, words: OnOffWords): String = when {
-    signal.id !in OnOffSignalIds -> formatNumber(value, signal.decimals)
+/** A reading ([value] is metric) as the text of a value slot in [units]. */
+internal fun formatReading(signal: Signal, value: Double, words: OnOffWords, units: UnitSystem): String = when {
+    signal.id !in OnOffSignalIds -> signal.display(units).format(value)
     value != 0.0 -> words.on
     else -> words.off
 }
+
+/** The unit text next to a value of [signal] in [units]: "mph" for a speed, "°F" for a temperature. */
+internal fun unitOf(signal: Signal, units: UnitSystem): String = signal.display(units).unit
 
 /**
  * The widest text a signal normally shows with every digit replaced by an "8" (all digits are the
  * same width with tabular figures). Measuring it gives the value slot a width that never changes.
  */
-internal fun slotSample(signal: Signal): String {
-    val widest = listOf(signal.min, signal.max).map { formatNumber(it, signal.decimals) }.maxBy { it.length }
+internal fun slotSample(signal: Signal, units: UnitSystem): String {
+    val display = signal.display(units)
+    val widest = listOf(display.min, display.max).map { formatNumber(it, display.decimals) }.maxBy { it.length }
     return widest.map { if (it.isDigit()) '8' else it }.joinToString("")
 }
 

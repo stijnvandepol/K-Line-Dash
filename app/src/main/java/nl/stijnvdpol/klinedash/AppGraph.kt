@@ -23,6 +23,7 @@ import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.AppDatabase
 import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
+import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
 import nl.stijnvdpol.klinedash.data.MIGRATION_2_3
@@ -32,6 +33,7 @@ import nl.stijnvdpol.klinedash.data.StartupSettingsRepository
 import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
 import nl.stijnvdpol.klinedash.data.TrackRepository
 import nl.stijnvdpol.klinedash.data.TripSettingsRepository
+import nl.stijnvdpol.klinedash.service.CrashLog
 import nl.stijnvdpol.klinedash.service.ExportController
 import nl.stijnvdpol.klinedash.service.LapSessions
 import nl.stijnvdpol.klinedash.service.LocationHub
@@ -52,6 +54,7 @@ import java.io.File
 private const val TAG = "AppGraph"
 private const val TRIPS_DIR_NAME = "trips"
 private const val THEMES_DIR_NAME = "themes"
+private const val CRASH_DIR_NAME = "crashes"
 
 /** Stands in when the bundled database cannot be read: codes are then shown without text. */
 private object NoDtcDescriptions : DtcDescriptions {
@@ -75,10 +78,18 @@ class AppGraph(val appContext: Context) {
      */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /**
+     * Uncaught exceptions of this process, installed as the crash handler by KLineDashApp. Internal
+     * storage only. Under the data directory itself (a path, no disk access) rather than filesDir,
+     * whose first use creates the folder and would be a main-thread disk write at startup.
+     */
+    val crashLog: CrashLog by lazy { CrashLog(File(appContext.applicationInfo.dataDir, CRASH_DIR_NAME)) }
+
     val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(database.settingsDao()) }
     val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(database.settingsDao()) }
     val dashboardLayoutRepository: DashboardLayoutRepository by lazy { DashboardLayoutRepository(database.settingsDao()) }
     val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(database.settingsDao()) }
+    val generalSettingsRepository: GeneralSettingsRepository by lazy { GeneralSettingsRepository(database.settingsDao()) }
 
     /**
      * App-specific external storage: no permission needed, removed with the app. Null only when that

@@ -24,6 +24,7 @@ import nl.stijnvdpol.klinedash.ui.LiveState
 import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.labelAndGapHeight
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.slotSample
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -78,7 +79,8 @@ private fun GridCellContent(
 private fun rememberNumberLook(cells: List<GridCell>, cellWidth: Dp, cellHeight: Dp): ValueLook {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(cells, cellWidth, cellHeight, density) {
+    val units = LocalUnitSystem.current
+    return remember(cells, cellWidth, cellHeight, density, units) {
         val style = KLineType.primaryValue
         val roomWidth = cellWidth - Spacing.fieldPaddingHorizontal * 2
         val roomHeight = cellHeight - Spacing.fieldPaddingVertical * 2 - density.labelAndGapHeight()
@@ -86,7 +88,7 @@ private fun rememberNumberLook(cells: List<GridCell>, cellWidth: Dp, cellHeight:
         val scale = cells.filter { it.widget == WidgetType.NUMBER }
             .mapNotNull { Signals.byId(it.signalId) }
             .minOfOrNull { signal ->
-                val slotWidth = with(density) { measurer.measure(slotSample(signal), style).size.width.toDp() }
+                val slotWidth = with(density) { measurer.measure(slotSample(signal, units), style).size.width.toDp() }
                 valueScale(slotWidth.value, roomWidth.value, digitHeight.value, roomHeight.value, NUMBER_MAX_GROWTH)
             } ?: NUMBER_MAX_GROWTH
         ValueLook(style, scale)

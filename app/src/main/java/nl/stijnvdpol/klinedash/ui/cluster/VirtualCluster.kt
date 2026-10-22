@@ -37,17 +37,20 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.MainPage
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
 import nl.stijnvdpol.klinedash.ui.CAUTION_RPM
 import nl.stijnvdpol.klinedash.ui.DANGER_RPM
 import nl.stijnvdpol.klinedash.ui.FieldCaption
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.LiveState
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RPM_ID
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.fieldLabel
 import nl.stijnvdpol.klinedash.ui.labelIsUnit
+import nl.stijnvdpol.klinedash.ui.unitOf
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -116,8 +119,8 @@ private class RingSpec(
 private fun tachRing(centerX: Float, caption: String) =
     RingSpec(LeftRingTach, centerX, TACH_MINOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, hasZones = true, caption = caption)
 
-private fun speedRing(centerX: Float, caption: String) =
-    RingSpec(RightRingSpeed, centerX, SPEED_MINOR_STEP_KMH, SPEED_MAJOR_STEP_KMH, SPEED_LABEL_STEP_KMH, labelDivisor = 1, hasZones = false, caption = caption)
+private fun speedRing(centerX: Float, caption: String, units: UnitSystem) =
+    RingSpec(rightRingSpeed(units), centerX, SPEED_MINOR_STEP_KMH, SPEED_MAJOR_STEP_KMH, SPEED_LABEL_STEP_KMH, labelDivisor = 1, hasZones = false, caption = caption)
 
 private class RingStatic(
     size: Size,
@@ -245,8 +248,9 @@ internal fun VirtualCluster(page: MainPage, live: LiveState, modifier: Modifier 
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
         val layout = remember(widthPx, heightPx) { RingLayout(widthPx, heightPx) }
-        val specs = remember(layout, captions) {
-            listOf(tachRing(layout.leftCenterX, captions.first), speedRing(layout.rightCenterX, captions.second))
+        val units = LocalUnitSystem.current
+        val specs = remember(layout, captions, units) {
+            listOf(tachRing(layout.leftCenterX, captions.first), speedRing(layout.rightCenterX, captions.second, units))
         }
         Spacer(
             Modifier
@@ -327,7 +331,7 @@ private fun ValueRow(id: String, live: LiveState, height: Dp) {
             FieldCaption(fieldLabel(feed.signal), Modifier.weight(1f).alignByBaseline())
             ValueText(feed.signal, feed.reading, feed.stale, feed.tone, style, Modifier.alignByBaseline(), ink = colors.ink)
             if (!labelIsUnit(id)) {
-                Text(feed.signal.unit, style = KLineType.caption, color = colors.inkMuted, maxLines = 1, modifier = Modifier.width(UnitSlotWidth).alignByBaseline())
+                Text(unitOf(feed.signal, LocalUnitSystem.current), style = KLineType.caption, color = colors.inkMuted, maxLines = 1, modifier = Modifier.width(UnitSlotWidth).alignByBaseline())
             }
         }
     }

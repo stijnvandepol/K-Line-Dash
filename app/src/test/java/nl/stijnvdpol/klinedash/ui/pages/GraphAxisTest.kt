@@ -1,13 +1,15 @@
 package nl.stijnvdpol.klinedash.ui.pages
 
-import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
+import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.service.SignalDisplay
+import nl.stijnvdpol.klinedash.service.display
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GraphAxisTest {
-    private fun signal(id: String): Signal = checkNotNull(Signals.byId(id))
+    private fun signal(id: String): SignalDisplay = checkNotNull(Signals.byId(id)).display(UnitSystem.METRIC)
 
     private fun assertAxis(expectedLow: Double, expectedHigh: Double, axis: ValueRange) {
         assertEquals("low", expectedLow, axis.low, 1e-9)
@@ -44,6 +46,22 @@ class GraphAxisTest {
     @Test
     fun `data beyond the display range is still on the axis`() {
         assertAxis(120.0, 136.0, graphAxis(ValueRange(120.0, 135.0), signal("coolant")))
+    }
+
+    @Test
+    fun `an axis in Fahrenheit has round Fahrenheit labels, not converted Celsius ones`() {
+        val coolant = checkNotNull(Signals.byId("coolant")).display(UnitSystem.IMPERIAL)
+        // 85 to 87 degrees Celsius is 185 to 188.6 Fahrenheit.
+        val axis = graphAxis(ValueRange(185.0, 188.6), coolant)
+        assertEquals(axis.low, Math.floor(axis.low / 5) * 5, 1e-9)
+        assertEquals(axis.high, Math.floor(axis.high / 5) * 5, 1e-9)
+        assertTrue(axis.low <= 185.0 && axis.high >= 188.6)
+        assertTrue("at least 15 % of 104..266 °F", axis.high - axis.low >= (coolant.max - coolant.min) * MIN_AXIS_SPAN_SHARE)
+    }
+
+    @Test
+    fun `a flat zero speed in mph stays at the bottom`() {
+        assertAxis(0.0, 25.0, graphAxis(ValueRange(0.0, 0.0), checkNotNull(Signals.byId("speed")).display(UnitSystem.IMPERIAL)))
     }
 
     @Test

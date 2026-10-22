@@ -63,6 +63,11 @@ The APK is `app/build/outputs/apk/debug/app-debug.apk`. Tests, lint and the full
 Installing on the head unit (USB stick or adb over Wi-Fi) and what to test in the car is described
 per phase in `docs/fase-*-installeren-en-testen.md` (Dutch).
 
+The release APK (`./gradlew :app:assembleRelease`) is shrunk with R8. It is signed with the key in
+`keystore.properties` or the `KLD_KEYSTORE_*` environment variables, and with the debug key (plus a
+warning) when neither exists. Signed releases are published as GitHub releases by tagging `v<version>`;
+see `docs/RELEASING.md`. CI (`.github/workflows/ci.yml`) runs the tests, a debug build and lint on every push and pull request.
+
 ## Architecture
 
 Two Gradle modules with strict layers:
@@ -92,6 +97,7 @@ manages about two requests per second, so every extra signal slows the others.
 - `CODE GUIDELINES.md` – rules for all code in this repository, with the project specifics
 - `docs/design-system.md` – the visual design: tokens, type scale, layouts per page
 - `docs/themes.md` – the theme JSON format
+- `docs/RELEASING.md` – signing key, GitHub secrets and how to cut a release
 - `docs/research/` – ELM327 clone behaviour, head-unit autostart, the 2ZZ-GE's OBD facts, lessons
   from the earlier ESP32 prototype
 - `docs/fase-*-installeren-en-testen.md` – install and in-car test plans (Dutch)

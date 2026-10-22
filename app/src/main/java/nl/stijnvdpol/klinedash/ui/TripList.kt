@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.service.Quantity
+import nl.stijnvdpol.klinedash.service.label
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -137,7 +139,7 @@ private fun TripRowView(row: TripRow, columns: TripColumns, onOpen: (Long) -> Un
             NumberText(row.duration, columns.duration)
             Spacer(Modifier.width(ColumnGap))
             NumberText(row.distance, columns.distance)
-            UnitText(stringResource(R.string.unit_km))
+            UnitText(LocalUnitSystem.current.label(Quantity.DISTANCE))
         }
         VerticalRule()
         Box(Modifier.width(DeleteCellWidth).fillMaxHeight(), contentAlignment = Alignment.Center) {

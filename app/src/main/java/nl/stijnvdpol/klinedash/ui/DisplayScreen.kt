@@ -60,7 +60,7 @@ private val ModeRows = listOf(
  */
 @Composable
 internal fun DisplayScreen() {
-    val vm = graphViewModel { DisplayViewModel(it.themeSettingsRepository, it.themeCatalog) }
+    val vm = graphViewModel { DisplayViewModel.forGraph(it) }
     val loadedSettings by vm.settings.collectAsStateWithLifecycle()
     val loadedCatalog by vm.catalog.collectAsStateWithLifecycle()
     // The user may have copied files since the app started.
@@ -133,7 +133,7 @@ private fun SlotToggle(slot: ThemeSlot, onSlot: (ThemeSlot) -> Unit) {
 
 /** Background, ink, accent, caution and danger side by side: enough to tell the themes apart at a glance. */
 @Composable
-private fun SwatchStrip(colors: KLineColors) {
+internal fun SwatchStrip(colors: KLineColors) {
     Row(Modifier.border(Spacing.ruleThickness, KLineTheme.colors.inkFaint).padding(SwatchStripGap), horizontalArrangement = Arrangement.spacedBy(SwatchStripGap)) {
         listOf(colors.background, colors.ink, colors.accent, colors.caution, colors.danger).forEach { color ->
             Box(Modifier.size(SwatchStripCell).border(Spacing.ruleThickness, KLineTheme.colors.rule).padding(Spacing.ruleThickness).background(color))
@@ -169,6 +169,8 @@ private fun UserThemes(catalog: ThemeCatalog) {
 @Composable
 private fun OptionsColumn(settings: ThemeSettings, vm: DisplayViewModel, modifier: Modifier) {
     Column(modifier.verticalScroll(rememberScrollState())) {
+        ColumnHeader(R.string.units_title)
+        UnitSystemChoice(LocalUnitSystem.current, vm::setUnits)
         ColumnHeader(R.string.display_mode_title)
         ModeRows.forEach { (mode, labelRes, hintRes) ->
             val isSelected = settings.mode == mode

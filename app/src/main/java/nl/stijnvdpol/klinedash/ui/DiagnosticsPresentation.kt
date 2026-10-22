@@ -9,6 +9,7 @@ import nl.stijnvdpol.klinedash.core.diag.MonitorStatus
 import nl.stijnvdpol.klinedash.core.diag.ReadinessMonitor
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signals
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -142,14 +143,14 @@ internal sealed interface FreezeFrameView {
     data class Values(val triggerCode: Dtc?, val rows: List<FreezeRow>) : FreezeFrameView
 }
 
-internal fun freezeFrameView(frame: FreezeFrame?, selected: Dtc?, words: OnOffWords): FreezeFrameView {
+internal fun freezeFrameView(frame: FreezeFrame?, selected: Dtc?, words: OnOffWords, units: UnitSystem): FreezeFrameView {
     if (frame == null) return FreezeFrameView.None
     val trigger = frame.triggerCode
     if (trigger != null && selected != null && selected != trigger) return FreezeFrameView.OtherCode(selected, trigger)
     val rows = frame.values.mapNotNull { reading ->
         // A value without a signal definition cannot be formatted or named; leave it out.
         val signal = Signals.byId(reading.signalId) ?: return@mapNotNull null
-        FreezeRow(signal.shortName, formatReading(signal, reading.value, words), signal.unit)
+        FreezeRow(signal.shortName, formatReading(signal, reading.value, words, units), unitOf(signal, units))
     }
     return if (rows.isEmpty()) FreezeFrameView.None else FreezeFrameView.Values(trigger, rows)
 }

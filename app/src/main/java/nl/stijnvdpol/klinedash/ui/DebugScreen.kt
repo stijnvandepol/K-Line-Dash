@@ -110,23 +110,28 @@ fun DebugScreen() {
  */
 @Composable
 private fun AdapterSection(info: AdapterInfo?) {
-    val words = AdapterWords(
-        yes = stringResource(R.string.value_yes),
-        no = stringResource(R.string.value_no),
-        none = stringResource(R.string.value_none),
-        chipGenuine = stringResource(R.string.value_chip_genuine),
-        chipStn = stringResource(R.string.value_chip_stn),
-        chipClone = stringResource(R.string.value_chip_clone),
-        timingAt1 = stringResource(R.string.value_timing_at1),
-        timingAt2 = stringResource(R.string.value_timing_at2),
-    )
+    val words = adapterWords()
     SectionTitle(stringResource(R.string.debug_section_adapter))
     HorizontalRule()
     adapterValues(info, words).forEach { (field, value) -> InfoRow(stringResource(field.labelRes), value) }
 }
 
+/** The words the adapter values are written in; shared with the setup's connection test. */
 @Composable
-private fun InfoRow(label: String, value: String?) {
+internal fun adapterWords() = AdapterWords(
+    yes = stringResource(R.string.value_yes),
+    no = stringResource(R.string.value_no),
+    none = stringResource(R.string.value_none),
+    chipGenuine = stringResource(R.string.value_chip_genuine),
+    chipStn = stringResource(R.string.value_chip_stn),
+    chipClone = stringResource(R.string.value_chip_clone),
+    timingAt1 = stringResource(R.string.value_timing_at1),
+    timingAt2 = stringResource(R.string.value_timing_at2),
+)
+
+/** A label in muted text and its value, one row between rules; a missing value shows "--". */
+@Composable
+internal fun InfoRow(label: String, value: String?) {
     val colors = KLineTheme.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),

@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.ui.theme.AccentSwatches
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -35,6 +36,28 @@ private val SwatchInset = 12.dp
 private val SwatchGridStart = Spacing.fieldPaddingHorizontal - SwatchInset
 private val SelectionFrame = Spacing.markerThickness
 private const val MAX_SWATCHES_PER_ROW = 8
+
+/**
+ * Metric or imperial as two 72 dp cells and one line saying what each means. The choice applies at
+ * once on every screen; what is stored and exported stays metric.
+ */
+@Composable
+internal fun UnitSystemChoice(selected: UnitSystem, onChoose: (UnitSystem) -> Unit) {
+    val systems = UnitSystem.entries
+    ChoiceCells(
+        labels = systems.map { stringResource(if (it == UnitSystem.METRIC) R.string.units_metric else R.string.units_imperial) },
+        selectedIndex = systems.indexOf(selected),
+        onSelect = { onChoose(systems[it]) },
+    )
+    HorizontalRule()
+    Text(
+        stringResource(R.string.units_hint),
+        style = KLineType.caption,
+        color = KLineTheme.colors.inkMuted,
+        modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
+    )
+    HorizontalRule()
+}
 
 /** The 8 swatches as 72 dp cells (as many per row as fit), then "Theme default"; [chosen] is null for the default. */
 @Composable

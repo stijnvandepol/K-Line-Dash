@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12+ system splash screen, no library needed: black like the app, with the gauge from the
+        launcher icon. Devices below API 31 (minSdk is 26) keep the plain dark window of values/themes.xml.
+    -->
+    <style name="Theme.KLineDash" parent="Theme.KLineDash.Base">
+        <item name="android:windowSplashScreenBackground">@color/window_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+</resources>

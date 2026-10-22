@@ -135,7 +135,7 @@ rules. No cards.
 
 Five pages: **DASH · SENSORS · DIAG · TRIPS · SETUP**. Driving pages first, setup last. SETUP has
 its own left menu (240 dp, 72 dp rows, selected row with the 4 dp white left bar like the adapter
-list): **Connection**, **Warnings**, **Debug** (and in phase 5 Display and Startup). The right
+list): **Connection**, **Warnings**, **Debug** (and in phase 5 Display and Startup; in phase 7 Help and About, placed before Debug, and the menu scrolls). The right
 part shows the chosen section; Connection and Debug keep their layouts below, narrowed to the
 remaining width (Connection's 400 dp adapter column becomes the section's left column).
 
@@ -391,6 +391,42 @@ When the link ends in "unsupported adapter", the status block shows the reason i
 below it, "Adapters that work" as a short list (from the README's supported list) instead of the
 reconnect countdown. In the device lists, devices whose name matches a known app-locked dongle get
 a `caution` "May not work" caption; they stay selectable.
+
+## Phase 7
+
+### First-run setup (wizard)
+
+Shown once on first launch, again from SETUP > Help > Run setup again. One screen per step; a 72 dp
+header row ("Step 3 of 6" in `fieldLabel`, as text, and a "Skip setup" cell) and a 72 dp footer (Back
+and one filled Next cell) frame it, the content between scrolls. From 840 dp wide the content is two
+halves side by side (instructions left, list or choices right), narrower it stacks. Steps: Welcome,
+Adapter (Bluetooth, Bluetooth LE, Wi-Fi, simulator), Connect (not for the simulator, so the count
+becomes "of 5"), Test, Preferences (units, theme, record trips), Done. Runtime permissions are asked
+only where needed, with a one-line reason above the button that opens the system dialog. The Test
+step shows the connection states as they happen, then protocol, adapter, battery and the number of
+sensors, or one specific fix per failure kind with Retry and Choose another adapter. The wizard
+reuses ConnectionViewModel and DisplayViewModel; it has no connection code of its own.
+
+### Dashboard without an adapter
+
+While no adapter is chosen (the simulator counts as one) DASH shows a centred invitation: "Connect
+your adapter to see live data", a filled "Set up adapter" and an outlined "Try the simulator".
+
+### Help and About (SETUP)
+
+Help: a topic list (280 dp) and the chosen topic. Troubleshooting is a list of questions that open on
+a tap; the others read top to bottom, headings in `fieldLabel`. All text is string resources, offline.
+About: version, privacy and what each permission is for, open-source licenses with the Apache License
+2.0 text on a tap, and the crash reports (latest, Export crash log, Clear).
+
+### Units
+
+SETUP > Display > Units: Metric (default) or Imperial, applied at once everywhere a value is shown or
+edited: km/h and mph, km and mi, °C and °F, kPa and psi, L and US gal, L/h and gal/h, and fuel
+consumption as L/100 km or mpg. RPM, %, V, g/s and degrees never change. Imperial pressure and fuel
+get one more decimal. The speedometers run 0 to 260 km/h or 0 to 160 mph (ticks every 10, numerals
+every 40); the coolant dial 40 to 130 °C or 100 to 270 °F. Warning limits are stored in °C and
+stepped in 1 °F or 1 °C. Stored values and every export (VBO, GPX, CSV) stay metric.
 
 ## Writing
 

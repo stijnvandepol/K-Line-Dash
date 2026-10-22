@@ -40,7 +40,6 @@
     <string name="status_engine_off">Engine off, saving power</string>
     <string name="status_rate">%1$s/s</string>
     <string name="field_rpm">RPM</string>
-    <string name="field_speed">km/h</string>
     <string name="field_coolant">Water</string>
     <string name="field_intake">Intake</string>
     <string name="field_throttle">Throttle</string>
@@ -162,7 +161,6 @@
     <string name="trips_empty_manual">No trips yet. Start a trip to record one.</string>
     <string name="trips_delete">Delete</string>
     <string name="trips_delete_title">Delete trip?</string>
-    <string name="unit_km">km</string>
     <string name="unit_rpm">rpm</string>
     <string name="unit_m">m</string>
     <string name="unit_hz">Hz</string>
@@ -224,7 +222,8 @@
     <string name="value_chip_genuine">ELM327</string>
     <string name="value_chip_stn">STN</string>
     <string name="value_chip_clone">ELM327 clone</string>
-    <string name="value_timing_at1">AT1</string>
+    <!-- AT1/AT2 are ELM327 adaptive-timing command names, not misspellings of "AT!". -->
+    <string name="value_timing_at1" tools:ignore="Typos">AT1</string>
     <string name="value_timing_at2">AT2</string>
     <string name="label_protocol">Protocol</string>
     <string name="label_saved_protocol">Saved protocol used</string>
@@ -312,7 +311,7 @@
     <string name="page_grid">Grid</string>
     <string name="page_track">Track</string>
     <string name="track_max_rpm">Max RPM</string>
-    <string name="track_max_speed">Max km/h</string>
+    <string name="track_max_speed">Max %1$s</string>
     <string name="track_reset_peaks">Reset peaks</string>
     <string name="graph_description">%1$s, graph of the last 60 seconds</string>
     <string name="dash_pages_title">Pages</string>
@@ -371,7 +370,7 @@
     <string name="lap_column_lap">Lap</string>
     <string name="lap_column_time">Time</string>
     <string name="lap_column_delta">Delta</string>
-    <string name="lap_column_max_speed">Max km/h</string>
+    <string name="lap_column_max_speed">Max %1$s</string>
     <string name="lap_column_max_rpm">Max rpm</string>
     <string name="lap_column_full_throttle" formatted="false">Full thr. %</string>
     <string name="lap_mark_best">Best</string>
@@ -399,4 +398,217 @@
     <string name="gps_rename_title">Rename track</string>
     <string name="gps_rename_save">Save</string>
     <string name="gps_delete_title">Delete track?</string>
+
+    <!-- Units (SETUP > Display, setup wizard) -->
+    <string name="units_title">Units</string>
+    <string name="units_metric">Metric</string>
+    <string name="units_imperial">Imperial</string>
+    <string name="units_hint">Metric: km/h, km, °C, kPa, litres. Imperial: mph, miles, °F, psi, US gallons. Exports to a PC stay metric.</string>
+
+    <!-- Dashboard before an adapter is chosen -->
+    <string name="empty_dash_title">Connect your adapter to see live data</string>
+    <string name="empty_dash_body">Plug an OBD2 adapter into your car, then set it up here. It takes about two minutes.</string>
+    <string name="empty_dash_setup">Set up adapter</string>
+    <string name="empty_dash_simulator">Try the simulator</string>
+    <string name="empty_dash_simulator_hint">No adapter yet? The simulator drives a virtual car.</string>
+
+    <!-- Setup wizard: frame -->
+    <string name="wiz_step_of">Step %1$s of %2$s</string>
+    <string name="wiz_skip">Skip setup</string>
+    <string name="wiz_back">Back</string>
+    <string name="wiz_next">Next</string>
+    <string name="wiz_get_started">Get started</string>
+    <string name="wiz_open_dashboard">Open dashboard</string>
+
+    <!-- Setup wizard: welcome and adapter -->
+    <string name="wiz_welcome_title">Your car, live on one screen</string>
+    <string name="wiz_welcome_line_live">K-Line Dash shows speed, RPM, temperatures and more, straight from the car.</string>
+    <string name="wiz_welcome_line_adapter">All you need is an OBD2 adapter in the car and this device.</string>
+    <string name="wiz_welcome_line_time">Setup takes about two minutes. You can skip it at any step.</string>
+    <string name="wiz_welcome_privacy">Works offline. No account. No data leaves your device unless you export it.</string>
+    <string name="wiz_adapter_title">Which adapter do you have?</string>
+    <string name="wiz_adapter_bt">Bluetooth</string>
+    <string name="wiz_adapter_bt_hint">The most common kind. It came with a PIN like 1234 or 0000.</string>
+    <string name="wiz_adapter_ble">Bluetooth LE</string>
+    <string name="wiz_adapter_ble_hint">Newer adapters, often sold as BLE or Bluetooth 4.0. No PIN.</string>
+    <string name="wiz_adapter_wifi">Wi-Fi</string>
+    <string name="wiz_adapter_wifi_hint">The adapter makes its own Wi-Fi network.</string>
+    <string name="wiz_adapter_sim">No adapter yet: try the simulator</string>
+    <string name="wiz_adapter_sim_hint">A virtual car, so you can look around the app first.</string>
+    <string name="wiz_adapter_tip">Not sure? If your adapter came with a PIN like 1234, choose Bluetooth.</string>
+
+    <!-- Setup wizard: connect -->
+    <string name="wiz_connect_title_bt">Connect your Bluetooth adapter</string>
+    <string name="wiz_connect_title_ble">Connect your Bluetooth LE adapter</string>
+    <string name="wiz_connect_title_wifi">Connect your Wi-Fi adapter</string>
+    <string name="wiz_step_plug_in">Plug the adapter into the OBD port of the car and switch the ignition on. The engine can stay off.</string>
+    <string name="wiz_bt_step_pair">Pair it in the Bluetooth settings of Android. The PIN is usually 1234, 0000 or 6789.</string>
+    <string name="wiz_bt_step_choose">Come back here and choose the adapter from the list.</string>
+    <string name="wiz_ble_step_button">If the adapter has a button, press it. Its light should come on.</string>
+    <string name="wiz_ble_step_scan">Tap Scan and choose the adapter from the list.</string>
+    <string name="wiz_wifi_step_join">Join the Wi-Fi network of the adapter. It has no internet, which is normal.</string>
+    <string name="wiz_wifi_step_address">Check the address. Most adapters use 192.168.0.10 and port 35000.</string>
+    <string name="btn_open_wifi_settings">Wi-Fi settings</string>
+    <string name="wiz_permission_reason_nearby">Android will ask to allow \"Nearby devices\". K-Line Dash only uses it to find your adapter.</string>
+    <string name="wiz_permission_reason_location">Android will ask to allow \"Location\". This Android version needs it to find Bluetooth devices. K-Line Dash only uses it to find your adapter.</string>
+    <string name="wiz_permission_allow">Allow</string>
+    <string name="wiz_choose_adapter_hint">Choose your adapter to continue.</string>
+    <string name="wiz_settings_missing">This unit has no screen for that. Open the settings of the unit itself.</string>
+
+    <!-- Setup wizard: test -->
+    <string name="wiz_test_title">Test the connection</string>
+    <string name="wiz_test_starting">Starting the connection…</string>
+    <string name="wiz_test_progress_hint">The first connection can take up to 30 seconds while the app finds out how your car talks.</string>
+    <string name="wiz_test_ok_title">Connected</string>
+    <string name="wiz_test_adapter">Adapter</string>
+    <string name="wiz_test_battery">Battery</string>
+    <string name="wiz_test_volts">%1$s V</string>
+    <string name="wiz_test_sensors">Your car reports %1$s sensors</string>
+    <string name="wiz_test_sensors_detecting">Asking the car which sensors it has…</string>
+    <string name="wiz_test_sim_note">This is the simulator, a virtual car. Connect a real adapter later under Setup, Connection.</string>
+    <string name="wiz_test_details">Details: %1$s</string>
+    <string name="wiz_test_retry">Retry</string>
+    <string name="wiz_test_choose_other">Choose another adapter</string>
+    <string name="fix_allow_bluetooth">Allow Bluetooth</string>
+    <string name="fail_unsupported_title">This adapter does not work with K-Line Dash</string>
+    <string name="fail_unsupported_body">It only talks to its own app. Choose another adapter, or try the simulator. These adapters work:</string>
+    <string name="fail_ecu_title">The car did not answer</string>
+    <string name="fail_ecu_body">The adapter works, but the car stays silent. Turn the ignition on (the engine may stay off) and try again. Also check that the adapter sits all the way in the OBD port.</string>
+    <string name="fail_permission_title">Bluetooth is not allowed yet</string>
+    <string name="fail_permission_body">K-Line Dash needs the permission \"Nearby devices\" to reach the adapter. Tap Allow Bluetooth. If Android does not ask again, turn it on under Settings, Apps, K-Line Dash, Permissions.</string>
+    <string name="fail_not_paired_title">The adapter is not paired</string>
+    <string name="fail_not_paired_body">Pair the adapter in the Bluetooth settings of Android (PIN 1234, 0000 or 6789), then choose it in the list and try again.</string>
+    <string name="fail_not_found_title">No adapter found</string>
+    <string name="fail_not_found_ble_body">Press the button on the adapter so its light is on, then tap Scan and choose the adapter.</string>
+    <string name="fail_wifi_body">Join the Wi-Fi network of the adapter in the Wi-Fi settings of Android, check the address and try again.</string>
+    <string name="fail_bluetooth_off_title">Bluetooth is off</string>
+    <string name="fail_bluetooth_off_body">Turn Bluetooth on and try again.</string>
+    <string name="fail_bluetooth_unavailable_title">No Bluetooth for apps on this unit</string>
+    <string name="fail_bluetooth_unavailable_body">This head unit does not let apps use its Bluetooth. Use a Wi-Fi adapter instead.</string>
+    <string name="fail_not_reached_title">Could not reach the adapter</string>
+    <string name="fail_not_reached_classic_body">Check that the adapter is plugged into the OBD port, the ignition is on and the adapter is paired (PIN 1234, 0000 or 6789). If it has a button, press it. Then try again.</string>
+    <string name="fail_not_reached_ble_body">Check that the adapter is plugged in and the ignition is on. Press its button so the light is on, and close other OBD apps: an adapter talks to one app at a time. Then try again.</string>
+    <string name="fail_stopped_title">The adapter stopped answering</string>
+    <string name="fail_stopped_body">Unplug the adapter, plug it back in, wait for its light and try again. A loose OBD port can cause this.</string>
+    <string name="fail_other_title">Could not connect</string>
+    <string name="fail_other_body">Check the adapter and the ignition, then try again. Setup, Debug shows what the adapter says.</string>
+
+    <!-- Setup wizard: preferences and done -->
+    <string name="wiz_prefs_trips">Record trips automatically</string>
+    <string name="wiz_prefs_trips_hint">A trip is saved while the engine runs. You can delete trips on the Trips page.</string>
+    <string name="wiz_prefs_location_hint">Allow location to see GPS speed, record routes and time laps. It stays on this device.</string>
+    <string name="wiz_prefs_notifications_hint">Allow notifications so Android shows that the connection to the adapter stays alive in the background.</string>
+    <string name="wiz_done_title">You are ready to drive</string>
+    <string name="wiz_done_dash_label">Dash</string>
+    <string name="wiz_done_dash">Live values. Swipe left or right for more pages.</string>
+    <string name="wiz_done_sensors_label">Sensors</string>
+    <string name="wiz_done_sensors">Everything your car reports, with how often it updates.</string>
+    <string name="wiz_done_help_label">Setup, Help</string>
+    <string name="wiz_done_help">Answers to common problems, and this setup if you want to run it again.</string>
+
+    <!-- Setup: Help and About -->
+    <string name="setup_help">Help</string>
+    <string name="setup_about">About</string>
+    <string name="help_run_setup">Run setup again</string>
+    <string name="help_open">Open %1$s</string>
+    <string name="help_topic_connect">Getting connected</string>
+    <string name="help_topic_trouble">Troubleshooting</string>
+    <string name="help_topic_adapters">Supported adapters</string>
+    <string name="help_topic_laps">Lap timing</string>
+    <string name="help_topic_export">Exporting to a PC</string>
+    <string name="help_topic_battery">Your car battery</string>
+
+    <string name="help_connect_before_h">Before you start</string>
+    <string name="help_connect_before_b">Plug the adapter into the OBD port of the car. It is usually under the dashboard on the driver\'s side. Switch the ignition on. The engine can stay off.</string>
+    <string name="help_connect_bt_h">Bluetooth</string>
+    <string name="help_connect_bt_b">Pair the adapter in the Bluetooth settings of Android first (PIN 1234, 0000 or 6789). Then open Setup, Connection, choose Bluetooth Classic and pick the adapter. Adapters that look like OBD adapters are listed first.</string>
+    <string name="help_connect_ble_h">Bluetooth LE</string>
+    <string name="help_connect_ble_b">Press the button on the adapter if it has one. Choose Bluetooth LE, tap Scan and pick the adapter. These adapters need no PIN.</string>
+    <string name="help_connect_wifi_h">Wi-Fi</string>
+    <string name="help_connect_wifi_b">Join the Wi-Fi network of the adapter in the Wi-Fi settings of Android. It has no internet, which is normal. Choose Wi-Fi in Setup, Connection and check the address: most adapters use 192.168.0.10, port 35000.</string>
+    <string name="help_connect_go_h">Connect</string>
+    <string name="help_connect_go_b">Tap Connect. The first connection to a car can take up to 30 seconds while the app finds the right protocol; later ones are faster. The dot in the bottom bar turns green and Dash shows live values.</string>
+    <string name="help_connect_sim_h">No adapter yet</string>
+    <string name="help_connect_sim_b">Choose Simulator in Setup, Connection to try the app with a virtual car.</string>
+
+    <string name="help_tr_missing_h">The adapter is not in the list</string>
+    <string name="help_tr_missing_b">A Bluetooth Classic adapter must be paired in the Bluetooth settings of Android first. Pair it, come back and tap Refresh. For Bluetooth LE, press the button on the adapter if it has one, then tap Scan; the light must be on. Some adapters sleep when the ignition is off: switch the ignition on and plug the adapter in again.</string>
+    <string name="help_tr_nodata_h">Connected, but no data</string>
+    <string name="help_tr_nodata_b">Switch the ignition on; the engine may stay off. Push the adapter all the way into the OBD port. If values stay empty, tap Forget protocol in Setup, Connection and connect again. Setup, Debug shows what the adapter and the car say, which helps when you ask for help.</string>
+    <string name="help_tr_unsupported_h">\"Adapter not supported\"</string>
+    <string name="help_tr_unsupported_b">Some adapters only work with their own app, for example BlueDriver, ThinkDiag, Golo, TopScan, ANCEL and Autel. K-Line Dash cannot use them. See Supported adapters for adapters that work.</string>
+    <string name="help_tr_slow_h">Values update slowly on an older car</string>
+    <string name="help_tr_slow_b">That is normal. Cars with a K-line connection (mostly cars built before 2008) answer about two requests per second in total, so every extra value slows the others. Newer cars with CAN are much faster. Dash only asks for what is on screen: a page with fewer fields updates faster.</string>
+    <string name="help_tr_headunit_h">The head unit closes the app after the ignition goes off</string>
+    <string name="help_tr_headunit_b">Many head units stop apps shortly after the ignition is switched off. Add K-Line Dash to the sleep whitelist of the unit and allow background running. Setup, Startup explains how for FYT / UIS and Microntek units. Open the app once by hand afterwards.</string>
+    <string name="help_tr_gps_h">No GPS fix</string>
+    <string name="help_tr_gps_b">GPS needs the location permission (Setup, GPS and Tracks, Allow location), the location switch of Android on, and a clear view of the sky. The first fix can take a few minutes. Some head units have no GPS antenna connected; trips then record from the adapter only, without a route or laps.</string>
+    <string name="help_tr_trip_h">A trip did not record</string>
+    <string name="help_tr_trip_b">Automatic recording starts when the engine runs and the adapter is connected, and ends two minutes after the engine stops. Without an adapter, switch on \"When the car moves\" on the Trips page: it starts above 10 km/h (6 mph) with a GPS fix. Check that the switch is on and that the unit has free storage.</string>
+
+    <string name="help_ad_intro_b">K-Line Dash speaks plain ELM327, so an adapter that works with other generic OBD apps usually works here too. These are known to work:</string>
+    <string name="help_ad_clones_h">Cheap clones</string>
+    <string name="help_ad_clones_b">The cheap \"ELM327 v1.5\" and \"v2.1\" adapters work, but some do not answer every optional command; the app skips those. Pair a Bluetooth Classic clone first. A Konnwei KW905 only works over Bluetooth LE. Adapters with an STN chip or newer ELM327 firmware are the best choice for cars from 2008 on.</string>
+    <string name="help_ad_locked_h">Does not work</string>
+    <string name="help_ad_locked_b">Adapters that only talk to their own app: BlueDriver, ThinkDiag, Launch Golo and EasyDiag, TOPDON TopScan, ANCEL BD200 and Autel MaxiAP. K-Line Dash then reports Adapter not supported. FIXD is not verified.</string>
+
+    <string name="help_lap_gps_h">1. Get a GPS fix</string>
+    <string name="help_lap_gps_b">Open Trips and wait until GPS in the bottom bar turns green. It needs the location permission.</string>
+    <string name="help_lap_start_h">2. Start a lap session</string>
+    <string name="help_lap_start_b">Tap Start lap session, or Start lap timing during a trip that already runs.</string>
+    <string name="help_lap_line_h">3. Set the start/finish line</string>
+    <string name="help_lap_line_b">Drive across the line at a steady speed, faster than walking pace, and tap Set start/finish here as you pass it. The GPS must be accurate to 15 m or better.</string>
+    <string name="help_lap_sector_h">4. Add sectors (optional)</string>
+    <string name="help_lap_sector_b">Tap Add sector here at each point where you want a split time. A sector line does not restart the lap clock.</string>
+    <string name="help_lap_drive_h">5. Drive</string>
+    <string name="help_lap_drive_b">Current lap, last lap, best lap and the delta to your best show on Trips. A green delta means you are ahead of your best lap.</string>
+    <string name="help_lap_review_h">6. Look back</string>
+    <string name="help_lap_review_b">Open the trip in the Trips list for the lap table, the route and graphs of speed and RPM. The track is saved under Setup, GPS and Tracks and offered again for your next session.</string>
+
+    <string name="help_ex_how_h">Export a trip</string>
+    <string name="help_ex_how_b">Open a trip on the Trips page and tap Export for PC. Choose a format. Lap sessions also give a CSV with one row per lap.</string>
+    <string name="help_ex_programs_h">What opens what</string>
+    <string name="help_ex_programs_b">VBO: Circuit Tools, RaceChrono and RaceRender. GPX: Google Earth, GPS Visualizer and most map apps. CSV: Excel, LibreOffice Calc and Google Sheets.</string>
+    <string name="help_ex_transfer_h">Get the files off the unit</string>
+    <string name="help_ex_transfer_b">Use Copy to USB or SD card on the Trips page. Or tap Start Wi-Fi export and open the address it shows in a browser on a phone or PC on the same network, then type the PIN shown on the unit.</string>
+    <string name="help_ex_units_h">Units</string>
+    <string name="help_ex_units_b">Exports are always metric (km/h, km, °C), as the VBO and GPX formats expect, whatever units the app shows. The CSV column names include the unit, for example speed (km/h).</string>
+
+    <string name="help_bat_on_h">The adapter stays on</string>
+    <string name="help_bat_on_b">An adapter draws power from the OBD port all the time. Simple adapters use roughly 20 to 50 mA and have no sleep mode, so the ignition does not switch them off. Better ones (OBDLink, Vgate iCar Pro and vLinker) sleep when the engine stops and use only a few mA.</string>
+    <string name="help_bat_do_h">What you can do</string>
+    <string name="help_bat_do_b">Unplug a simple adapter when the car stands for more than a week or two, or when the battery is already weak.</string>
+    <string name="help_bat_app_h">What the app does</string>
+    <string name="help_bat_app_b">While the engine is off, K-Line Dash stops asking the car for values (the status bar says Engine off). Set a battery warning under Setup, Warnings to hear about a low voltage early.</string>
+
+    <string name="about_tagline">Made for drivers who want to see what their car is doing.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_privacy_title">Privacy</string>
+    <string name="about_privacy_body">K-Line Dash works offline. It has no account, no ads and no analytics, and it sends nothing anywhere. Your trips, settings and crash reports stay on this device until you export them yourself.</string>
+    <string name="about_permissions_title">What the permissions are for</string>
+    <string name="about_perm_bluetooth_h">Bluetooth (Nearby devices)</string>
+    <string name="about_perm_bluetooth_b">Finds your Bluetooth adapter and talks to it.</string>
+    <string name="about_perm_location_h">Location</string>
+    <string name="about_perm_location_b">Only for GPS speed, routes and lap times, and on Android 11 and older to find Bluetooth LE adapters. It never leaves the device.</string>
+    <string name="about_perm_notifications_h">Notifications</string>
+    <string name="about_perm_notifications_b">Shows that the connection to the adapter stays alive in the background.</string>
+    <string name="about_perm_network_h">Local network</string>
+    <string name="about_perm_network_b">Reaches a Wi-Fi adapter, and serves your trips to your own devices on the same network during the optional Wi-Fi export. That export is off until you start it and needs a PIN.</string>
+    <string name="about_perm_options_h">Only if you turn them on</string>
+    <string name="about_perm_options_b">Start with the head unit, display over other apps and the battery optimization exemption, all under Setup, Startup.</string>
+    <string name="about_licenses_title">Open-source licenses</string>
+    <string name="about_licenses_intro">K-Line Dash is built with these open-source libraries. Test-only tools such as JUnit are not part of the app.</string>
+    <string name="about_license_show">Show the Apache License 2.0</string>
+    <string name="about_license_hide">Hide the Apache License 2.0</string>
+    <string name="about_crash_title">Crash reports</string>
+    <string name="about_crash_none">No crashes recorded.</string>
+    <string name="about_crash_latest">Latest crash: %1$s, version %2$s</string>
+    <string name="about_crash_count">%1$s crashes recorded.</string>
+    <string name="about_crash_hint">A report holds the error and the app version, nothing else. Nothing is sent: share the file yourself if you report a problem.</string>
+    <string name="about_crash_export">Export crash log</string>
+    <string name="about_crash_clear">Clear</string>
+    <string name="about_crash_exported">Crash log saved</string>
+    <string name="about_crash_export_failed">Export failed. Try again.</string>
+    <string name="about_crash_saved_to">Crash log saved to %1$s</string>
+    <string name="about_crash_cleared">Crash reports cleared</string>
 </resources>

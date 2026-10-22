@@ -144,14 +144,15 @@ internal fun ValueText(
     tone: State<ValueTone>,
     style: TextStyle,
     modifier: Modifier = Modifier,
-    sample: String = slotSample(signal),
+    sample: String = slotSample(signal, LocalUnitSystem.current),
     ink: Color = KLineTheme.colors.ink,
     dimmed: Color = KLineTheme.colors.inkFaint,
     align: TextAlign = TextAlign.End,
 ) {
     val words = rememberOnOffWords()
-    val text by remember(signal, reading, words) {
-        derivedStateOf { reading.value?.let { formatReading(signal, it.value, words) } ?: MISSING_VALUE }
+    val units = LocalUnitSystem.current
+    val text by remember(signal, reading, words, units) {
+        derivedStateOf { reading.value?.let { formatReading(signal, it.value, words, units) } ?: MISSING_VALUE }
     }
     val slotWidth = rememberTextWidth(sample, style)
     Text(

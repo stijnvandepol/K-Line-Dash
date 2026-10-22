@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui.cluster
 
 import androidx.compose.ui.geometry.Offset
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.min
@@ -19,6 +20,12 @@ private const val DEG_TO_RAD = (Math.PI / 180.0).toFloat()
 /** The tach and the speedometer scales of docs/cluster-styles.md. */
 internal const val TACH_MAX_RPM = 9_000.0
 internal const val SPEEDO_MAX_KMH = 260.0
+
+/** The imperial speedometer: 0 to 160 mph, ticks every 10 and a numeral every 40 like the metric one. */
+internal const val SPEEDO_MAX_MPH = 160.0
+
+/** The top of the speedometer scales in the shown [units]. */
+internal fun speedoMax(units: UnitSystem): Double = if (units == UnitSystem.METRIC) SPEEDO_MAX_KMH else SPEEDO_MAX_MPH
 
 /** Sweep of the round dials of the twin and centre styles, and of the arc style's tachometer. */
 internal const val DIAL_SWEEP_DEG = 250f
@@ -173,16 +180,27 @@ private const val RING_START_DEG = 118f
 internal val LeftRingTach = ArcScale(0.0, TACH_MAX_RPM, RING_START_DEG, -RING_SWEEP_DEG)
 
 /** The speed ring: the right one, the mirror image of [LeftRingTach]. */
-internal val RightRingSpeed = ArcScale(0.0, SPEEDO_MAX_KMH, FULL_TURN_DEG / 2 - RING_START_DEG, RING_SWEEP_DEG)
+internal fun rightRingSpeed(units: UnitSystem) = ArcScale(0.0, speedoMax(units), FULL_TURN_DEG / 2 - RING_START_DEG, RING_SWEEP_DEG)
 
 /** The round tachometer of the twin and centre styles. */
 internal val DialTach = topCentredScale(0.0, TACH_MAX_RPM, DIAL_SWEEP_DEG)
 
 /** The round speedometer of the twin style. */
-internal val DialSpeedo = topCentredScale(0.0, SPEEDO_MAX_KMH, DIAL_SWEEP_DEG)
+internal fun dialSpeedo(units: UnitSystem) = topCentredScale(0.0, speedoMax(units), DIAL_SWEEP_DEG)
 
 /** The segmented tachometer of the arc style. */
 internal val ArcTach = topCentredScale(0.0, TACH_MAX_RPM, ARC_SWEEP_DEG)
 
-/** The slim coolant dial between the twin dials: a quarter of a circle across the top, cold left, hot right. */
-internal val CoolantScale = ArcScale(40.0, 130.0, 225f, QUARTER_TURN_DEG)
+private const val COOLANT_COLD_C = 40.0
+private const val COOLANT_HOT_C = 130.0
+private const val COOLANT_COLD_F = 100.0
+private const val COOLANT_HOT_F = 270.0
+
+/**
+ * The slim coolant dial between the twin dials: a quarter of a circle across the top, cold left,
+ * hot right. The ends are 40 to 130 °C, or 100 to 270 °F (whole tens, so the ticks fall on round numbers).
+ */
+internal fun coolantScale(units: UnitSystem) = when (units) {
+    UnitSystem.METRIC -> ArcScale(COOLANT_COLD_C, COOLANT_HOT_C, 225f, QUARTER_TURN_DEG)
+    UnitSystem.IMPERIAL -> ArcScale(COOLANT_COLD_F, COOLANT_HOT_F, 225f, QUARTER_TURN_DEG)
+}

@@ -15,6 +15,9 @@ import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
  */
 class EcuNotRespondingException(message: String) : TransportException(message)
 
+/** How the message of an [EcuNotRespondingException] starts, so the UI can tell this failure from the others. */
+const val ECU_NOT_RESPONDING_PREFIX = "ECU did not respond"
+
 /**
  * One connected [Transport] plus a [CommLog]: sends single commands and runs the ELM327
  * init / protocol-detection sequence. Not thread-safe; [ElmConnectionManager] serialises calls.
@@ -239,7 +242,7 @@ class Elm327Session(
         }
 
         throw EcuNotRespondingException(
-            "ECU did not respond (${describe(lastProbe)}). Is the ignition on, " +
+            "$ECU_NOT_RESPONDING_PREFIX (${describe(lastProbe)}). Is the ignition on, " +
                 "is the adapter plugged into the car and is this the right vehicle?",
         )
     }

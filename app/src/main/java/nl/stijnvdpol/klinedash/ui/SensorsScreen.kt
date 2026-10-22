@@ -179,7 +179,7 @@ private fun RowScope.SensorCell(
     Text(signal.name, style = KLineType.body, color = colors.ink, maxLines = 1, modifier = Modifier.weight(1f).alignByBaseline())
     ValueText(signal, reading, stale, tone, KLineType.rowValue, Modifier.alignByBaseline(), sample = VALUE_COLUMN_SAMPLE)
     Text(
-        signal.unit, style = KLineType.caption, color = colors.inkMuted, maxLines = 1,
+        unitOf(signal, LocalUnitSystem.current), style = KLineType.caption, color = colors.inkMuted, maxLines = 1,
         modifier = Modifier.padding(start = ColumnGap).width(UnitColumnWidth).alignByBaseline(),
     )
     Text(

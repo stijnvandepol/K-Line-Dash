@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.core.alert.AlertKind
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
+import nl.stijnvdpol.klinedash.data.UnitSystem
 
 private const val STOP_TIMEOUT_MS = 5_000L
 
@@ -27,8 +28,8 @@ internal class WarningsViewModel(private val repository: AlertSettingsRepository
     fun setSound(kind: AlertKind, isOn: Boolean) =
         update { it.copy(withSound = if (isOn) it.withSound + kind else it.withSound - kind) }
 
-    /** One step of [limit]: [direction] 1 raises it, -1 lowers it. */
-    fun step(limit: AlertLimit, direction: Int) = update { it.stepped(limit, direction) }
+    /** One step of [limit] in the unit the user sees ([units]): [direction] 1 raises it, -1 lowers it. */
+    fun step(limit: AlertLimit, direction: Int, units: UnitSystem) = update { it.stepped(limit, direction, units) }
 
     fun resetToDefaults() = update { AlertSettings() }
 

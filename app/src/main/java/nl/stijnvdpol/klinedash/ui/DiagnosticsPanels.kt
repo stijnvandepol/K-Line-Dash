@@ -146,7 +146,7 @@ internal fun ReportSidePanels(report: DiagnosticReport, selected: Dtc?, modifier
     val words = rememberOnOffWords()
     Column(modifier.verticalScroll(rememberScrollState())) {
         ReadinessPanel(report.monitors)
-        FreezeFramePanel(freezeFrameView(report.freezeFrame, selected, words))
+        FreezeFramePanel(freezeFrameView(report.freezeFrame, selected, words, LocalUnitSystem.current))
     }
 }
 

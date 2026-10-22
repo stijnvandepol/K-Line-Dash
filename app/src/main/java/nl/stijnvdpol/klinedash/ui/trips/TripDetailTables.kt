@@ -21,7 +21,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.FieldCaption
+import nl.stijnvdpol.klinedash.service.Quantity
+import nl.stijnvdpol.klinedash.service.label
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.MISSING_VALUE
 import nl.stijnvdpol.klinedash.ui.SelectableRow
 import nl.stijnvdpol.klinedash.ui.ValueField
@@ -90,7 +93,7 @@ private fun LapHeader() {
         LapHeaderCell(stringResource(R.string.lap_column_lap), LAP_WEIGHT, TextAlign.Start)
         LapHeaderCell(stringResource(R.string.lap_column_time), TIME_WEIGHT, TextAlign.End)
         LapHeaderCell(stringResource(R.string.lap_column_delta), DELTA_WEIGHT, TextAlign.End)
-        LapHeaderCell(stringResource(R.string.lap_column_max_speed), SPEED_WEIGHT, TextAlign.End)
+        LapHeaderCell(stringResource(R.string.lap_column_max_speed, LocalUnitSystem.current.label(Quantity.SPEED)), SPEED_WEIGHT, TextAlign.End)
         LapHeaderCell(stringResource(R.string.lap_column_max_rpm), RPM_WEIGHT, TextAlign.End)
         LapHeaderCell(stringResource(R.string.lap_column_full_throttle), THROTTLE_WEIGHT, TextAlign.End)
         LapHeaderCell("", MARK_WEIGHT, TextAlign.End)

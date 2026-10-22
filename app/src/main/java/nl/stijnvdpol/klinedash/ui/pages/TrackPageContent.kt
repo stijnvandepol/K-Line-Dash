@@ -38,7 +38,9 @@ import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.ValueTone
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.VerticalRule
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.slotSample
+import nl.stijnvdpol.klinedash.ui.unitOf
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -87,15 +89,16 @@ internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Pea
 
 @Composable
 private fun SideColumn(live: LiveState, peaks: State<Peaks>, onResetPeaks: () -> Unit, modifier: Modifier) {
+    val speedUnit = unitOf(checkNotNull(Signals.byId(SPEED_ID)), LocalUnitSystem.current)
     Column(modifier) {
         DataField(COOLANT_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
         HorizontalRule()
         DataField(SPEED_ID, SideLook, live, Modifier.weight(1f).fillMaxWidth())
         HorizontalRule()
         Row(Modifier.height(PeakRowHeight).fillMaxWidth()) {
-            PeakField(R.string.track_max_rpm, RPM_ID, peaks, { it.maxRpm }, Modifier.weight(1f).fillMaxHeight())
+            PeakField(stringResource(R.string.track_max_rpm), RPM_ID, peaks, { it.maxRpm }, Modifier.weight(1f).fillMaxHeight())
             VerticalRule()
-            PeakField(R.string.track_max_speed, SPEED_ID, peaks, { it.maxSpeed }, Modifier.weight(1f).fillMaxHeight())
+            PeakField(stringResource(R.string.track_max_speed, speedUnit), SPEED_ID, peaks, { it.maxSpeed }, Modifier.weight(1f).fillMaxHeight())
         }
         HorizontalRule()
         TextActionButton(stringResource(R.string.track_reset_peaks), onResetPeaks, Modifier.fillMaxWidth().height(Spacing.touchMin))
@@ -104,12 +107,12 @@ private fun SideColumn(live: LiveState, peaks: State<Peaks>, onResetPeaks: () ->
 
 /** A peak value in the look of a small field; "--" until a reading has come in since the reset. */
 @Composable
-private fun PeakField(labelRes: Int, signalId: String, peaks: State<Peaks>, select: (Peaks) -> Double?, modifier: Modifier) {
+private fun PeakField(label: String, signalId: String, peaks: State<Peaks>, select: (Peaks) -> Double?, modifier: Modifier) {
     val signal = remember(signalId) { checkNotNull(Signals.byId(signalId)) }
     val reading = remember(peaks, signalId) { derivedStateOf { select(peaks.value)?.let { Reading(signalId, it, 0L) } } }
     val never = remember { mutableStateOf(false) }
     val normal = remember { mutableStateOf(ValueTone.NORMAL) }
-    FieldFrame(stringResource(labelRes).uppercase(), unit = null, look = PeakLook, slotSample = slotSample(signal), modifier = modifier) { style ->
+    FieldFrame(label.uppercase(), unit = null, look = PeakLook, slotSample = slotSample(signal, LocalUnitSystem.current), modifier = modifier) { style ->
         ValueText(signal, reading, never, normal, style)
     }
 }

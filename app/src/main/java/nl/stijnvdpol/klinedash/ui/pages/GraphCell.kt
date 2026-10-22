@@ -32,10 +32,13 @@ import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
+import nl.stijnvdpol.klinedash.service.SignalDisplay
+import nl.stijnvdpol.klinedash.service.display
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.ui.DataField
 import nl.stijnvdpol.klinedash.ui.FieldCaption
 import nl.stijnvdpol.klinedash.ui.LiveState
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.ValueLook
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.fieldLabel
@@ -73,7 +76,9 @@ private fun KnownGraphCell(signal: Signal, live: LiveState, history: GraphHistor
     val reading = rememberReading(live.readings, signal.id)
     val stale = rememberIsStale(reading, live.nowMs, signal)
     val tone = rememberValueTone(signal, reading, live.toneContext)
-    val label = fieldLabel(signal) + if (labelIsUnit(signal.id)) "" else " ${signal.unit}"
+    val units = LocalUnitSystem.current
+    val display = remember(signal, units) { signal.display(units) }
+    val label = fieldLabel(signal) + if (labelIsUnit(signal.id)) "" else " ${display.unit}"
     val description = stringResource(R.string.graph_description, signal.name)
     Column(modifier.semantics { contentDescription = description }) {
         Row(
@@ -85,7 +90,7 @@ private fun KnownGraphCell(signal: Signal, live: LiveState, history: GraphHistor
             ValueText(signal, reading, stale, tone, KLineType.fieldValue)
         }
         GraphPlot(
-            signal, live.nowMs, history, revision,
+            signal, display, slotSample(signal, units), live.nowMs, history, revision,
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -100,15 +105,23 @@ private fun KnownGraphCell(signal: Signal, live: LiveState, history: GraphHistor
  * draw and the points are read from the ring buffer by index, so a draw allocates no objects per point.
  */
 @Composable
-private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory, revision: State<Int>, modifier: Modifier) {
+private fun GraphPlot(
+    signal: Signal,
+    display: SignalDisplay,
+    sample: String,
+    nowMs: State<Long>,
+    history: GraphHistory,
+    revision: State<Int>,
+    modifier: Modifier,
+) {
     val colors = KLineTheme.colors
     val measurer = rememberTextMeasurer()
     Spacer(
         modifier.fillMaxSize().drawWithCache {
             val path = Path()
-            val frame = PlotFrame(size, this, measurer, signal)
-            val high = ValueLabel(measurer, signal.decimals)
-            val low = ValueLabel(measurer, signal.decimals)
+            val frame = PlotFrame(size, this, measurer, sample)
+            val high = ValueLabel(measurer, display.decimals)
+            val low = ValueLabel(measurer, display.decimals)
             onDrawBehind {
                 // Reading the revision is what redraws the graph for a new point.
                 val newestRevision = revision.value
@@ -118,12 +131,12 @@ private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory,
                 val data = series?.rangeSince(sinceMs)
                 if (series == null || data == null || newestRevision < 0) return@onDrawBehind
 
-                val axis = graphAxis(data, signal)
+                val axis = graphAxis(ValueRange(display.value(data.low), display.value(data.high)), display)
                 val first = series.firstIndexAtOrAfter(sinceMs)
                 path.rewind()
                 for (i in first until series.size) {
                     val x = frame.left + (series.timeAt(i) - sinceMs).toFloat() / GRAPH_WINDOW_MS * frame.width
-                    val y = frame.yOf(series.valueAt(i), axis)
+                    val y = frame.yOf(display.value(series.valueAt(i)), axis)
                     if (i == first) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawPath(path, colors.ink, style = frame.lineStroke)
@@ -135,15 +148,15 @@ private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory,
 
 /**
  * Where a graph draws, shared by the dashboard Graph cell and the lap graph of the trip detail: the
- * plot starts right of the axis labels (as wide as the signal's widest value) and keeps the line its
+ * plot starts right of the axis labels (as wide as [sample], the signal's widest value) and keeps the line its
  * own width clear of the two rules, so a value at an end of the axis is never cut in half.
  */
-internal class PlotFrame(size: Size, density: Density, measurer: TextMeasurer, signal: Signal) {
+internal class PlotFrame(size: Size, density: Density, measurer: TextMeasurer, sample: String) {
     private val lineInset = with(density) { LineWidth.toPx() }
     private val ruleHeight = with(density) { Spacing.ruleThickness.toPx() }
     private val height = size.height
     private val plotHeight = height - 2 * lineInset
-    val left: Float = measurer.measure(slotSample(signal), KLineType.fieldLabel).size.width + with(density) { LabelGap.toPx() }
+    val left: Float = measurer.measure(sample, KLineType.fieldLabel).size.width + with(density) { LabelGap.toPx() }
     val width: Float = size.width - left
     val lineStroke = Stroke(lineInset, join = StrokeJoin.Round)
 

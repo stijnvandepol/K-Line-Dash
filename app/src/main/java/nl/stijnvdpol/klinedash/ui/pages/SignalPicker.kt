@@ -18,10 +18,12 @@ import nl.stijnvdpol.klinedash.data.WidgetType
 import nl.stijnvdpol.klinedash.ui.ChoiceCells
 import nl.stijnvdpol.klinedash.ui.DialogListMaxHeight
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RaceDialog
 import nl.stijnvdpol.klinedash.ui.SecondaryButton
 import nl.stijnvdpol.klinedash.ui.SelectableRow
 import nl.stijnvdpol.klinedash.ui.rememberInitialFocus
+import nl.stijnvdpol.klinedash.ui.unitOf
 import nl.stijnvdpol.klinedash.ui.supportedSignals
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -77,7 +79,7 @@ internal fun SignalPickerDialog(
             signals.forEach { signal ->
                 SelectableRow(selected = signal.id == currentSignalId, onClick = { onPick(signal.id) }) {
                     Text(signal.name, style = KLineType.body, color = KLineTheme.colors.ink, modifier = Modifier.weight(1f))
-                    Text(signal.unit, style = KLineType.caption, color = KLineTheme.colors.inkMuted)
+                    Text(unitOf(signal, LocalUnitSystem.current), style = KLineType.caption, color = KLineTheme.colors.inkMuted)
                 }
             }
         }

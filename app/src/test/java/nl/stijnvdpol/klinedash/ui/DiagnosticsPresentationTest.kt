@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.core.diag.Dtc
 import nl.stijnvdpol.klinedash.core.diag.DtcDescription
 import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
@@ -166,7 +167,7 @@ class DiagnosticsPresentationTest {
 
     @Test
     fun `freeze frame values use the signal name, decimals and unit`() {
-        val view = freezeFrameView(frame, selected = lean, words = words) as FreezeFrameView.Values
+        val view = freezeFrameView(frame, selected = lean, words = words, UnitSystem.METRIC) as FreezeFrameView.Values
         assertEquals(lean, view.triggerCode)
         assertEquals(
             listOf(FreezeRow("RPM", "2100", "rpm"), FreezeRow("Coolant", "85", "°C"), FreezeRow("Timing", "12.0", "°")),
@@ -176,20 +177,20 @@ class DiagnosticsPresentationTest {
 
     @Test
     fun `a frame for another code is not shown as the selected codes frame`() {
-        assertEquals(FreezeFrameView.OtherCode(selected = vvt, triggerCode = lean), freezeFrameView(frame, selected = vvt, words = words))
+        assertEquals(FreezeFrameView.OtherCode(selected = vvt, triggerCode = lean), freezeFrameView(frame, selected = vvt, words = words, UnitSystem.METRIC))
     }
 
     @Test
     fun `no frame, or one without usable values, shows none`() {
-        assertEquals(FreezeFrameView.None, freezeFrameView(null, lean, words))
-        assertEquals(FreezeFrameView.None, freezeFrameView(FreezeFrame(lean, emptyList()), lean, words))
-        assertEquals(FreezeFrameView.None, freezeFrameView(FreezeFrame(lean, listOf(Reading("unknown_signal", 1.0, 0))), lean, words))
+        assertEquals(FreezeFrameView.None, freezeFrameView(null, lean, words, UnitSystem.METRIC))
+        assertEquals(FreezeFrameView.None, freezeFrameView(FreezeFrame(lean, emptyList()), lean, words, UnitSystem.METRIC))
+        assertEquals(FreezeFrameView.None, freezeFrameView(FreezeFrame(lean, listOf(Reading("unknown_signal", 1.0, 0))), lean, words, UnitSystem.METRIC))
     }
 
     @Test
     fun `a frame without a trigger code is shown whatever is selected`() {
         val withoutTrigger = FreezeFrame(null, listOf(Reading("rpm", 900.0, 0)))
-        assertTrue(freezeFrameView(withoutTrigger, selected = vvt, words = words) is FreezeFrameView.Values)
+        assertTrue(freezeFrameView(withoutTrigger, selected = vvt, words = words, UnitSystem.METRIC) is FreezeFrameView.Values)
     }
 
     // --- text ---------------------------------------------------------------------------------

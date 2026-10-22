@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui.cluster
 
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -35,8 +36,8 @@ class ArcScaleTest {
 
     @Test
     fun theSpeedometerCoversZeroTo260() {
-        assertEquals(145f, DialSpeedo.angleDeg(0.0), EPSILON)
-        assertEquals(395f, DialSpeedo.angleDeg(SPEEDO_MAX_KMH), EPSILON)
+        assertEquals(145f, dialSpeedo(UnitSystem.METRIC).angleDeg(0.0), EPSILON)
+        assertEquals(395f, dialSpeedo(UnitSystem.METRIC).angleDeg(SPEEDO_MAX_KMH), EPSILON)
     }
 
     @Test
@@ -46,15 +47,42 @@ class ArcScaleTest {
         assertEquals(0f, LeftRingTach.angleDeg(4_500.0), EPSILON)
         for (fraction in listOf(0.0, 0.25, 0.5, 1.0)) {
             val left = LeftRingTach.angleDeg(fraction * TACH_MAX_RPM)
-            val right = RightRingSpeed.angleDeg(fraction * SPEEDO_MAX_KMH)
+            val right = rightRingSpeed(UnitSystem.METRIC).angleDeg(fraction * SPEEDO_MAX_KMH)
             assertEquals(180f - left, right, EPSILON)
         }
     }
 
     @Test
+    fun theImperialSpeedometerCoversZeroTo160() {
+        assertEquals(160.0, speedoMax(UnitSystem.IMPERIAL), 0.0)
+        assertEquals(145f, dialSpeedo(UnitSystem.IMPERIAL).angleDeg(0.0), EPSILON)
+        assertEquals(395f, dialSpeedo(UnitSystem.IMPERIAL).angleDeg(160.0), EPSILON)
+        assertEquals(260.0, speedoMax(UnitSystem.METRIC), 0.0)
+        val left = LeftRingTach.angleDeg(0.5 * TACH_MAX_RPM)
+        assertEquals(180f - left, rightRingSpeed(UnitSystem.IMPERIAL).angleDeg(80.0), EPSILON)
+    }
+
+    @Test
+    fun theImperialSpeedometerHasTicksEvery10AndNumeralsEvery40() {
+        val ticks = dialTicks(dialSpeedo(UnitSystem.IMPERIAL), minorStep = 10, majorStep = 20, labelStep = 40)
+        assertEquals(17, ticks.size)
+        assertEquals((0..4).map { it * 40.0 }, ticks.filter { it.hasLabel }.map { it.value })
+        assertEquals(160.0, ticks.last().value, 0.0)
+    }
+
+    @Test
+    fun theImperialCoolantDialRunsFrom100To270Degrees() {
+        val scale = coolantScale(UnitSystem.IMPERIAL)
+        assertEquals(225f, scale.angleDeg(100.0), EPSILON)
+        assertEquals(315f, scale.angleDeg(270.0), EPSILON)
+        val ticks = dialTicks(scale, minorStep = 10, majorStep = 50, labelStep = 50)
+        assertEquals(listOf(100.0, 150.0, 200.0, 250.0), ticks.filter { it.kind == TickKind.MAJOR }.map { it.value })
+    }
+
+    @Test
     fun theCoolantDialIsAQuarterCircleAcrossTheTop() {
-        assertEquals(225f, CoolantScale.angleDeg(40.0), EPSILON)
-        assertEquals(315f, CoolantScale.angleDeg(130.0), EPSILON)
+        assertEquals(225f, coolantScale(UnitSystem.METRIC).angleDeg(40.0), EPSILON)
+        assertEquals(315f, coolantScale(UnitSystem.METRIC).angleDeg(130.0), EPSILON)
     }
 }
 
@@ -72,7 +100,7 @@ class DialTicksTest {
 
     @Test
     fun theSpeedometerHasMajorTicksEvery20AndNumeralsEvery40() {
-        val ticks = dialTicks(DialSpeedo, minorStep = 10, majorStep = 20, labelStep = 40)
+        val ticks = dialTicks(dialSpeedo(UnitSystem.METRIC), minorStep = 10, majorStep = 20, labelStep = 40)
         assertEquals(27, ticks.size)
         assertEquals(14, ticks.count { it.kind == TickKind.MAJOR })
         assertEquals((0..6).map { it * 40.0 }, ticks.filter { it.hasLabel }.map { it.value })

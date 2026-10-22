@@ -211,27 +211,27 @@ A change is done when every line is true:
 Fill this in per repository. It is the one section an agent cannot infer, and the one most often left empty. Fill it in before anything else in this file matters.
 
 ```
-Stack:            Kotlin 2.1, AGP 8.7.3, Gradle 8.11.1 (wrapper), JDK 17, Jetpack Compose (BOM 2024.12.01,
-                  Material 3), Room 2.6.1 (KSP), kotlinx.coroutines 1.9; Android minSdk 26 / targetSdk 34
-                  (compileSdk 35). Tests: JUnit 4 + kotlinx-coroutines-test.
+Stack:            Kotlin 2.1, AGP 8.7.3, Gradle 8.11.1 (wrapper), JDK 17, Jetpack Compose (Material 3),
+                  Room (KSP), kotlinx.coroutines (versions: gradle/libs.versions.toml); Android minSdk 26 /
+                  targetSdk 34 / compileSdk 35. Tests: JUnit 4 + kotlinx-coroutines-test.
 Run locally:      ./gradlew :app:installDebug   (then start K-Line Dash on the device/head unit;
                   the Simulator transport needs no adapter)
-Run tests:        ./gradlew :obd-core:test
-Lint / format:    ./gradlew :app:lintDebug   (report: app/build/reports/lint-results-debug.html)
-Build:            ./gradlew :app:assembleDebug   (sideload APK: ./gradlew :app:assembleRelease)
-Architecture:     Two modules. :obd-core is pure Kotlin/JVM, layered transport -> elm -> obd, plus
-                  sim and log: transport/ moves ASCII to the adapter and frames on the '>' prompt
-                  (Transport, StreamTransport, WifiTransport, PromptBuffer); elm/ runs the ELM327
-                  init, parses replies (ElmParser -> ElmResult) and owns connect/reconnect
-                  (ElmConnectionManager implements ElmLink); obd/ builds on ElmLink; sim/ is a fake
-                  ELM327 + 2ZZ-GE engine behind the Transport interface; log/ is the ring-buffered
-                  CommLog. :app is the Android shell: Bluetooth Classic/BLE transports
-                  (app/.../transport), the foreground ObdService that owns the one link and publishes
-                  it through ObdServiceState, Room-backed settings (data/), and the Compose UI (ui/)
-                  with ViewModels that only talk to ObdServiceState and the repositories.
-                  Docs: docs/ (install/test guide, research notes in docs/research/).
+Run tests:        ./gradlew :obd-core:test :app:testDebugUnitTest (full gate: add assembleDebug assembleRelease lintDebug)
+Lint / format:    ./gradlew :app:lintDebug (report: app/build/reports/lint-results-debug.html)
+Build:            ./gradlew :app:assembleDebug; release APK: :app:assembleRelease (signing, version, release
+                  steps: docs/RELEASING.md; the version lives in app/build.gradle.kts only)
+Architecture:     :obd-core (pure Kotlin/JVM): transport -> elm (ELM327 init, parser, ElmLink with
+                  reconnect) -> obd (signals, poll scheduler) -> diag, alert, trip, geo, export,
+                  exportformat; sim/ fakes an ELM327 car. :app: BT/BLE transports, the foreground
+                  ObdService owning link, poller, alerts, trips and GPS (published via ObdServiceState),
+                  Room data/, Compose ui/ whose ViewModels only use ObdServiceState and repositories.
+                  Overview: README.md; design: docs/design-system.md; research: docs/research/.
 Known oddities:   obd-core has no Android imports on purpose, so its tests run on any JDK.
-                  The release build is signed with the debug key: the app is sideload-only.
+                  Sideload-only; never publish a debug-signed APK. Release builds are minified (R8): new
+                  reflection needs a keep rule in app/proguard-rules.pro. Library versions are capped by the
+                  toolchain: core-ktx 1.16, activity 1.10 (AGP 8.7.3 / compileSdk 35), Room 2.7 (KSP vs Kotlin
+                  2.1.0), Compose BOM 2025.07 and lifecycle 2.8.7 (newer ones break AGP 8.7's lint). Nothing is
+                  backed up and crashes stay in a local CrashLog, on purpose. Debug builds run StrictMode.
                   targetSdk is 34, not 35, to avoid forced edge-to-edge on head units with odd bars.
                   ElmConnectionManager retries forever (capped backoff, no max attempts) by design:
                   ignition off is the normal state, not an error.

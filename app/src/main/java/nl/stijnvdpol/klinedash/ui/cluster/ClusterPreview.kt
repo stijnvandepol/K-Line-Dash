@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.data.ClusterStyle
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -105,7 +106,7 @@ private fun DrawScope.drawTwinSketch(colors: KLineColors) {
     val radius = top * 0.45f
     val y = top / 2f
     drawDial(colors, Offset(size.width * 0.27f, y), radius, DialTach.angleDeg(NEEDLE_FRACTION * TACH_MAX_RPM))
-    drawDial(colors, Offset(size.width * 0.73f, y), radius, DialSpeedo.angleDeg(NEEDLE_FRACTION * SPEEDO_MAX_KMH))
+    drawDial(colors, Offset(size.width * 0.73f, y), radius, dialSpeedo(UnitSystem.METRIC).angleDeg(NEEDLE_FRACTION * SPEEDO_MAX_KMH))
     val mid = polar(size.width / 2f, y + radius * 0.5f, radius * 0.45f, 270f)
     drawArc(colors.inkMuted, 225f, 90f, false, Offset(size.width / 2f - radius * 0.45f, y + radius * 0.05f), Size(radius * 0.9f, radius * 0.9f), style = Stroke(1.5.dp.toPx()))
     drawCircle(colors.ink, 1.5.dp.toPx(), mid)
@@ -152,7 +153,7 @@ private fun DrawScope.drawVirtualSketch(colors: KLineColors) {
     val rightCenter = Offset(size.width - radius * 0.64f, y)
     listOf(leftCenter to true, rightCenter to false).forEach { (center, isLeft) ->
         drawCircle(colors.ring, radius, center, style = Stroke(1.5.dp.toPx()))
-        val scale = if (isLeft) LeftRingTach else RightRingSpeed
+        val scale = if (isLeft) LeftRingTach else rightRingSpeed(UnitSystem.METRIC)
         val start = scale.startDeg
         drawArc(colors.needle, start, scale.sweepDeg * 0.5f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2, radius * 2), style = Stroke(3.dp.toPx()))
         drawRect(colors.ink, Offset(center.x - radius * 0.25f, y - top * 0.08f), Size(radius * 0.5f, top * 0.16f))

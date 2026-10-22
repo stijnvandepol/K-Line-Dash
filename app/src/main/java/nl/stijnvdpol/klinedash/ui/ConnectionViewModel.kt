@@ -103,6 +103,14 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun selectKind(kind: TransportKind) = updateSettings { it.copy(kind = kind) }
 
+    /** Chooses the simulator and, once that is stored, runs [then] (starting the link): the link must see the new choice. */
+    fun useSimulator(then: () -> Unit) {
+        viewModelScope.launch {
+            repository.update { it.copy(kind = TransportKind.SIMULATOR) }
+            then()
+        }
+    }
+
     fun selectBtDevice(device: BtDeviceInfo) = updateSettings { it.copy(btAddress = device.address, btName = device.name) }
 
     fun selectBleDevice(device: BtDeviceInfo) = updateSettings { it.copy(bleAddress = device.address, bleName = device.name) }

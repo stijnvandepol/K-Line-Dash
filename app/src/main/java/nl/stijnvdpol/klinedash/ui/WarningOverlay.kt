@@ -69,7 +69,7 @@ internal fun WarningBanner(banner: Banner, onDismiss: () -> Unit, modifier: Modi
             .padding(horizontal = Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(bannerText(banner.alert), style = KLineType.fieldLabel, color = textColor, maxLines = 1, modifier = Modifier.weight(1f))
+        Text(bannerText(banner.alert, LocalUnitSystem.current), style = KLineType.fieldLabel, color = textColor, maxLines = 1, modifier = Modifier.weight(1f))
         if (banner.moreCount > 0) Text("+${banner.moreCount}", style = KLineType.fieldLabel, color = textColor, maxLines = 1)
     }
 }

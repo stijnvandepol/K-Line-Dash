@@ -2,11 +2,9 @@ package nl.stijnvdpol.klinedash.ui
 
 import android.annotation.SuppressLint
 import android.net.Uri
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +20,6 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.AppGraph
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
@@ -31,7 +28,6 @@ import nl.stijnvdpol.klinedash.core.elm.ElmResult
 import nl.stijnvdpol.klinedash.core.log.LogEntry
 import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.service.ObdServiceState
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Collections
 import java.util.Date
@@ -185,13 +181,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
     fun exportTo(uri: Uri) {
         val link = ObdServiceState.link.value
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    val text = link?.log?.exportText().orEmpty()
-                    context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-                        ?: error("No output stream")
-                }.onFailure { Log.w(TAG, "Log export to $uri failed", it) }.isSuccess
-            }
+            val ok = TextExport.toUri(context, uri, link?.log?.exportText().orEmpty())
             message.show(context.getString(if (ok) R.string.debug_export_ok else R.string.debug_export_failed))
         }
     }
@@ -203,12 +193,7 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
     fun exportToAppFolder(fileName: String, pickerMissing: Boolean) {
         val link = ObdServiceState.link.value
         viewModelScope.launch {
-            val file = withContext(Dispatchers.IO) {
-                runCatching {
-                    val dir = context.getExternalFilesDir(null) ?: context.filesDir
-                    File(dir, fileName).also { it.writeText(link?.log?.exportText().orEmpty()) }
-                }.onFailure { Log.w(TAG, "Log export to app folder ($fileName) failed", it) }.getOrNull()
-            }
+            val file = TextExport.toAppFolder(context, fileName, link?.log?.exportText().orEmpty())
             val text = when {
                 file == null -> context.getString(R.string.debug_export_failed)
                 pickerMissing -> context.getString(R.string.debug_export_no_picker, file.absolutePath)

@@ -7,8 +7,11 @@ import nl.stijnvdpol.klinedash.core.geo.LapTimingState
 import nl.stijnvdpol.klinedash.core.trip.LapStats
 import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.Trip
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.service.GatePlacement
 import nl.stijnvdpol.klinedash.service.GpsStatus
+import nl.stijnvdpol.klinedash.service.Quantity
+import nl.stijnvdpol.klinedash.service.format
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.service.placeGateAt
 import nl.stijnvdpol.klinedash.ui.LOCATION_OFF_HINT
@@ -176,11 +179,11 @@ internal data class LapRow(
 )
 
 /**
- * The lap table. The best lap is the fastest valid one; every other valid lap shows its difference
+ * The lap table, speeds in [units]. The best lap is the fastest valid one; every other valid lap shows its difference
  * to it, the best lap and the laps with a GPS dropout show "--". Full throttle is the share of the
  * lap with the throttle above 90 %, "--" when the lap has no OBD data (a phone without an adapter).
  */
-internal fun lapRows(laps: List<LapStats>): List<LapRow> {
+internal fun lapRows(laps: List<LapStats>, units: UnitSystem): List<LapRow> {
     val best = bestLapOf(laps)
     return laps.map { stats ->
         val lap = stats.lap
@@ -193,7 +196,7 @@ internal fun lapRows(laps: List<LapStats>): List<LapRow> {
             number = lap.number,
             time = formatLapTime(lap.lapTimeMs),
             delta = if (mark == LapMark.NONE && best != null) formatDelta(lap.lapTimeMs - best.lap.lapTimeMs) else MISSING_VALUE,
-            maxSpeed = stats.maxSpeedKmh?.let { formatNumber(it, 0) } ?: MISSING_VALUE,
+            maxSpeed = stats.maxSpeedKmh?.let { units.format(Quantity.SPEED, it, 0) } ?: MISSING_VALUE,
             maxRpm = stats.maxRpm?.let { formatNumber(it, 0) } ?: MISSING_VALUE,
             fullThrottle = fullThrottleShare(stats.fullThrottleTimeMs, lap.lapTimeMs, hasObdData = stats.maxRpm != null)
                 ?.let { formatNumber(it, 0) } ?: MISSING_VALUE,

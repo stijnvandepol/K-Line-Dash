@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,17 +74,24 @@ class AlertPresentationTest {
 
     @Test
     fun `banner texts say what and how much`() {
-        assertEquals("WATER 106 °C", bannerText(coolantCaution))
-        assertEquals("BATTERY 11.4 V", bannerText(alert(AlertKind.VOLTAGE_LOW, value = 11.4)))
-        assertEquals("BATTERY 15.6 V", bannerText(alert(AlertKind.VOLTAGE_HIGH, AlertSeverity.DANGER, 15.6)))
-        assertEquals("NEW FAULT CODE: CHECK DIAG", bannerText(alert(AlertKind.NEW_DTC)))
-        assertEquals("CHECK ENGINE LIGHT ON", bannerText(alert(AlertKind.MIL_ON)))
-        assertEquals("ADAPTER CONNECTION LOST", bannerText(alert(AlertKind.CONNECTION_LOST)))
+        assertEquals("WATER 106 °C", bannerText(coolantCaution, UnitSystem.METRIC))
+        assertEquals("BATTERY 11.4 V", bannerText(alert(AlertKind.VOLTAGE_LOW, value = 11.4), UnitSystem.METRIC))
+        assertEquals("BATTERY 15.6 V", bannerText(alert(AlertKind.VOLTAGE_HIGH, AlertSeverity.DANGER, 15.6), UnitSystem.METRIC))
+        assertEquals("NEW FAULT CODE: CHECK DIAG", bannerText(alert(AlertKind.NEW_DTC), UnitSystem.METRIC))
+        assertEquals("CHECK ENGINE LIGHT ON", bannerText(alert(AlertKind.MIL_ON), UnitSystem.METRIC))
+        assertEquals("ADAPTER CONNECTION LOST", bannerText(alert(AlertKind.CONNECTION_LOST), UnitSystem.METRIC))
+    }
+
+    @Test
+    fun `the coolant banner follows the unit system, the voltage does not`() {
+        assertEquals("WATER 223 °F", bannerText(coolantCaution, UnitSystem.IMPERIAL))
+        assertEquals("BATTERY 11.4 V", bannerText(alert(AlertKind.VOLTAGE_LOW, value = 11.4), UnitSystem.IMPERIAL))
+        assertEquals("WATER", bannerText(alert(AlertKind.COOLANT_HIGH, value = null), UnitSystem.IMPERIAL))
     }
 
     @Test
     fun `a reading that is missing is left out of the text`() {
-        assertEquals("WATER", bannerText(alert(AlertKind.COOLANT_HIGH, value = null)))
+        assertEquals("WATER", bannerText(alert(AlertKind.COOLANT_HIGH, value = null), UnitSystem.METRIC))
     }
 
     @Test

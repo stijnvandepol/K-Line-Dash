@@ -125,13 +125,11 @@ internal class SafDestination(private val resolver: ContentResolver, treeUri: Ur
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_SIZE,
         )
-        val cursor = resolver.query(childrenUri, projection, null, null, null)
-            ?: throw IOException("The target folder returned no listing")
-        return cursor.use {
+        return resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
             buildMap {
-                while (it.moveToNext()) put(it.getString(0), it.getLong(1))
+                while (cursor.moveToNext()) put(cursor.getString(0), cursor.getLong(1))
             }
-        }
+        } ?: throw IOException("The target folder returned no listing")
     }
 
     override fun writeNew(fileName: String, write: (OutputStream) -> Unit) {

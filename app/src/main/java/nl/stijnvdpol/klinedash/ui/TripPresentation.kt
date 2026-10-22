@@ -1,9 +1,11 @@
 package nl.stijnvdpol.klinedash.ui
 
 import nl.stijnvdpol.klinedash.data.Trip
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.service.CopyProgress
+import nl.stijnvdpol.klinedash.service.Quantity
 import nl.stijnvdpol.klinedash.service.StartResult
-import nl.stijnvdpol.klinedash.service.formatNumber
+import nl.stijnvdpol.klinedash.service.format
 import nl.stijnvdpol.klinedash.ui.trips.formatLapTime
 import java.time.Instant
 import java.time.ZoneId
@@ -59,11 +61,12 @@ internal data class TripRow(
 
 /**
  * The trip being recorded, and one cut off by a power loss that is not repaired yet, show "--" for the
- * summary values. [trackNames] maps a track id to its name for the lap summary.
+ * summary values. [units] is the system the distance is shown in; [trackNames] maps a track id to its name for the lap summary.
  */
 internal fun tripRows(
     trips: List<Trip>,
     recordingFileName: String?,
+    units: UnitSystem,
     trackNames: Map<Long, String> = emptyMap(),
     zone: ZoneId = ZoneId.systemDefault(),
 ): List<TripRow> =
@@ -75,7 +78,7 @@ internal fun tripRows(
             id = trip.id,
             start = formatTripStart(trip.startMs, zone),
             duration = endMs?.let { formatDuration(it - trip.startMs) } ?: MISSING_VALUE,
-            distance = endMs?.let { formatNumber(trip.distanceKm, DISTANCE_DECIMALS) } ?: MISSING_VALUE,
+            distance = endMs?.let { units.format(Quantity.DISTANCE, trip.distanceKm, DISTANCE_DECIMALS) } ?: MISSING_VALUE,
             lapSummary = lapSummary(trip, trackNames),
             isRecording = isRecording,
         )

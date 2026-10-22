@@ -11,3 +11,6 @@ build/
 *.aab
 # Kotlin 2.x compiler session data
 .kotlin/
+keystore.properties
+*.jks
+*.keystore

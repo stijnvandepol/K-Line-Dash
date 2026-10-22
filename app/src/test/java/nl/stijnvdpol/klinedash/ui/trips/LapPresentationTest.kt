@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui.trips
 
+import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LapTimingState
@@ -153,7 +154,7 @@ class LapPresentationTest {
 
     @Test
     fun `the table marks the best lap, the others show the difference to it`() {
-        val rows = lapRows(listOf(stats(lap(1, 84_000)), stats(lap(2, 82_500)), stats(lap(3, 83_000))))
+        val rows = lapRows(listOf(stats(lap(1, 84_000)), stats(lap(2, 82_500)), stats(lap(3, 83_000))), UnitSystem.METRIC)
         assertEquals(listOf(LapMark.NONE, LapMark.BEST, LapMark.NONE), rows.map { it.mark })
         assertEquals(listOf("+1.50", MISSING_VALUE, "+0.50"), rows.map { it.delta })
         assertEquals("1:22.500", rows[1].time)
@@ -161,7 +162,7 @@ class LapPresentationTest {
 
     @Test
     fun `a lap with a GPS dropout is never the best and shows no delta`() {
-        val rows = lapRows(listOf(stats(lap(1, 70_000, isValid = false)), stats(lap(2, 83_000))))
+        val rows = lapRows(listOf(stats(lap(1, 70_000, isValid = false)), stats(lap(2, 83_000))), UnitSystem.METRIC)
         assertEquals(listOf(LapMark.INVALID, LapMark.BEST), rows.map { it.mark })
         assertEquals(MISSING_VALUE, rows[0].delta)
     }
@@ -173,6 +174,7 @@ class LapPresentationTest {
                 stats(lap(1, 80_000), fullThrottleTimeMs = 20_000),
                 stats(lap(2, 80_000), maxSpeedKmh = 90.0, maxRpm = null),
             ),
+            UnitSystem.METRIC,
         )
         assertEquals("25", rows[0].fullThrottle)
         assertEquals(MISSING_VALUE, rows[1].fullThrottle)
@@ -182,7 +184,7 @@ class LapPresentationTest {
 
     @Test
     fun `the sector times of a lap are listed in lap time format, named S1 onwards`() {
-        val rows = lapRows(listOf(stats(lap(1, 83_000, sectors = listOf(31_200, 28_100, 23_700)))))
+        val rows = lapRows(listOf(stats(lap(1, 83_000, sectors = listOf(31_200, 28_100, 23_700)))), UnitSystem.METRIC)
         assertEquals(
             listOf(SectorSplit("S1", "0:31.200"), SectorSplit("S2", "0:28.100"), SectorSplit("S3", "0:23.700")),
             rows.single().sectors,
@@ -197,8 +199,14 @@ class LapPresentationTest {
     }
 
     @Test
+    fun `the highest speed of a lap is shown in mph in imperial`() {
+        val rows = lapRows(listOf(stats(lap(1, 83_000), maxSpeedKmh = 160.9344)), UnitSystem.IMPERIAL)
+        assertEquals("100", rows.single().maxSpeed)
+    }
+
+    @Test
     fun `no laps give no rows`() {
-        assertTrue(lapRows(emptyList()).isEmpty())
+        assertTrue(lapRows(emptyList(), UnitSystem.METRIC).isEmpty())
     }
 
     private fun splits(count: Int) = List(count) { SectorSplit("S${it + 1}", "0:32.1") }

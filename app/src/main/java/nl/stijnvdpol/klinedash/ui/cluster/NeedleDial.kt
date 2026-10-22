@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.IntOffset
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
+import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RPM_ID
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
 import nl.stijnvdpol.klinedash.ui.ValueText
@@ -45,12 +46,13 @@ internal fun rememberTachSpec(): DialSpec {
     }
 }
 
-/** The speedometer of the twin style: 0 to 260, a numeral every 40. */
+/** The speedometer of the twin style: 0 to 260 km/h or 0 to 160 mph, a numeral every 40. */
 @Composable
 internal fun rememberSpeedoSpec(): DialSpec {
     val caption = fieldLabel(checkNotNull(Signals.byId(SPEED_ID)))
-    return remember(caption) {
-        DialSpec(DialSpeedo, SPEEDO_MINOR_STEP_KMH, SPEEDO_MAJOR_STEP_KMH, SPEEDO_LABEL_STEP_KMH, 1, hasZones = false, topCaption = null, caption = caption)
+    val units = LocalUnitSystem.current
+    return remember(caption, units) {
+        DialSpec(dialSpeedo(units), SPEEDO_MINOR_STEP_KMH, SPEEDO_MAJOR_STEP_KMH, SPEEDO_LABEL_STEP_KMH, 1, hasZones = false, topCaption = null, caption = caption)
     }
 }
 
