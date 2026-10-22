@@ -119,7 +119,7 @@ class AppGraph(val appContext: Context) {
     val tripRecorder: TripRecorder by lazy {
         TripRecorder(
             tripsDir, database.tripDao(), tripSettingsRepository.settings, ObdServiceState.poller,
-            location, trackRepository.activeTrack, tripAnalysis::refreshSummary,
+            location, trackRepository.activeTrack, tripAnalysis::refreshSummary, trackRepository::release,
         )
     }
 
@@ -135,7 +135,7 @@ class AppGraph(val appContext: Context) {
 
     /** Tracks (start/finish and sector gates) and lap timing. */
     val lapSessions: LapSessions by lazy {
-        LapSessions(trackRepository, database.tripDao(), location, tripAnalysis, tripExporter)
+        LapSessions(trackRepository, database.tripDao(), location, tripAnalysis, tripExporter, tripRecorder)
     }
 
     /** Trip list, delete and copy-to-USB for the UI. */

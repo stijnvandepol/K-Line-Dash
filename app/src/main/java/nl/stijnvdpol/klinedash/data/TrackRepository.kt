@@ -36,9 +36,12 @@ class TrackRepository(private val dao: TrackDao, private val tripDao: TripDao, p
     /** Makes [id] the track for lap timing; null switches lap timing off. */
     suspend fun setActive(id: Long?) = settings.update { it.copy(activeTrackId = id) }
 
+    /** Switches lap timing off when [id] is still the active track; another active track is left alone. */
+    suspend fun release(id: Long) = settings.update { if (it.activeTrackId == id) it.copy(activeTrackId = null) else it }
+
     /** Removes the track; trips that used it keep their data but lose their laps. */
     suspend fun delete(id: Long) {
-        settings.update { if (it.activeTrackId == id) it.copy(activeTrackId = null) else it }
+        release(id)
         tripDao.clearTrack(id)
         dao.deleteById(id)
     }

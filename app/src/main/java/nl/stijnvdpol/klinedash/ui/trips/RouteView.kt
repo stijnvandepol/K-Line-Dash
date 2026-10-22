@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -48,10 +49,11 @@ private class TrackGates(val startFinish: Gate, val sectors: List<Gate>) {
 internal fun RouteView(route: List<LatLon>, lap: List<LatLon>?, track: Track?, description: String, modifier: Modifier = Modifier) {
     val colors = KLineTheme.colors
     val gates = remember(track) { track?.let { TrackGates(it.startFinish.toGate(), it.sectors.map { sector -> sector.toGate() }) } }
-    Box(modifier.background(colors.surface).semantics { contentDescription = description }) {
+    // Clipped: a stray fix that the scale ignores (see RouteProjector) is drawn outside the field, not over the tables.
+    Box(modifier.background(colors.surface).clipToBounds().semantics { contentDescription = description }) {
         Box(
             Modifier.fillMaxSize().drawWithCache {
-                val projector = RouteProjector.fit(route + gates?.ends.orEmpty(), size.width, size.height, FieldMargin.toPx())
+                val projector = RouteProjector.fit(route, size.width, size.height, FieldMargin.toPx(), gates?.ends.orEmpty())
                 val stroke = Stroke(RouteLineWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 val linePath = projector?.let { pathOf(route, it) }
                 val lapPath = projector?.let { lap?.let { positions -> pathOf(positions, it) } }

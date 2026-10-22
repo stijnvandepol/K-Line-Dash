@@ -259,4 +259,53 @@ class LapDetectorTest {
         assertNull(detector.state.predictedLapMs)
         assertEquals(0, detector.state.lapCount)
     }
+
+    @Test
+    fun theFixesOfTheLapInProgressAreKeptFromTheFixBeforeTheStartCrossing() {
+        val detector = LapDetector(gates)
+        assertTrue(detector.currentLapFixes().isEmpty())
+        // 13 fixes reach 246 m: lap 1 started at 100 m, between the fixes at 82 m and 102.5 m.
+        loopAtSpeed.take(13).forEach(detector::add)
+        val trail = detector.currentLapFixes()
+
+        assertEquals(loopAtSpeed[4], trail.first())
+        assertEquals(loopAtSpeed[12], trail.last())
+        assertEquals(9, trail.size)
+    }
+
+    @Test
+    fun theLatestValidCompleteLapIsTheReferenceLap() {
+        val detector = LapDetector(gates)
+        assertTrue(detector.state.referenceLap.isEmpty())
+        val laps = loopAtSpeed.mapNotNull(detector::add)
+        assertEquals(3, laps.size)
+
+        val reference = detector.state.referenceLap
+        assertEquals(TestLoop.LENGTH_M, SectorOrder.lapLengthM(reference), 50.0)
+        assertTrue("it starts just before the start crossing", reference.first().timeMs < laps.last().startMs)
+        assertTrue("and ends just after the end crossing", reference.last().timeMs >= laps.last().endMs)
+    }
+
+    @Test
+    fun aLapWithADropoutIsNoReferenceLap() {
+        val detector = LapDetector(gates)
+        val withDropout = loopAtSpeed.filterNot { it.timeMs in (t0 + 20_000)..(t0 + 30_000) }
+        withDropout.takeWhile { it.timeMs < t0 + 4_878 + 48_780 + 2_000 }.forEach(detector::add)
+
+        assertEquals(1, detector.state.lapCount)
+        assertFalse(checkNotNull(detector.state.lastLap).isValid)
+        assertTrue(detector.state.referenceLap.isEmpty())
+    }
+
+    @Test
+    fun aLapThatNeverEndsKeepsABoundedTrace() {
+        val detector = LapDetector(gates)
+        TestLoop.drive(150.0, 20.5).forEach(detector::add)
+        val straight = (1..20_000).map { TestWorld.fix(t0 + 7_000L + it * 1_000L, 143.5 + it * 20.0, 0.0) }
+        straight.forEach(detector::add)
+
+        val trail = detector.currentLapFixes()
+        assertTrue("${trail.size} fixes", trail.size in 1..8_000)
+        assertEquals(straight.last(), trail.last())
+    }
 }

@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,6 +32,7 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 private val StatCellHeight = 64.dp
 private val LapHeaderHeight = 48.dp
 private val SectorsHeight = 56.dp
+private val LapCaptionWidth = 64.dp
 private const val STAT_COLUMNS = 3
 
 /** Weights of the lap table columns: the numerals are right-aligned in their slot, the lap number and the mark are not. */
@@ -151,19 +154,16 @@ private fun RowScope.NumberCell(text: String, weight: Float, color: Color, align
     )
 }
 
-/** The sector times of the selected lap in one row: "S1 0:31.234   S2 0:28.100". */
+/** The sector times of the selected lap, "S1  0:31.234" each, wrapping onto further lines when there are many (see [detailSplitLines]). */
 @Composable
 internal fun SectorTimes(lapNumber: Int, sectors: List<String>) {
-    val colors = KLineTheme.colors
     Row(
-        Modifier.fillMaxWidth().height(SectorsHeight).padding(horizontal = Spacing.fieldPaddingHorizontal),
+        Modifier.fillMaxWidth().heightIn(min = SectorsHeight).padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
         horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FieldCaption("LAP $lapNumber")
-        sectors.forEachIndexed { index, time ->
-            Text("S${index + 1}  $time", style = KLineType.body, color = colors.ink, maxLines = 1)
-        }
+        FieldCaption("LAP $lapNumber", Modifier.width(LapCaptionWidth))
+        SplitCells(detailSplitLines(sectors.mapIndexed { index, time -> SectorSplit("S${index + 1}", time) }), Modifier.weight(1f))
     }
     HorizontalRule()
 }

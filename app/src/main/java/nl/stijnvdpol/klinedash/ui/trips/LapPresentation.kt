@@ -74,6 +74,32 @@ internal fun deltaTone(deltaMs: Long?): DeltaTone {
 /** A sector gate crossed in the current lap: "S1" and the elapsed time at the gate, or "--" while it is ahead. */
 internal data class SectorSplit(val label: String, val time: String)
 
+/**
+ * The session column is 480 dp wide: three splits fit on a line at body size. More than
+ * [FULL_SIZE_SPLITS_MAX] go in the compact form, caption size with [COMPACT_SPLITS_PER_ROW] to a line.
+ */
+internal const val FULL_SIZE_SPLITS_MAX = 3
+internal const val COMPACT_SPLITS_PER_ROW = 4
+
+/** The sector splits as lines of at most [perLine] cells; every cell has the same width, so the columns line up. */
+internal data class SplitLines(val isCompact: Boolean, val perLine: Int, val lines: List<List<SectorSplit>>)
+
+/** Splits over the lines of the panel: one line up to [FULL_SIZE_SPLITS_MAX], else compact lines that wrap, so none is cut off. */
+internal fun splitLines(splits: List<SectorSplit>): SplitLines {
+    val isCompact = splits.size > FULL_SIZE_SPLITS_MAX
+    val perLine = if (isCompact) COMPACT_SPLITS_PER_ROW else FULL_SIZE_SPLITS_MAX
+    return SplitLines(isCompact, perLine, splits.chunked(perLine))
+}
+
+/**
+ * The sector times of a lap in the trip detail, which has 750 dp: [DETAIL_SPLITS_PER_LINE] to a line
+ * at body size, wrapping, never compact.
+ */
+internal const val DETAIL_SPLITS_PER_LINE = 4
+
+internal fun detailSplitLines(splits: List<SectorSplit>): SplitLines =
+    SplitLines(isCompact = false, perLine = DETAIL_SPLITS_PER_LINE, lines = splits.chunked(DETAIL_SPLITS_PER_LINE))
+
 /** The lap timer as text. [lapCount] counts completed laps. */
 internal data class LapPanel(
     val current: String,

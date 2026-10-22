@@ -190,4 +190,41 @@ class LapPresentationTest {
     fun `no laps give no rows`() {
         assertTrue(lapRows(emptyList()).isEmpty())
     }
+
+    private fun splits(count: Int) = List(count) { SectorSplit("S${it + 1}", "0:32.1") }
+
+    @Test
+    fun `up to three splits are one line at full size`() {
+        assertTrue(splitLines(emptyList()).lines.isEmpty())
+        val three = splitLines(splits(3))
+        assertEquals(false, three.isCompact)
+        assertEquals(1, three.lines.size)
+        assertEquals(3, three.perLine)
+    }
+
+    @Test
+    fun `more than three splits go compact and wrap instead of running out of the panel`() {
+        val four = splitLines(splits(4))
+        assertTrue(four.isCompact)
+        assertEquals(listOf(4), four.lines.map { it.size })
+
+        val eight = splitLines(splits(8))
+        assertTrue(eight.isCompact)
+        assertEquals(listOf(4, 4), eight.lines.map { it.size })
+
+        val twenty = splitLines(splits(20))
+        assertEquals(5, twenty.lines.size)
+        assertEquals("no split is lost, in order", splits(20), twenty.lines.flatten())
+        assertTrue(twenty.lines.all { it.size <= twenty.perLine })
+    }
+
+    @Test
+    fun `the sector times of the trip detail wrap at four to a line, in order`() {
+        assertTrue(detailSplitLines(emptyList()).lines.isEmpty())
+        val nine = detailSplitLines(splits(9))
+        assertEquals(false, nine.isCompact)
+        assertEquals(listOf(4, 4, 1), nine.lines.map { it.size })
+        assertEquals(splits(9), nine.lines.flatten())
+        assertEquals(6, detailSplitLines(splits(21)).lines.size)
+    }
 }

@@ -12,6 +12,9 @@ package nl.stijnvdpol.klinedash.core.geo
  * @property deltaToBestMs current lap minus the best lap at the same distance into the lap
  *   (negative = ahead); null without a best lap or when the current lap is longer than it.
  * @property predictedLapMs best lap time plus [deltaToBestMs].
+ * @property referenceLap the fixes of the latest valid complete lap, from the fix before its start
+ *   crossing to the fix after its end crossing; empty before the first one. Where a sector gate lies
+ *   along the lap, see [SectorOrder].
  */
 data class LapTimingState(
     val isTiming: Boolean,
@@ -22,4 +25,5 @@ data class LapTimingState(
     val lapCount: Int,
     val deltaToBestMs: Long?,
     val predictedLapMs: Long?,
+    val referenceLap: List<GeoFix> = emptyList(),
 )

@@ -71,4 +71,41 @@ class RouteProjectorTest {
         assertNull(RouteProjector.fit(emptyList(), 400f, 400f, 20f))
         assertNull(RouteProjector.fit(listOf(origin), 30f, 400f, 20f))
     }
+
+    /** 400 positions along a 300 m line east, as a decimated real route would have. */
+    private fun line() = (0 until 400).map { east(it * 300.0 / 399) }
+
+    @Test
+    fun `one stray position far away does not shrink the route`() {
+        val stray = north(30_000.0)
+        val route = line().take(200) + stray + line().drop(200)
+        val projector = fit(route, width = 400f, height = 400f, margin = 20f)
+
+        val start = projector.project(east(0.0))
+        val end = projector.project(east(300.0))
+        assertEquals("the real route still spans the field (within the trimmed 0.5 % at each end)", 360f, end.x - start.x, 5f)
+    }
+
+    @Test
+    fun `a stray first position does not shrink the route either`() {
+        val projector = fit(listOf(north(30_000.0)) + line(), width = 400f, height = 400f, margin = 20f)
+        assertEquals(360f, projector.project(east(300.0)).x - projector.project(east(0.0)).x, 5f)
+    }
+
+    @Test
+    fun `a route of fewer than 200 positions is fitted to its real extremes`() {
+        val route = line().take(150) + north(300.0)
+        val projector = fit(route, width = 400f, height = 400f, margin = 20f)
+        assertEquals(20f, projector.project(north(300.0)).y, 0.5f)
+    }
+
+    @Test
+    fun `anchors stay inside the field even when they lie beyond the trimmed range`() {
+        val gateEnd = east(-40.0)
+        val projector = fit(line() + listOf(north(30_000.0)), width = 400f, height = 400f, margin = 20f)
+        assertTrue(projector.project(gateEnd).x < 20f)
+
+        val anchored = checkNotNull(RouteProjector.fit(line() + listOf(north(30_000.0)), 400f, 400f, 20f, anchors = listOf(gateEnd)))
+        assertEquals(20f, anchored.project(gateEnd).x, 0.5f)
+    }
 }

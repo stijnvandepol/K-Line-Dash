@@ -36,15 +36,7 @@ internal fun lapTraceOf(samples: Sequence<TripSample>, lap: Lap): LapTrace {
         val speedKmh = fix.speedMps?.times(KMH_PER_MPS) ?: sample.values[SPEED_ID]
         TracePoint(fix.timeMs - lap.startMs, speedKmh, sample.values[RPM_ID])
     }
-    var lastFixMs = Long.MIN_VALUE
-    val route = ArrayList<LatLon>()
-    for (sample in inLap) {
-        val fix = sample.gps ?: continue
-        if (fix.timeMs == lastFixMs) continue
-        lastFixMs = fix.timeMs
-        route += fix.position
-    }
-    return LapTrace(decimateRoute(route), thinPoints(points), lap.lapTimeMs)
+    return LapTrace(routeOf(inLap.mapNotNull { it.gps }), thinPoints(points), lap.lapTimeMs)
 }
 
 /** Every n-th point so that at most [MAX_TRACE_POINTS] remain; the last point is always kept. */

@@ -219,6 +219,18 @@ class RouteDecimationTest {
         assertEquals(listOf(line.first(), line.last()), decimateRoute(line, maxPoints = 2_000))
     }
 
+    @Test
+    fun theRouteToDrawLeavesOutAStrayFix() {
+        val fixes = (0 until 60).map { GeoFix(TEST_BASE_MS + it * 1_000L, 51.0, 5.0 + it * 0.0002, accuracyM = 3.0) }
+        val stray = GeoFix(TEST_BASE_MS + 30_500L, 52.0, 6.0, accuracyM = 3.0)
+
+        val route = routeOf((fixes.take(31) + stray + fixes.drop(31)))
+
+        assertEquals(fixes.first().position, route.first())
+        assertEquals(fixes.last().position, route.last())
+        assertTrue("no point near the stray fix", route.all { it.lat < 51.01 })
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun aBudgetBelowTwoIsRejected() {
         decimateRoute(circle(10), maxPoints = 1)

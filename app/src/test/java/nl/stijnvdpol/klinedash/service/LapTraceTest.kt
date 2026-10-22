@@ -54,6 +54,19 @@ class LapTraceTest {
     }
 
     @Test
+    fun `a stray fix inside a lap is not part of its route`() {
+        val fixes = circuitFixes(72.0, 320_000)
+        val stray = fixes[150].copy(lat = fixes[150].lat + 0.4)
+        val csv = tripCsvOf(fixes.take(150) + stray + fixes.drop(151))
+        val lap = analyzeTrip(readTripCsv(csv.reader()).samples, gates).laps.first().lap
+
+        val route = lapTraceOf(readTripCsv(csv.reader()).samples, lap).route
+
+        assertTrue(route.size > 20)
+        assertTrue("no point 40 km away", route.all { it.lat < testCircuit.pointAt(0.0).first.lat + 0.05 })
+    }
+
+    @Test
     fun `a trip without GPS has no lap trace`() {
         val lap = analyzeTrip(readTripCsv(driven().reader()).samples, gates).laps.first().lap
         val trace = lapTraceOf(readTripCsv(driven(withGps = false).reader()).samples, lap)

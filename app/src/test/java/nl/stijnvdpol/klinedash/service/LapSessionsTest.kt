@@ -31,12 +31,13 @@ class LapSessionsTest {
     private val gpsSettings = GpsSettingsRepository(settingsDao)
     private val tracks = TrackRepository(trackDao, tripDao, gpsSettings)
     private val location = FakeLocationSource()
+    private val liveLaps = FakeLiveLaps()
 
     private fun sessions(): LapSessions {
         val tripsDir = folder.newFolder("trips")
         val analysis = TripAnalysisRepository(tripsDir, tripDao, trackDao, Dispatchers.Unconfined)
         val exporter = TripExporter(tripsDir, tripDao, analysis, MutableStateFlow(RecordingState.Idle), { TEST_BASE_MS }, Dispatchers.Unconfined)
-        return LapSessions(tracks, tripDao, location, analysis, exporter) { TEST_BASE_MS }
+        return LapSessions(tracks, tripDao, location, analysis, exporter, liveLaps) { TEST_BASE_MS }
     }
 
     private val movingFix = GeoFix(TEST_BASE_MS, 51.0, 5.0, speedMps = 20.0, bearingDeg = 90.0, accuracyM = 4.0, satellites = 10)

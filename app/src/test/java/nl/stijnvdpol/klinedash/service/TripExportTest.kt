@@ -5,6 +5,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.Trip
@@ -81,6 +82,26 @@ class TripExportTest {
         assertTrue(detail.route.size <= MAX_ROUTE_POINTS)
         assertTrue(detail.laps.isEmpty())
         assertEquals(null, detail.track)
+    }
+
+    @Test
+    fun aStrayFarFixDoesNotStretchTheRoute() = runBlocking {
+        val fileName = "trip-stray.csv"
+        val fixes = circuitFixes(speedKmh = 72.0, durationMs = 60_000)
+        val stray = fixes[100].copy(lat = fixes[100].lat + 0.4, lon = fixes[100].lon + 0.4)
+        val withStrays = listOf(stray.copy(timeMs = fixes.first().timeMs - 1_000)) + fixes.take(100) + stray + fixes.drop(101)
+        File(tripsDir, fileName).writeText(tripCsvOf(withStrays), Charsets.UTF_8)
+        val id = tripDao.insert(
+            Trip(startMs = TEST_BASE_MS, endMs = null, fileName = fileName, sampleCount = withStrays.size, distanceKm = 0.0, maxRpm = null, maxSpeedKmh = null, maxCoolantC = null),
+        )
+
+        val detail = (analysis.analyze(id) as AnalysisResult.Done).detail
+
+        assertTrue(detail.hasGps)
+        val origin = testCircuit.pointAt(0.0).first
+        val farthestM = detail.route.maxOf { Geodesy.distanceM(origin, it) }
+        assertTrue("the route reaches $farthestM m from the circuit", farthestM < 1_000.0)
+        assertEquals("the stray first fix is gone", 0.0, Geodesy.distanceM(fixes.first().position, detail.route.first()), 1.0)
     }
 
     @Test
@@ -181,7 +202,7 @@ class TripExportTest {
     @Test
     fun changingTheGatesRecomputesTheCacheAndDropsStaleExports() = runBlocking {
         val tracks = TrackRepository(trackDao, tripDao, GpsSettingsRepository(FakeSettingsDao()))
-        val sessions = LapSessions(tracks, tripDao, NoLocation, analysis, exporter) { TEST_BASE_MS }
+        val sessions = LapSessions(tracks, tripDao, NoLocation, analysis, exporter, FakeLiveLaps()) { TEST_BASE_MS }
         val track = sessions.createTrack("Circuit", circuitStartLine())
         val trip = storeTrip(trackId = track.id)
         analysis.refreshSummary(trip.id)

@@ -102,6 +102,7 @@ class ObdService : LifecycleService() {
         wakeSignals = WakeSignalReceivers(this, ::onWakeSignal)
         lifecycleScope.launch { appGraph.startupSettingsRepository.settings.collect(::applyStartupSettings) }
         lifecycleScope.launch { superviseLocation() }
+        lifecycleScope.launch(Dispatchers.Default) { appGraph.lapSessions.keepSectorsOrdered() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

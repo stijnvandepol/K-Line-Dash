@@ -61,13 +61,15 @@ private fun File.endsWithNewline(): Boolean = RandomAccessFile(this, "r").use { 
  * and maxima come from the CSV file (see [recoverTripSummary]); a trip whose file is missing or has
  * no complete row is removed, because there is nothing to export. A trip with a track (a lap session
  * cut off by the ignition, the usual end on a head unit) gets its lap count and best lap from
- * [refreshSummary], like a trip that ended normally.
+ * [refreshSummary], like a trip that ended normally. Its lap session ended with it, so the track is
+ * handed to [releaseTrack] too, as when a trip is finished normally (see [TripRecorder]).
  */
 internal class TripRecovery(
     private val tripsDir: File,
     private val tripDao: TripDao,
     private val ioDispatcher: CoroutineDispatcher,
     private val refreshSummary: suspend (tripId: Long) -> Unit = {},
+    private val releaseTrack: suspend (trackId: Long) -> Unit = {},
 ) {
     /** Recovers every unfinished trip except [activeTripId] (the one being recorded right now). */
     suspend fun recover(activeTripId: Long?) {
@@ -77,6 +79,11 @@ internal class TripRecovery(
     }
 
     private suspend fun recoverOne(trip: Trip) {
+        recoverTripRow(trip)
+        trip.trackId?.let { releaseActiveTrack(it) }
+    }
+
+    private suspend fun recoverTripRow(trip: Trip) {
         val file = resolveTripFile(tripsDir, trip.fileName)
         val recovered = try {
             file?.takeIf { it.isFile }?.let { withContext(ioDispatcher) { readTrip(it) } }
@@ -111,6 +118,14 @@ internal class TripRecovery(
             refreshSummary(tripId)
         } catch (e: SQLException) {
             Log.e(TAG, "Could not refresh the lap summary of recovered trip $tripId", e)
+        }
+    }
+
+    private suspend fun releaseActiveTrack(trackId: Long) {
+        try {
+            releaseTrack(trackId)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Could not release the active track $trackId of a recovered trip", e)
         }
     }
 

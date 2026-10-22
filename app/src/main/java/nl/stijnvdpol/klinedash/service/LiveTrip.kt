@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.service
 
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
+import nl.stijnvdpol.klinedash.core.geo.LapDetector
 import nl.stijnvdpol.klinedash.core.geo.LapGates
 import nl.stijnvdpol.klinedash.core.geo.LapTimingState
 import nl.stijnvdpol.klinedash.core.trip.LapStats
@@ -64,6 +66,9 @@ internal class LiveTripAnalysis {
         this.gates = gates
         lapped = gates?.let { TripAnalyzer(it) }
     }
+
+    /** The fixes of the lap in progress so far, see [LapDetector.currentLapFixes]; empty without a track. */
+    fun currentLapFixes(): List<GeoFix> = lapped?.currentLapFixes().orEmpty()
 
     /** The location source changed: no distance between the old source's last fix and the new one's first. */
     fun startNewGpsSegment() {

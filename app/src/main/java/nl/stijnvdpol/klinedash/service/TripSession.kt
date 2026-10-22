@@ -75,6 +75,9 @@ internal class TripSession(
     /** The track the laps are timed for from now on, see [LiveTripAnalysis.setTrack]. */
     fun setTrack(trackId: Long?, gates: LapGates?) = live.setTrack(trackId, gates)
 
+    /** See [LiveTripAnalysis.currentLapFixes]. */
+    fun currentLapFixes(): List<GeoFix> = live.currentLapFixes()
+
     /** See [LiveTripAnalysis.startNewGpsSegment]. */
     fun startNewGpsSegment() = live.startNewGpsSegment()
 

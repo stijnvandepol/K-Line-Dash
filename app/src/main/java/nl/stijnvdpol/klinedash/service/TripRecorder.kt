@@ -79,9 +79,14 @@ sealed interface StartResult {
  *
  * Lap timing: the track in [activeTrack] when the trip starts, and any track set while it runs, is
  * stored with the trip and timed live (see [live]). Ending the lap session (null track) does not
- * take the laps away from the trip that is running. A trip with a track gets its cached lap count
- * and best lap recomputed from the finished CSV by [refreshSummary], because a start/finish line set
- * mid-trip restarts the live lap timer (an added sector line does not) and the file knows all fixes.
+ * take the laps away from the trip that is running. A lap session ends with its trip, however the
+ * trip ends (stop, ignition off, the engine stopping, a write error, the service stopping): the
+ * recorder then hands the trip's track to [releaseTrack], so the next trip is a plain one whether or
+ * not any screen is there to see it.
+ *
+ * A trip with a track gets its cached lap count and best lap recomputed from the finished CSV by
+ * [refreshSummary], because a start/finish line set mid-trip restarts the live lap timer (an added
+ * sector line does not) and the file knows all fixes.
  * When the location source changes during a trip (simulated circuit on or off), the GPS distance
  * starts a new segment, so the jump between the two sources is not driven distance.
  *
@@ -102,7 +107,8 @@ class TripRecorder internal constructor(
     private val location: LocationSource = NoLocation,
     private val activeTrack: Flow<Track?> = flowOf(null),
     private val refreshSummary: suspend (tripId: Long) -> Unit = {},
-) {
+    private val releaseTrack: suspend (trackId: Long) -> Unit = {},
+) : LiveLaps {
     constructor(
         tripsDir: File,
         tripDao: TripDao,
@@ -111,16 +117,17 @@ class TripRecorder internal constructor(
         location: LocationSource,
         activeTrack: Flow<Track?>,
         refreshSummary: suspend (tripId: Long) -> Unit,
+        releaseTrack: suspend (trackId: Long) -> Unit,
     ) : this(
         tripsDir, tripDao, settings, poller, System::currentTimeMillis, ZoneId.systemDefault(), Dispatchers.IO,
-        location, activeTrack, refreshSummary,
+        location, activeTrack, refreshSummary, releaseTrack,
     )
 
     private class Active(val tripId: Long, val session: TripSession, val startMs: Long, val origin: RecordingOrigin)
 
     private val lock = Mutex()
     private val policy = AutoRecordPolicy()
-    private val recovery = TripRecovery(tripsDir, tripDao, ioDispatcher, refreshSummary)
+    private val recovery = TripRecovery(tripsDir, tripDao, ioDispatcher, refreshSummary, releaseTrack)
     private val motion = MotionDetector()
     private var active: Active? = null
     private var latestTrack: Track? = null
@@ -136,7 +143,7 @@ class TripRecorder internal constructor(
     private val _live = MutableStateFlow(LiveTripState.Idle)
 
     /** Statistics, lap timer and laps of the trip being recorded, updated with every sample; [LiveTripState.Idle] when idle. */
-    val live: StateFlow<LiveTripState> = _live.asStateFlow()
+    override val live: StateFlow<LiveTripState> = _live.asStateFlow()
 
     private val _lastError = MutableStateFlow<String?>(null)
 
@@ -165,6 +172,8 @@ class TripRecorder internal constructor(
         policy.suppressStartUntilEngineStops()
         finishLocked()
     }
+
+    override suspend fun currentLapFixes(): List<GeoFix> = lock.withLock { active?.session?.currentLapFixes().orEmpty() }
 
     /** See [TripRecovery]. Safe to call while recording: the active trip is left alone. */
     suspend fun recoverUnfinished() = lock.withLock { recovery.recover(active?.tripId) }
@@ -349,6 +358,18 @@ class TripRecorder internal constructor(
                 tripDao.updateSummary(finished.tripId, finished.session.cache())
                 if (finished.session.trackId != null) refreshLapSummary(finished.tripId)
             }
+            finished.session.trackId?.let { releaseActiveTrack(it) }
+        }
+    }
+
+    /** The lap session is over: the next trip is not timed on [trackId] unless the user chooses it again. */
+    private suspend fun releaseActiveTrack(trackId: Long) {
+        // The settings flow tells the recorder the same a moment later; the next trip must not wait for that.
+        if (latestTrack?.id == trackId) latestTrack = null
+        try {
+            releaseTrack(trackId)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Could not release the active track $trackId", e)
         }
     }
 

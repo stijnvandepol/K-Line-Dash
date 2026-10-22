@@ -1,10 +1,17 @@
 package nl.stijnvdpol.klinedash.service
 
 import java.util.Locale
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Gate
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
+import nl.stijnvdpol.klinedash.core.geo.SectorOrder
 import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.MAX_TRIPS_PER_TRACK
 import nl.stijnvdpol.klinedash.data.Track
@@ -25,6 +32,15 @@ const val GATE_MIN_SPEED_MPS = 2.0
 const val MAX_SECTOR_LINES = 20
 
 private const val KMH_PER_MPS = 3.6
+
+/** The trip being recorded, as lap sessions see it; implemented by [TripRecorder]. */
+interface LiveLaps {
+    /** The live lap timer and laps; [LiveTripState.Idle] when nothing records. */
+    val live: StateFlow<LiveTripState>
+
+    /** The fixes of the lap in progress so far, empty while no lap is timed. */
+    suspend fun currentLapFixes(): List<GeoFix>
+}
 
 /** Result of setting a gate at the current position; [Rejected.reason] is a sentence for the user. */
 sealed interface GateResult {
@@ -82,6 +98,7 @@ class LapSessions(
     private val location: LocationSource,
     private val analysis: TripAnalysisRepository,
     private val exporter: TripExporter,
+    private val liveLaps: LiveLaps,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     /** All tracks, newest first. */
@@ -107,10 +124,14 @@ class LapSessions(
     }
 
     /**
-     * "Set sector line here": appends a sector line at the current position to track [trackId]. Sector
-     * lines count in the order they were added, so add them in driving order after the start/finish
-     * line. Same requirements as [startFinishHere]; also refused when the track is gone or has the
-     * maximum of [MAX_SECTOR_LINES] sectors.
+     * "Set sector line here": adds a sector line at the current position to track [trackId], at its
+     * place along the lap (lap detection counts sector lines in list order, so a line that lies
+     * earlier in the lap than an existing one goes before it): measured on the latest complete lap of
+     * the trip being recorded, else on the lap in progress, where the new line is the head of the lap so
+     * far and the lines not yet reached lie after it. With no lap to measure on, or one that does not
+     * cross every line, it is appended; [keepSectorsOrdered] puts the lines in order once a lap does.
+     * Same requirements as [startFinishHere]; also refused when the track is gone or has the maximum
+     * of [MAX_SECTOR_LINES] sectors.
      */
     suspend fun addSectorHere(trackId: Long, widthM: Double = Gate.DEFAULT_WIDTH_M): GateResult {
         val track = tracks.get(trackId) ?: return GateResult.Rejected("This track no longer exists.")
@@ -118,8 +139,51 @@ class LapSessions(
         if (sectors.size >= MAX_SECTOR_LINES) return GateResult.Rejected("A track can have at most $MAX_SECTOR_LINES sector lines.")
         val placement = placeGateAt(location.freshFix(GATE_MAX_FIX_AGE_MS), widthM)
         if (placement is GatePlacement.Rejected) return GateResult.Rejected(placement.reason)
-        setSectors(trackId, sectors + (placement as GatePlacement.Ready).spec)
+        setSectors(trackId, sectorsWith(trackId, sectors, (placement as GatePlacement.Ready).spec))
         return GateResult.Placed(checkNotNull(tracks.get(trackId)))
+    }
+
+    /** [existing] with [added] (at the head of the lap so far) at its place in driving order, see [addSectorHere]. */
+    private suspend fun sectorsWith(trackId: Long, existing: List<GateSpec>, added: GateSpec): List<GateSpec> {
+        val state = liveLaps.live.value
+        if (state.trackId != trackId) return existing + added
+        val completeLap = state.lapTiming?.referenceLap.orEmpty()
+        if (completeLap.isNotEmpty()) return SectorOrder.orderAlongLap(existing + added, completeLap) { it.toGate() }
+        val lapSoFar = liveLaps.currentLapFixes()
+        if (lapSoFar.isEmpty()) return existing + added
+        val headM = SectorOrder.lapLengthM(lapSoFar)
+        return SectorOrder.sortedByPosition(existing + added) { spec ->
+            if (spec === added) headM else SectorOrder.positionAlongLapM(spec.toGate(), lapSoFar)
+        }
+    }
+
+    /**
+     * Puts the sector lines of [trackId] in driving order along [lap] (a complete lap of that track),
+     * storing and recomputing only when the order changes; a list the lap cannot fully measure is left alone.
+     */
+    suspend fun orderSectors(trackId: Long, lap: List<GeoFix>) {
+        val sectors = tracks.get(trackId)?.sectors ?: return
+        val ordered = SectorOrder.orderAlongLap(sectors, lap) { it.toGate() }
+        if (ordered != sectors) setSectors(trackId, ordered)
+    }
+
+    /**
+     * Keeps the sector lines of the active track in driving order, for as long as it runs (the
+     * service launches it): against the newest recorded trip with a complete lap when a track becomes
+     * active, which repairs tracks whose lines were stored in the order they were added, and against
+     * every lap the trip being recorded completes, which orders lines that were appended before any lap
+     * was known.
+     */
+    suspend fun keepSectorsOrdered() = coroutineScope {
+        launch {
+            tracks.activeTrack.map { it?.id }.distinctUntilChanged().filterNotNull()
+                .collect { trackId -> orderSectors(trackId, analysis.referenceLap(trackId)) }
+        }
+        launch {
+            liveLaps.live.map { state -> state.trackId?.let { id -> state.lapTiming?.referenceLap?.takeIf { it.isNotEmpty() }?.let { id to it } } }
+                .distinctUntilChanged().filterNotNull()
+                .collect { (trackId, lap) -> orderSectors(trackId, lap) }
+        }
     }
 
     /** A track from gates the user picked on a recorded trace (no live position needed). Not made active. */

@@ -2,6 +2,8 @@ package nl.stijnvdpol.klinedash.service
 
 import java.util.PriorityQueue
 import kotlin.math.hypot
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
+import nl.stijnvdpol.klinedash.core.geo.GpsSegment
 import nl.stijnvdpol.klinedash.core.geo.LatLon
 import nl.stijnvdpol.klinedash.core.geo.LocalFrame
 import nl.stijnvdpol.klinedash.core.geo.PointM
@@ -11,6 +13,14 @@ const val MAX_ROUTE_POINTS = 2_000
 
 /** Points that deviate less than this from the simplified line are not worth a point on a screen. */
 private const val MIN_DEVIATION_M = 0.5
+
+/**
+ * The route to draw for [fixes] (time ordered): without the fixes that are jumps rather than driving
+ * ([GpsSegment.dropJumps], the same plausibility rule the distances and laps use), because one stray
+ * fix would stretch the picture over the whole distance to it; then reduced by [decimateRoute].
+ */
+fun routeOf(fixes: Iterable<GeoFix>, maxPoints: Int = MAX_ROUTE_POINTS): List<LatLon> =
+    decimateRoute(GpsSegment.dropJumps(fixes).map { it.position }, maxPoints)
 
 /**
  * Reduces [points] (a route in driving order) to at most [maxPoints] for drawing, keeping the shape:

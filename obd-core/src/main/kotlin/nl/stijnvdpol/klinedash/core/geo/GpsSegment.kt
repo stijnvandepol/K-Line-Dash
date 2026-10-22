@@ -26,6 +26,9 @@ object GpsSegment {
     /** Fixes less accurate than this (horizontal, 68 %) are not used for distance or laps. */
     const val MAX_ACCURACY_M = 20.0
 
+    /** A continuous piece of track shorter than this is a stray fix, see [dropJumps]. */
+    const val MIN_PIECE_FIXES = 3
+
     /** True when [fix] carries no accuracy or one of at most [maxAccuracyM]. */
     fun isAccurate(fix: GeoFix, maxAccuracyM: Double = MAX_ACCURACY_M): Boolean =
         fix.accuracyM == null || fix.accuracyM <= maxAccuracyM
@@ -42,6 +45,28 @@ object GpsSegment {
         if (intervalMs <= 0) return false
         val impliedKmh = Geodesy.distanceM(from.position, to.position) / (intervalMs / MS_PER_SECOND) * KMH_PER_MPS
         return impliedKmh <= limitKmh(listOfNotNull(reportedSpeedMps, from.speedMps, to.speedMps).maxOrNull())
+    }
+
+    /**
+     * [fixes] (time ordered) without the ones that are jumps rather than driving, for drawing a route.
+     * Inaccurate fixes ([isAccurate]) and repeats of the same time are dropped. The rest is cut into
+     * pieces at every pair that is not plausible, as every distance sum does ([isPlausible]); a piece
+     * of fewer than [MIN_PIECE_FIXES] fixes is a stray fix (one bad fix is a piece of one: it breaks
+     * the track on both sides) and goes, whether it is in the middle of the drive or the very first
+     * fix. What is left is joined again in time order. When no piece is that long the longest one is
+     * kept, so a very short trip still has a route.
+     */
+    fun dropJumps(fixes: Iterable<GeoFix>): List<GeoFix> {
+        val pieces = ArrayList<MutableList<GeoFix>>()
+        var previous: GeoFix? = null
+        for (fix in fixes) {
+            if (!isAccurate(fix) || fix.timeMs == previous?.timeMs) continue
+            if (previous == null || !isPlausible(previous, fix)) pieces += ArrayList<GeoFix>()
+            pieces.last() += fix
+            previous = fix
+        }
+        val kept = pieces.filter { it.size >= MIN_PIECE_FIXES }.ifEmpty { listOfNotNull(pieces.maxByOrNull { it.size }) }
+        return kept.flatten()
     }
 
     private fun limitKmh(referenceMps: Double?): Double {

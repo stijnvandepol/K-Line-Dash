@@ -20,6 +20,25 @@ data class LapDetectorConfig(
     val maxAccuracyM: Double = GpsSegment.MAX_ACCURACY_M,
 )
 
+/** A lap trace is thinned to every second fix when it holds this many, so a lap that never ends cannot grow without bound. */
+private const val MAX_TRAIL_FIXES = 8_000
+
+/** The fixes of one lap, for placing sector gates along it (see [SectorOrder]); bounded by [MAX_TRAIL_FIXES]. */
+private class FixTrail {
+    private val fixes = ArrayList<GeoFix>()
+
+    fun add(fix: GeoFix) {
+        if (fixes.size >= MAX_TRAIL_FIXES) {
+            val thinned = fixes.filterIndexed { index, _ -> index % 2 == 0 }
+            fixes.clear()
+            fixes.addAll(thinned)
+        }
+        fixes += fix
+    }
+
+    fun snapshot(): List<GeoFix> = fixes.toList()
+}
+
 /**
  * Incremental lap detector: feed fixes in time order with [add], read the live state from [state].
  * Pure and deterministic; the same fixes always give the same laps, live or recomputed afterwards
@@ -32,6 +51,10 @@ data class LapDetectorConfig(
  * jitters over the line can begin lap 1 slightly early. A break in the track (dropout or jump, see
  * [LapDetectorConfig.maxFixGapMs]) adds no distance and makes the lap in progress invalid; the lap
  * timer keeps running. Another location source or clock ([startNewSegment]) drops the lap in progress.
+ *
+ * The fixes of each lap are kept so the order of sector gates can be checked against a driven lap
+ * ([SectorOrder]): the lap in progress ([currentLapFixes]) and the latest valid complete lap
+ * ([LapTimingState.referenceLap]).
  */
 class LapDetector(
     private var gates: LapGates,
@@ -40,6 +63,7 @@ class LapDetector(
     private class ActiveLap(val startMs: Long) {
         val splitsMs = ArrayList<Long>()
         val profile = LapProfileBuilder()
+        val trail = FixTrail()
         var isValid = true
     }
 
@@ -49,6 +73,7 @@ class LapDetector(
     private var lastLap: Lap? = null
     private var bestLap: Lap? = null
     private var bestProfile: LapProfile? = null
+    private var referenceLap: List<GeoFix> = emptyList()
     private var completedLaps = 0
 
     /** Processes [fix]; returns the lap that ended with it, if any. */
@@ -93,6 +118,12 @@ class LapDetector(
         if (!isExtension) active?.splitsMs?.clear()
     }
 
+    /**
+     * The fixes of the lap in progress so far, from the fix before the start crossing; empty while no
+     * lap is timed. With [LapTimingState.referenceLap] it tells where sector gates lie along the lap.
+     */
+    fun currentLapFixes(): List<GeoFix> = active?.trail?.snapshot().orEmpty()
+
     val state: LapTimingState
         get() {
             val lap = active
@@ -108,6 +139,7 @@ class LapDetector(
                 lapCount = completedLaps,
                 deltaToBestMs = delta,
                 predictedLapMs = delta?.let { bestLap?.lapTimeMs?.plus(it) },
+                referenceLap = referenceLap,
             )
         }
 
@@ -122,19 +154,24 @@ class LapDetector(
         if (lap != null) recordSectorSplit(lap, from, to)
         val crossing = if (isGateArmed) gates.startFinish.crossing(from, to) else null
         if (crossing == null || !isLongEnough(lap, crossing)) {
-            lap?.let { it.profile.addPoint(it.profile.distanceM + segmentM, to.timeMs - it.startMs) }
+            lap?.let {
+                it.profile.addPoint(it.profile.distanceM + segmentM, to.timeMs - it.startMs)
+                it.trail.add(to)
+            }
             return null
         }
         isGateArmed = false
-        val finished = lap?.let { finish(it, crossing, segmentM) }
-        active = startLap(crossing, to, segmentM)
+        val finished = lap?.let { finish(it, crossing, segmentM, to) }
+        active = startLap(crossing, from, to, segmentM)
         return finished
     }
 
-    private fun startLap(crossing: GateCrossing, to: GeoFix, segmentM: Double): ActiveLap =
+    private fun startLap(crossing: GateCrossing, from: GeoFix, to: GeoFix, segmentM: Double): ActiveLap =
         ActiveLap(crossing.timeMs).also {
             it.profile.addPoint(0.0, 0L)
             it.profile.addPoint((1 - crossing.fraction) * segmentM, to.timeMs - crossing.timeMs)
+            it.trail.add(from)
+            it.trail.add(to)
         }
 
     private fun isLongEnough(lap: ActiveLap?, crossing: GateCrossing): Boolean {
@@ -149,7 +186,8 @@ class LapDetector(
         gate.crossing(from, to)?.let { lap.splitsMs += it.timeMs }
     }
 
-    private fun finish(lap: ActiveLap, crossing: GateCrossing, segmentM: Double): Lap {
+    private fun finish(lap: ActiveLap, crossing: GateCrossing, segmentM: Double, to: GeoFix): Lap {
+        lap.trail.add(to)
         val elapsedMs = crossing.timeMs - lap.startMs
         lap.profile.addPoint(lap.profile.distanceM + crossing.fraction * segmentM, elapsedMs)
         val result = Lap(
@@ -161,6 +199,7 @@ class LapDetector(
             isValid = lap.isValid,
         )
         lastLap = result
+        if (result.isValid) referenceLap = lap.trail.snapshot()
         if (result.isValid && result.lapTimeMs < (bestLap?.lapTimeMs ?: Long.MAX_VALUE)) {
             bestLap = result
             bestProfile = lap.profile.build()

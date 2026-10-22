@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -39,6 +40,8 @@ private val StatusDotTopInset = 10.dp
 private val GridRowHeight = 96.dp
 private val HeroRowHeight = 136.dp
 private val SplitsHeight = 48.dp
+private val SplitsLineGap = 2.dp
+private val SplitsCellGap = Spacing.grid
 private val ButtonGap = Spacing.grid
 
 private val PrimaryLook = ValueLook(KLineType.primaryValue)
@@ -232,18 +235,45 @@ private fun LapTimer(panel: LapPanel) {
         stringResource(R.string.session_delta), panel.delta, DELTA_SAMPLE, panel.deltaTone.color(),
         stringResource(R.string.session_laps), "${panel.lapCount}", COUNT_SAMPLE, colors.ink,
     )
-    if (panel.splits.isNotEmpty()) {
-        Row(
-            Modifier.fillMaxWidth().height(SplitsHeight).padding(horizontal = Spacing.fieldPaddingHorizontal),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            panel.splits.forEach { split ->
-                Text("${split.label}  ${split.time}", style = KLineType.body, color = colors.ink, maxLines = 1)
+    SectorSplits(panel.splits)
+}
+
+/** "S1  32.1" per sector gate of the current lap; compact and wrapping when there are many, see [splitLines]. */
+@Composable
+private fun SectorSplits(splits: List<SectorSplit>) {
+    val layout = splitLines(splits)
+    if (layout.lines.isEmpty()) return
+    SplitCells(
+        layout,
+        Modifier.fillMaxWidth().heightIn(min = SplitsHeight).padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
+    )
+    HorizontalRule()
+}
+
+/** The lines of [layout], every cell one `weight` wide so the columns line up; shared with the trip detail. */
+@Composable
+internal fun SplitCells(layout: SplitLines, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(SplitsLineGap, Alignment.CenterVertically)) {
+        layout.lines.forEach { line ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SplitsCellGap)) {
+                line.forEach { SplitCell(it, layout.isCompact) }
+                // The last line keeps the width of its cells, so the columns line up.
+                repeat(layout.perLine - line.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-        HorizontalRule()
     }
+}
+
+@Composable
+private fun RowScope.SplitCell(split: SectorSplit, isCompact: Boolean) {
+    Text(
+        "${split.label}  ${split.time}",
+        style = if (isCompact) KLineType.caption else KLineType.body,
+        color = KLineTheme.colors.ink,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier.weight(1f),
+    )
 }
 
 @Composable

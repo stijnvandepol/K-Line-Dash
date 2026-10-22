@@ -6,6 +6,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LatLon
 import nl.stijnvdpol.klinedash.core.trip.LapStats
@@ -20,6 +21,9 @@ import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.updateSummary
 
 private const val TAG = "TripAnalysis"
+
+/** How many of the newest trips on a track are searched for a complete lap. */
+private const val REFERENCE_LAP_TRIPS = 5
 
 /**
  * Everything the trip detail screen needs, computed from the trip's CSV.
@@ -92,6 +96,26 @@ class TripAnalysisRepository internal constructor(
         }
     }
 
+    /**
+     * The fixes of the latest valid complete lap on [trackId], from the newest of its finished trips
+     * that has one (looking at the newest [REFERENCE_LAP_TRIPS]); empty when there is none or the files
+     * cannot be read (logged). It tells where the sector lines of the track lie along a lap.
+     */
+    suspend fun referenceLap(trackId: Long): List<GeoFix> {
+        val track = trackDao.get(trackId) ?: return emptyList()
+        for (trip in tripDao.getByTrack(trackId, REFERENCE_LAP_TRIPS).filter { it.endMs != null }) {
+            val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile } ?: continue
+            val lap = try {
+                withContext(ioDispatcher) { referenceLapOf(file, track) }
+            } catch (e: IOException) {
+                Log.e(TAG, "Could not read ${trip.fileName} for a reference lap", e)
+                continue
+            }
+            if (lap.isNotEmpty()) return lap
+        }
+        return emptyList()
+    }
+
     /** Recomputes the cached statistics of the trip row (what the trip list shows) from the CSV. */
     suspend fun refreshSummary(tripId: Long): AnalysisResult {
         val result = analyze(tripId)
@@ -103,17 +127,19 @@ class TripAnalysisRepository internal constructor(
         return result
     }
 
+    private fun referenceLapOf(file: File, track: Track): List<GeoFix> = withTripCsv(file) { csv ->
+        val analyzer = TripAnalyzer(track.lapGates())
+        csv.samples.forEach(analyzer::add)
+        analyzer.timing()?.referenceLap.orEmpty()
+    }
+
     private fun analyzeFile(trip: Trip, file: File, track: Track?): TripDetail = withTripCsv(file) { csv ->
         val analyzer = TripAnalyzer(track?.lapGates())
-        val route = ArrayList<LatLon>()
-        var lastFixMs = Long.MIN_VALUE
+        val fixes = ArrayList<GeoFix>()
         for (sample in csv.samples) {
             analyzer.add(sample)
-            val fix = sample.gps ?: continue
-            if (fix.timeMs == lastFixMs) continue
-            lastFixMs = fix.timeMs
-            route += fix.position
+            sample.gps?.let(fixes::add)
         }
-        TripDetail(trip.id, analyzer.stats(), analyzer.lapStats(), track, route.isNotEmpty(), decimateRoute(route))
+        TripDetail(trip.id, analyzer.stats(), analyzer.lapStats(), track, fixes.isNotEmpty(), routeOf(fixes))
     }
 }

@@ -90,6 +90,8 @@ class TripRecorderGpsTest {
         assertEquals(100_000.0, live.lapStats.single().lap.lapTimeMs.toDouble(), 500.0)
         assertEquals(1, live.lapTiming?.lapCount)
         assertEquals(1L, live.trackId)
+        assertTrue("the lap just completed is the reference lap for placing sector lines", live.lapTiming?.referenceLap?.isNotEmpty() == true)
+        assertTrue("and the next lap is under way", recorder.currentLapFixes().isNotEmpty())
         assertNotNull(live.stats)
         assertTrue("distance by GPS", checkNotNull(live.stats).gpsDistanceKm > 2.0)
 

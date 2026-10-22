@@ -326,16 +326,27 @@ Two columns, like before, but the left column is now the **session**:
   starting with "Set start/finish here".
 - **Lap session:** CURRENT LAP as the hero numeral (`primaryValue`, `m:ss.s`), under it LAST and
   BEST (`fieldValue`) and DELTA to best (`fieldValue`, `ok` when faster, `danger` when slower,
-  with a sign), then the lap count and sector splits of the current lap in a row. While no
+  with a sign), then the lap count and the sector splits of the current lap ("S1  32.1" per sector
+  gate). Up to three splits sit on one line in `body`; with more they go compact: `caption`, four to
+  a line in equal columns, wrapping onto further lines, so a split is never cut off or overlapped
+  (20 sectors make five lines). While no
   start/finish line exists: "Set start/finish here" (white fill) with the hint "Drive across the
   line at a steady speed and tap when you pass it." It needs a GPS fix with accuracy ≤ 15 m;
   otherwise the button explains why it is disabled. Once the line exists, "Add sector here" and
   "Stop" sit side by side (72 dp outline cells), with the reason under them while the lines cannot
   be set. A new sector line keeps the lap clock running; only a new start/finish line restarts lap
-  timing.
+  timing. Sector lines are kept in driving order, not in the order they were added: a line set
+  earlier in the lap than an existing one goes before it. Its place is measured on the latest
+  complete lap of the running trip, or on the lap so far (the new line is the head of it, lines not
+  reached yet lie after it); with no lap to measure on it is appended, and the lines are put in
+  order as soon as a lap is complete, and when a stored track becomes active (against its newest
+  recorded trip with a complete lap). The order is stored with the track.
 - **Active track:** the track lap timing runs for. A lap session makes its track the active one
   only while it runs: when its trip ends the track is released, so the next trip (also an automatic
-  one) is a plain trip, and the idle panel offers the track again as the last used one. USE under
+  one) is a plain trip, and the idle panel offers the track again as the last used one. The release
+  belongs to the recorder in the service, not to this screen: it happens however the trip ends (Stop,
+  ignition off, the engine or link going away, the service stopping, or recovery of a trip cut off by
+  a power loss) whether or not the TRIPS page exists. USE under
   GPS & Tracks makes a track active outside a session; ACTIVE there switches it off again.
 - The right column keeps the trip list (newest first): date, duration, distance, and for lap
   sessions a second line in `caption` with the track name, lap count and best lap. The phase 4
@@ -350,14 +361,17 @@ A full page (back arrow cell top-left, 72 dp) with three parts:
   GPX, CSV, all as 72 dp cells; shows the file names when done, which the Wi-Fi export and USB
   copy then offer) and "Delete".
 - **Left:** the route as a line (2 dp, `ink`) on `surface`, scaled to fit, north up, no map tiles
-  (offline). Start/finish and sector gates as short `accent` bars; the selected lap's part in
+  (offline). Fixes the lap rules reject as jumps are left out of the route, and the scale uses the
+  central 99 % of the positions (per axis), so one stray GPS fix cannot shrink the route to a dot;
+  the field clips what lies outside it. Start/finish and sector gates as short `accent` bars; the selected lap's part in
   `accent`, the rest in `inkFaint`.
 - **Right** (scrolls on its own): a statistics table (TripStats) and, for lap sessions, the lap
   table: lap number, lap time, delta to best, max speed, max RPM, full-throttle %, in tabular
   slots; the best lap marked with `ok` text "BEST", a lap that cannot be trusted (GPS dropout or a
   jump in the positions during the lap) with `inkMuted` "NO GPS"; such a lap is never the best.
   The best lap is selected when the page opens (the first lap when none is valid). Selecting a lap
-  highlights it on the route and shows its sectors. Under the tables the graph of the selected
+  highlights it on the route and shows its sector times ("S1  0:31.234", four to a line, wrapping
+  onto further lines when there are more). Under the tables the graph of the selected
   lap, in the style of the dashboard Graph cell: two plots stacked, KM/H above RPM, each with its
   own axis labels and "MAX" value top-right, sharing one time axis from the start crossing to the
   lap time, whose two ends are captioned under the plots. Two plots instead of one with two

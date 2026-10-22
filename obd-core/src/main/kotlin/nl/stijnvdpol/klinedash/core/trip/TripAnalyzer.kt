@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.core.trip
 
 import nl.stijnvdpol.klinedash.core.geo.Gate
+import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LapDetector
 import nl.stijnvdpol.klinedash.core.geo.LapDetectorConfig
@@ -80,6 +81,9 @@ class TripAnalyzer(
 
     /** The live lap-timer state; null when no gates were given. */
     fun timing(): LapTimingState? = detector?.state
+
+    /** The fixes of the lap in progress so far, see [LapDetector.currentLapFixes]; empty without gates. */
+    fun currentLapFixes(): List<GeoFix> = detector?.currentLapFixes().orEmpty()
 
     private fun lapStatsOf(lap: Lap, accumulated: TripStatsAccumulator): LapStats {
         val stats = accumulated.stats()

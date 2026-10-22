@@ -37,7 +37,8 @@ private const val NO_TRACK = "There is no track yet. Set the start/finish line f
  * statistics and lap timer, and setting the start/finish and sector lines. It follows the recorder
  * and the lap sessions of the app; the only thing it keeps itself is whether the user started a lap
  * session (so "Set start/finish here" shows before the track exists) and the track picked for the next one.
- * The track of a lap session is the active track while the session runs; it is released when the trip ends.
+ * The track of a lap session is the active track while the session runs; the recorder releases it
+ * when the trip ends (see TripRecorder), whether or not this screen exists.
  */
 class SessionViewModel(
     private val recorder: TripRecorder,
@@ -91,18 +92,8 @@ class SessionViewModel(
 
     init {
         viewModelScope.launch {
-            var wasLapSession = false
-            recorder.state.collect { state ->
-                if (state is RecordingState.Idle) {
-                    // A lap session ends with its trip: the track stops being active (the next lap session
-                    // offers it again as the last used one), so the next trip is a plain one.
-                    if (wasLapSession) sessions.setActiveTrack(null)
-                    isLapMode.value = false
-                    wasLapSession = false
-                } else {
-                    wasLapSession = isLapMode.value || live.value.trackId != null
-                }
-            }
+            // A lap session ends with its trip; the recorder has released the track by then.
+            recorder.state.collect { state -> if (state is RecordingState.Idle) isLapMode.value = false }
         }
     }
 
