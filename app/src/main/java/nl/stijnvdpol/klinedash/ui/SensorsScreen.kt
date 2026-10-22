@@ -52,7 +52,7 @@ private const val WIDE_COLUMNS = 2
 /** Every signal the car supports, with its live value: a table, name left, value right. */
 @Composable
 fun SensorsScreen(onOpenConnection: () -> Unit) {
-    val vm = graphViewModel { LiveDataViewModel() }
+    val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
     val poller by vm.poller.collectAsStateWithLifecycle()
     val supportedPids by vm.supportedPids.collectAsStateWithLifecycle()
     val connection by vm.connectionState.collectAsStateWithLifecycle()
@@ -73,7 +73,7 @@ fun SensorsScreen(onOpenConnection: () -> Unit) {
                 readings = readings,
                 stats = vm.stats.collectAsStateWithLifecycle(),
                 nowMs = rememberNowMs(),
-                engineRunning = rememberEngineRunning(readings),
+                toneContext = rememberToneContext(readings, vm.limits.collectAsStateWithLifecycle()),
             )
         }
     }
@@ -101,7 +101,7 @@ private fun SensorTable(
     readings: State<Map<String, Reading>>,
     stats: State<PollStats>,
     nowMs: State<Long>,
-    engineRunning: State<Boolean>,
+    toneContext: State<ToneContext>,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= TwoColumnMinWidth) WIDE_COLUMNS else 1
@@ -113,7 +113,7 @@ private fun SensorTable(
                 items(rowCount, key = { signals[it].id }) { row ->
                     TableRow(columns) { column ->
                         signals.getOrNull(row + column * rowCount)?.let { signal ->
-                            SensorCell(signal, readings, stats, nowMs, engineRunning)
+                            SensorCell(signal, readings, stats, nowMs, toneContext)
                         }
                     }
                     HorizontalRule()
@@ -168,12 +168,12 @@ private fun RowScope.SensorCell(
     readings: State<Map<String, Reading>>,
     stats: State<PollStats>,
     nowMs: State<Long>,
-    engineRunning: State<Boolean>,
+    toneContext: State<ToneContext>,
 ) {
     val colors = KLineTheme.colors
     val reading = rememberReading(readings, signal.id)
     val stale = rememberIsStale(reading, nowMs, signal)
-    val tone = rememberValueTone(signal, reading, engineRunning)
+    val tone = rememberValueTone(signal, reading, toneContext)
     val rate by remember(signal) { derivedStateOf { stats.value.signalHz[signal.id]?.let { formatNumber(it, 1) } } }
     // All four texts share one baseline, so the row reads as a line.
     Text(signal.name, style = KLineType.body, color = colors.ink, maxLines = 1, modifier = Modifier.weight(1f).alignByBaseline())

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
@@ -38,19 +39,24 @@ internal fun rememberIsStale(reading: State<Reading?>, nowMs: State<Long>, signa
         derivedStateOf { reading.value?.let { isStale(signal, it.timestampMs, nowMs.value) } ?: true }
     }
 
-/** Flips only when the engine starts or stops, not on every rpm reading. */
+/**
+ * The engine state and the warning limits that colour the values. Flips only when the engine
+ * starts or stops or a limit is changed, not on every rpm reading.
+ */
 @Composable
-internal fun rememberEngineRunning(readings: State<Map<String, Reading>>): State<Boolean> =
-    remember(readings) { derivedStateOf { isEngineRunning(readings.value[RPM_ID]?.value) } }
+internal fun rememberToneContext(readings: State<Map<String, Reading>>, limits: State<AlertSettings>): State<ToneContext> =
+    remember(readings, limits) {
+        derivedStateOf { ToneContext(isEngineRunning(readings.value[RPM_ID]?.value), limits.value) }
+    }
 
 @Composable
 internal fun rememberValueTone(
     signal: Signal,
     reading: State<Reading?>,
-    engineRunning: State<Boolean>,
-): State<ValueTone> = remember(signal, reading, engineRunning) {
+    context: State<ToneContext>,
+): State<ValueTone> = remember(signal, reading, context) {
     derivedStateOf {
-        reading.value?.let { valueTone(signal.id, it.value, engineRunning.value) } ?: ValueTone.NORMAL
+        reading.value?.let { valueTone(signal.id, it.value, context.value) } ?: ValueTone.NORMAL
     }
 }
 

@@ -64,7 +64,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-private enum class ButtonKind { FILLED, OUTLINED, DANGER, TEXT }
+private enum class ButtonKind { FILLED, OUTLINED, DANGER, DANGER_TEXT, TEXT }
 
 /** The one action a screen wants: white fill, black text. */
 @Composable
@@ -81,6 +81,11 @@ fun SecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Mod
 fun DangerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
     RaceButton(label, onClick, modifier, enabled, ButtonKind.DANGER)
 
+/** Text only in the danger colour, for a delete cell in a list row. */
+@Composable
+fun DangerTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
+    RaceButton(label, onClick, modifier, enabled, ButtonKind.DANGER_TEXT)
+
 /** Text only, for quiet actions and for cells in a grid of buttons. */
 @Composable
 fun TextActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) =
@@ -92,7 +97,7 @@ private fun RaceButton(label: String, onClick: () -> Unit, modifier: Modifier, e
     val textColor = when {
         !enabled -> colors.inkFaint
         kind == ButtonKind.FILLED -> colors.background
-        kind == ButtonKind.DANGER -> colors.danger
+        kind == ButtonKind.DANGER || kind == ButtonKind.DANGER_TEXT -> colors.danger
         else -> colors.ink
     }
     val fill = when {
@@ -148,41 +153,49 @@ fun SelectableRow(
 }
 
 /**
- * Label on the left, the square toggle at the right edge, 72 dp high. No rule of its own: in a list
+ * Label on the left (two lines at most, which still fit the 72 dp), the square toggle at the right edge. No rule of its own: in a list
  * the caller adds one, in a toolbar cell the neighbouring rules already frame it.
  */
 @Composable
-fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val colors = KLineTheme.colors
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
             .heightIn(min = Spacing.touchMin)
             .padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.fieldPaddingHorizontal),
     ) {
-        Text(label, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
-        Toggle(checked)
+        Text(label, style = KLineType.body, color = if (enabled) colors.ink else colors.inkFaint, maxLines = 2, modifier = Modifier.weight(1f))
+        Toggle(checked, enabled)
     }
 }
 
-/** Outlined slot with a square thumb: left is off (grey), right is on (white). */
+/** Outlined slot with a square thumb: left is off (grey), right is on (white); all faint when disabled. */
 @Composable
-private fun Toggle(checked: Boolean) {
+private fun Toggle(checked: Boolean, enabled: Boolean) {
     val colors = KLineTheme.colors
+    val tone = when {
+        !enabled -> colors.inkFaint
+        checked -> colors.ink
+        else -> colors.inkMuted
+    }
     Row(
         modifier = Modifier
             .size(ToggleWidth, ToggleHeight)
-            .border(Spacing.ruleThickness, if (checked) colors.ink else colors.inkMuted)
+            .border(Spacing.ruleThickness, tone)
             .padding(ToggleThumbInset),
         horizontalArrangement = if (checked) Arrangement.End else Arrangement.Start,
     ) {
-        Box(
-            Modifier
-                .size(ToggleHeight - ToggleThumbInset * 2)
-                .background(if (checked) colors.ink else colors.inkMuted),
-        )
+        Box(Modifier.size(ToggleHeight - ToggleThumbInset * 2).background(tone))
     }
 }
 

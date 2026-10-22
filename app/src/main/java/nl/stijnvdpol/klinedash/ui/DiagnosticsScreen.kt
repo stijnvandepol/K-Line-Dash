@@ -148,7 +148,7 @@ private fun TopStrip(ui: DiagnosticsUiState, onRead: () -> Unit, onClear: () -> 
 
 /** Label top-left, value right-aligned at the bottom: the arrangement of the dashboard fields. */
 @Composable
-private fun StripField(label: String, value: String?, valueColor: Color, modifier: Modifier) {
+internal fun StripField(label: String, value: String?, valueColor: Color, modifier: Modifier) {
     Column(
         modifier.fillMaxHeight().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical),
         verticalArrangement = Arrangement.SpaceBetween,

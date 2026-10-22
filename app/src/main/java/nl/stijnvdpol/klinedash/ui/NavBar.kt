@@ -38,8 +38,8 @@ internal enum class Screen(@StringRes val labelRes: Int) {
     Dashboard(R.string.nav_dashboard),
     Sensors(R.string.nav_sensors),
     Diagnostics(R.string.nav_diagnostics),
-    Connection(R.string.nav_connection),
-    Debug(R.string.nav_debug),
+    Trips(R.string.nav_trips),
+    Setup(R.string.nav_setup),
 }
 
 private val NavBarHeight = 72.dp
@@ -100,7 +100,7 @@ private fun NavButton(screen: Screen, isSelected: Boolean, onClick: () -> Unit, 
  */
 @Composable
 private fun LinkStatus(modifier: Modifier) {
-    val vm = graphViewModel { LiveDataViewModel() }
+    val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
     val connection by vm.connectionState.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val colors = KLineTheme.colors

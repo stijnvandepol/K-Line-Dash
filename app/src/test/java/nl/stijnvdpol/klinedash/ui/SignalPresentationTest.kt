@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,32 +56,57 @@ class SignalPresentationTest {
         assertEquals("1", formatReading(signal("dtc_count"), 1.0, words))
     }
 
+    private val defaults = AlertSettings()
+    private fun running(limits: AlertSettings = defaults) = ToneContext(engineRunning = true, limits = limits)
+    private fun stopped(limits: AlertSettings = defaults) = ToneContext(engineRunning = false, limits = limits)
+
     @Test
-    fun `coolant turns amber at 100 and red at 105 degrees`() {
-        assertEquals(ValueTone.NORMAL, valueTone("coolant", 99.0, engineRunning = true))
-        assertEquals(ValueTone.CAUTION, valueTone("coolant", 100.0, engineRunning = true))
-        assertEquals(ValueTone.CAUTION, valueTone("coolant", 104.0, engineRunning = true))
-        assertEquals(ValueTone.DANGER, valueTone("coolant", 105.0, engineRunning = true))
+    fun `coolant turns amber at the caution limit and red at the danger limit`() {
+        // Defaults: caution 103, danger 108.
+        assertEquals(ValueTone.NORMAL, valueTone("coolant", 102.0, running()))
+        assertEquals(ValueTone.CAUTION, valueTone("coolant", 103.0, running()))
+        assertEquals(ValueTone.CAUTION, valueTone("coolant", 107.0, running()))
+        assertEquals(ValueTone.DANGER, valueTone("coolant", 108.0, running()))
     }
 
     @Test
-    fun `battery is amber below 12 V and above 15 V while the engine runs`() {
-        assertEquals(ValueTone.NORMAL, valueTone("battery", 13.9, engineRunning = true))
-        assertEquals(ValueTone.NORMAL, valueTone("battery", 12.0, engineRunning = true))
-        assertEquals(ValueTone.CAUTION, valueTone("battery", 11.9, engineRunning = true))
-        assertEquals(ValueTone.NORMAL, valueTone("battery", 15.0, engineRunning = true))
-        assertEquals(ValueTone.CAUTION, valueTone("battery", 15.1, engineRunning = true))
+    fun `coolant colours move with the limits from the warning settings`() {
+        val lowered = defaults.copy(coolantCautionC = 85.0, coolantDangerC = 90.0)
+        assertEquals(ValueTone.CAUTION, valueTone("coolant", 88.0, running(lowered)))
+        assertEquals(ValueTone.DANGER, valueTone("coolant", 90.0, running(lowered)))
+        assertEquals(ValueTone.NORMAL, valueTone("coolant", 88.0, running()))
     }
 
     @Test
-    fun `battery has no limits while the engine is off`() {
-        assertEquals(ValueTone.NORMAL, valueTone("battery", 11.2, engineRunning = false))
+    fun `battery is amber outside the running limits while the engine runs`() {
+        // Defaults: low 13.2, high 15.0.
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 13.9, running()))
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 13.2, running()))
+        assertEquals(ValueTone.CAUTION, valueTone("battery", 13.1, running()))
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 15.0, running()))
+        assertEquals(ValueTone.CAUTION, valueTone("battery", 15.1, running()))
+    }
+
+    @Test
+    fun `battery uses the engine-off limit while the engine is off and ignores the charging limits`() {
+        // Defaults: engine-off low 12.0. A resting battery at 12.6 V is healthy, not "below 13.2".
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 12.6, stopped()))
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 12.0, stopped()))
+        assertEquals(ValueTone.CAUTION, valueTone("battery", 11.9, stopped()))
+        assertEquals(ValueTone.NORMAL, valueTone("battery", 15.5, stopped()))
+    }
+
+    @Test
+    fun `battery colours move with the limits from the warning settings`() {
+        val strict = defaults.copy(voltageRunningLow = 13.8, voltageEngineOffLow = 12.5)
+        assertEquals(ValueTone.CAUTION, valueTone("battery", 13.5, running(strict)))
+        assertEquals(ValueTone.CAUTION, valueTone("battery", 12.4, stopped(strict)))
     }
 
     @Test
     fun `signals without limits are never coloured`() {
-        assertEquals(ValueTone.NORMAL, valueTone("rpm", 8_900.0, engineRunning = true))
-        assertEquals(ValueTone.NORMAL, valueTone("intake_temp", 90.0, engineRunning = true))
+        assertEquals(ValueTone.NORMAL, valueTone("rpm", 8_900.0, running()))
+        assertEquals(ValueTone.NORMAL, valueTone("intake_temp", 90.0, running()))
     }
 
     @Test

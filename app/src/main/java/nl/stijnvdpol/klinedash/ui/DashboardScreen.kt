@@ -55,7 +55,7 @@ private val LabelToValueGap = 8.dp
  */
 @Composable
 fun DashboardScreen() {
-    val vm = graphViewModel { LiveDataViewModel() }
+    val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
     val poller by vm.poller.collectAsStateWithLifecycle()
     val supportedPids by vm.supportedPids.collectAsStateWithLifecycle()
     val fieldIds = remember(supportedPids) { dashboardFieldIds(supportedPids) }
@@ -66,14 +66,14 @@ fun DashboardScreen() {
     val readings = vm.readings.collectAsStateWithLifecycle()
     val stats = vm.stats.collectAsStateWithLifecycle()
     val nowMs = rememberNowMs()
-    val engineRunning = rememberEngineRunning(readings)
+    val toneContext = rememberToneContext(readings, vm.limits.collectAsStateWithLifecycle())
 
     Column(Modifier.fillMaxSize()) {
         RpmBarRow(readings, stats, nowMs)
         HorizontalRule()
-        PrimaryRow(readings, nowMs, engineRunning, Modifier.weight(1f).fillMaxWidth())
+        PrimaryRow(readings, nowMs, toneContext, Modifier.weight(1f).fillMaxWidth())
         HorizontalRule()
-        SmallFieldRow(fieldIds, readings, nowMs, engineRunning, Modifier.height(SmallFieldRowHeight).fillMaxWidth())
+        SmallFieldRow(fieldIds, readings, nowMs, toneContext, Modifier.height(SmallFieldRowHeight).fillMaxWidth())
     }
 }
 
@@ -90,15 +90,15 @@ private fun RpmBarRow(readings: State<Map<String, Reading>>, stats: State<PollSt
 private fun PrimaryRow(
     readings: State<Map<String, Reading>>,
     nowMs: State<Long>,
-    engineRunning: State<Boolean>,
+    toneContext: State<ToneContext>,
     modifier: Modifier,
 ) {
     Row(modifier) {
-        DataField(RPM_ID, KLineType.heroValue, RPM_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(RPM_FIELD_WEIGHT).fillMaxHeight())
+        DataField(RPM_ID, KLineType.heroValue, RPM_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(RPM_FIELD_WEIGHT).fillMaxHeight())
         VerticalRule()
-        DataField(SPEED_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(SPEED_FIELD_WEIGHT).fillMaxHeight())
+        DataField(SPEED_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(SPEED_FIELD_WEIGHT).fillMaxHeight())
         VerticalRule()
-        DataField(COOLANT_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, engineRunning, Modifier.weight(COOLANT_FIELD_WEIGHT).fillMaxHeight())
+        DataField(COOLANT_ID, KLineType.primaryValue, PRIMARY_MAX_GROWTH, readings, nowMs, toneContext, Modifier.weight(COOLANT_FIELD_WEIGHT).fillMaxHeight())
     }
 }
 
@@ -107,7 +107,7 @@ private fun SmallFieldRow(
     fieldIds: List<String>,
     readings: State<Map<String, Reading>>,
     nowMs: State<Long>,
-    engineRunning: State<Boolean>,
+    toneContext: State<ToneContext>,
     modifier: Modifier,
 ) {
     Row(modifier) {
@@ -117,7 +117,7 @@ private fun SmallFieldRow(
             if (id == null) {
                 Spacer(Modifier.weight(1f))
             } else {
-                DataField(id, KLineType.fieldValue, 1f, readings, nowMs, engineRunning, Modifier.weight(1f).fillMaxHeight())
+                DataField(id, KLineType.fieldValue, 1f, readings, nowMs, toneContext, Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
@@ -160,13 +160,13 @@ private fun DataField(
     maxGrowth: Float,
     readings: State<Map<String, Reading>>,
     nowMs: State<Long>,
-    engineRunning: State<Boolean>,
+    toneContext: State<ToneContext>,
     modifier: Modifier,
 ) {
     val signal = remember(id) { checkNotNull(Signals.byId(id)) }
     val reading = rememberReading(readings, id)
     val stale = rememberIsStale(reading, nowMs, signal)
-    val tone = rememberValueTone(signal, reading, engineRunning)
+    val tone = rememberValueTone(signal, reading, toneContext)
     val label = FieldLabelRes[id]?.let { stringResource(it) } ?: signal.shortName
     val noReading = stringResource(R.string.field_no_reading)
     val words = rememberOnOffWords()

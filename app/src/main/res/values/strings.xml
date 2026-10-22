@@ -7,8 +7,8 @@
     <string name="nav_dashboard">Dash</string>
     <string name="nav_sensors">Sensors</string>
     <string name="nav_diagnostics">Diag</string>
-    <string name="nav_connection">Connection</string>
-    <string name="nav_debug">Debug</string>
+    <string name="nav_trips">Trips</string>
+    <string name="nav_setup">Setup</string>
 
     <!-- Connection state: one line for the notification, headline + detail for the screens -->
     <string name="state_idle">Not connected</string>
@@ -51,7 +51,7 @@
     <string name="rpm_bar_description">Engine speed bar, %1$d rpm</string>
 
     <!-- Sensors -->
-    <string name="sensors_not_connected">Not connected yet. Connect under Connection.</string>
+    <string name="sensors_not_connected">Not connected yet. Connect under Setup, Connection.</string>
     <string name="sensors_detecting">The car is still reporting which sensors it has…</string>
     <string name="btn_go_to_connection">Go to Connection</string>
     <string name="sensors_column_name">Sensor</string>
@@ -84,7 +84,7 @@
     <string name="diag_vin">VIN</string>
     <string name="diag_ecu">ECU</string>
     <string name="diag_not_reported">Not reported by this car</string>
-    <string name="diag_not_connected">Not connected yet. Connect to the car under Connection, then read its fault codes.</string>
+    <string name="diag_not_connected">Not connected yet. Connect to the car under Setup, Connection, then read its fault codes.</string>
     <string name="diag_reading">Reading the car…</string>
     <string name="diag_reading_hint">Codes, readiness monitors and freeze frame. This takes several seconds on a K-line car. Keep the ignition on.</string>
     <string name="diag_elapsed">%1$d s</string>
@@ -111,6 +111,56 @@
     <string name="clear_requirements">Ignition on, engine off.</string>
     <string name="clear_final_title">Clear codes now?</string>
     <string name="clear_final_body">This erases the codes, the freeze frame and the readiness monitors, and it cannot be undone. Only continue if you are sure.</string>
+
+    <!-- Setup -->
+    <string name="setup_connection">Connection</string>
+    <string name="setup_warnings">Warnings</string>
+    <string name="setup_debug">Debug</string>
+
+    <!-- Setup: warnings -->
+    <string name="warnings_column_warning">Warning</string>
+    <string name="warnings_column_sound">Sound</string>
+    <string name="warnings_column_limits">Limits</string>
+    <string name="warnings_sound">Sound</string>
+    <string name="warnings_reset">Reset to defaults</string>
+    <string name="warning_coolant">Coolant too hot</string>
+    <string name="warning_voltage_low">Battery voltage low</string>
+    <string name="warning_voltage_high">Battery voltage high</string>
+    <string name="warning_new_dtc">New fault code</string>
+    <string name="warning_mil">Check engine light on</string>
+    <string name="warning_connection_lost">Adapter connection lost</string>
+    <string name="limit_caution">Caution</string>
+    <string name="limit_danger">Danger</string>
+    <string name="limit_running">Running</string>
+    <string name="limit_engine_off">Engine off</string>
+
+    <!-- Trips -->
+    <string name="trips_state_recording">Recording</string>
+    <string name="trips_state_idle">Not recording</string>
+    <string name="trips_hint_not_connected">Not connected. Connect under Setup, Connection.</string>
+    <string name="trips_hint_waiting">Recording starts when the engine runs.</string>
+    <string name="trips_hint_press_record">Press Record to start a trip.</string>
+    <string name="trips_label_elapsed">Time</string>
+    <string name="trips_label_samples">Samples</string>
+    <string name="trips_record">Record</string>
+    <string name="trips_stop">Stop</string>
+    <string name="trips_auto_record">Record automatically when the engine runs</string>
+    <string name="trips_section_export">Export</string>
+    <string name="trips_copy">Copy to USB or SD card</string>
+    <string name="trips_wifi_start">Start Wi-Fi export</string>
+    <string name="trips_wifi_stop">Stop Wi-Fi export</string>
+    <string name="trips_label_pin">PIN</string>
+    <string name="trips_wifi_idle_note">Stops by itself after 10 minutes without use.</string>
+    <string name="trips_column_start">Started</string>
+    <string name="trips_column_duration">Duration</string>
+    <string name="trips_column_distance">Distance</string>
+    <string name="trips_column_max_rpm">Max RPM</string>
+    <string name="trips_empty_auto">No trips yet. Recording starts when the engine runs.</string>
+    <string name="trips_empty_manual">No trips yet. Press Record to start one.</string>
+    <string name="trips_delete">Delete</string>
+    <string name="trips_delete_title">Delete trip?</string>
+    <string name="unit_km">km</string>
+    <string name="unit_rpm">rpm</string>
 
     <!-- Connection screen -->
     <string name="section_adapter_kind">Adapter type</string>
@@ -151,11 +201,11 @@
     <string name="debug_resume">Resume log</string>
     <string name="debug_clear">Clear log</string>
     <string name="debug_export">Export log</string>
-    <string name="debug_log_empty">No messages yet. Connect under Connection to see the communication.</string>
+    <string name="debug_log_empty">No messages yet. Connect under Setup, Connection to see the communication.</string>
     <string name="debug_command_hint">e.g. 010C</string>
     <string name="debug_send">Send</string>
     <string name="debug_reply_error">Error</string>
-    <string name="debug_not_connected">Not connected. Connect under Connection.</string>
+    <string name="debug_not_connected">Not connected. Connect under Setup, Connection.</string>
     <string name="debug_export_ok">Log saved</string>
     <string name="debug_export_failed">Export failed. Try again.</string>
     <string name="debug_export_saved_to">Log saved to %1$s</string>

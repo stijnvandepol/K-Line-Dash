@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.core.alert.AlertSettings
 import nl.stijnvdpol.klinedash.core.obd.PollTier
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
@@ -56,26 +57,38 @@ internal fun supportedSignals(supportedPids: Set<Int>): List<Signal> =
 /** What a value means for the driver; colour is the only thing that changes (docs/design-system.md). */
 internal enum class ValueTone { NORMAL, CAUTION, DANGER }
 
-private const val COOLANT_CAUTION_C = 100.0
-private const val COOLANT_DANGER_C = 105.0
-private const val BATTERY_LOW_V = 12.0
-private const val BATTERY_HIGH_V = 15.0
-
 /** Above cranking speed. Below it the battery voltage says nothing about the charging system. */
 private const val ENGINE_RUNNING_RPM = 400.0
 
 internal fun isEngineRunning(rpm: Double?): Boolean = rpm != null && rpm >= ENGINE_RUNNING_RPM
 
+/** What decides a value's colour besides the value itself: the engine state and the warning limits. */
+internal data class ToneContext(val engineRunning: Boolean, val limits: AlertSettings)
+
 /**
- * Coolant from 100 degrees is caution, from 105 danger. The battery is caution below 12.0 V or
- * above 15.0 V, but only with the engine running. Every other signal has no limits yet (phase 4).
+ * The colour of a value follows the warning limits of SETUP > Warnings ([AlertSettings] is the one
+ * source): coolant from the caution limit is caution, from the danger limit danger. The battery is
+ * caution outside the running limits while the engine runs and below the engine-off limit while it
+ * does not (a charging voltage means nothing then). Every other signal has no limits.
  */
-internal fun valueTone(signalId: String, value: Double, engineRunning: Boolean): ValueTone = when (signalId) {
-    COOLANT_ID -> when {
-        value >= COOLANT_DANGER_C -> ValueTone.DANGER
-        value >= COOLANT_CAUTION_C -> ValueTone.CAUTION
+internal fun valueTone(signalId: String, value: Double, context: ToneContext): ValueTone {
+    val limits = context.limits
+    return when (signalId) {
+        COOLANT_ID -> when {
+            value >= limits.coolantDangerC -> ValueTone.DANGER
+            value >= limits.coolantCautionC -> ValueTone.CAUTION
+            else -> ValueTone.NORMAL
+        }
+        BATTERY_ID -> if (isBatteryOutsideLimits(value, context)) ValueTone.CAUTION else ValueTone.NORMAL
         else -> ValueTone.NORMAL
     }
-    BATTERY_ID -> if (engineRunning && (value < BATTERY_LOW_V || value > BATTERY_HIGH_V)) ValueTone.CAUTION else ValueTone.NORMAL
-    else -> ValueTone.NORMAL
+}
+
+private fun isBatteryOutsideLimits(volts: Double, context: ToneContext): Boolean {
+    val limits = context.limits
+    return if (context.engineRunning) {
+        volts < limits.voltageRunningLow || volts > limits.voltageRunningHigh
+    } else {
+        volts < limits.voltageEngineOffLow
+    }
 }

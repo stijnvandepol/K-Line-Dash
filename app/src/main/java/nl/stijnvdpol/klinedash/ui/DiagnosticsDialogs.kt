@@ -28,7 +28,7 @@ internal fun ClearDialogHost(dialog: ClearDialog, vm: DiagnosticsViewModel) {
 
 /** Focus starts on the safe answer, so a rotary or D-pad "press" on a head unit cancels rather than erases. */
 @Composable
-private fun rememberInitialFocus(): FocusRequester {
+internal fun rememberInitialFocus(): FocusRequester {
     val requester = remember { FocusRequester() }
     LaunchedEffect(Unit) { requester.requestFocus() }
     return requester
@@ -88,7 +88,7 @@ private fun ClearFinalDialog(onCancel: () -> Unit, onClear: () -> Unit) {
 }
 
 @Composable
-private fun DialogText(text: String) {
+internal fun DialogText(text: String) {
     Text(
         text,
         style = KLineType.body,
