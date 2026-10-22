@@ -1,7 +1,10 @@
 package nl.stijnvdpol.klinedash.core.export
 
 import java.io.File
+import java.io.IOException
+import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 import org.junit.After
@@ -339,6 +342,24 @@ class HttpTripExportServerTest {
         created.stop()
         assertFalse(created.isRunning)
         ServerSocket(port).use { assertNotNull(it) }
+    }
+
+    @Test
+    fun `an IPv6 peer gets no answer`() {
+        val port = HttpTripExportServer(ExportServerConfig(port = 0, pin = pin), TripFileSource { tripFiles })
+            .also { server = it }
+            .start()
+        // Without IPv6 on this machine the connect fails, which is the same outcome: nothing is served.
+        val answer = try {
+            Socket(InetAddress.getByName("::1"), port).use { socket ->
+                socket.soTimeout = 10_000
+                socket.getOutputStream().write("GET / HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                socket.getInputStream().readBytes()
+            }
+        } catch (_: IOException) {
+            ByteArray(0)
+        }
+        assertEquals("", answer.toString(Charsets.ISO_8859_1))
     }
 
     @Test

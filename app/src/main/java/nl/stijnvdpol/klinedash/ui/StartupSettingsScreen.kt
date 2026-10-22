@@ -3,11 +3,13 @@ package nl.stijnvdpol.klinedash.ui
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -121,10 +123,14 @@ private fun ActionGroup(@StringRes titleRes: Int, actions: List<String>, setting
     }
     HorizontalRule()
     actions.forEach { action ->
-        Row(Modifier.fillMaxWidth().height(Spacing.touchMin), verticalAlignment = Alignment.CenterVertically) {
+        // A long action wraps instead of being cut off: the user must see exactly what is listened for.
+        Row(
+            Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = Spacing.touchMin),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                action, style = KLineType.mono, color = colors.ink, maxLines = 1,
-                modifier = Modifier.weight(1f).padding(horizontal = Spacing.fieldPaddingHorizontal),
+                action, style = KLineType.mono, color = colors.ink,
+                modifier = Modifier.weight(1f).padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.grid),
             )
             val time = settings.lastReceived[action]
             Text(

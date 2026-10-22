@@ -2,7 +2,6 @@ package nl.stijnvdpol.klinedash.service
 
 import android.util.Log
 import java.io.IOException
-import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.SocketException
 import java.security.SecureRandom
@@ -18,6 +17,7 @@ import nl.stijnvdpol.klinedash.core.export.ExportServerConfig
 import nl.stijnvdpol.klinedash.core.export.HttpTripExportServer
 import nl.stijnvdpol.klinedash.core.export.TripExportServer
 import nl.stijnvdpol.klinedash.core.export.TripFileSource
+import nl.stijnvdpol.klinedash.core.export.isLocalNetworkAddress
 
 private const val TAG = "ExportController"
 private const val PREFERRED_PORT = 8080
@@ -46,7 +46,8 @@ fun generatePin(random: Random = SecureRandom()): String =
     random.nextInt(PIN_BOUND).toString().padStart(PIN_DIGITS, '0')
 
 /**
- * IPv4 addresses of the up, non-loopback, non-link-local interfaces (Wi-Fi, hotspot, Ethernet).
+ * Private IPv4 addresses of the up, non-loopback interfaces (Wi-Fi, hotspot, Ethernet): the only
+ * ones the export server answers on, see [isLocalNetworkAddress].
  * @throws SocketException when the network interfaces cannot be listed.
  */
 fun findLocalAddresses(): List<LocalAddress> =
@@ -54,8 +55,7 @@ fun findLocalAddresses(): List<LocalAddress> =
         .filter { it.isUp && !it.isLoopback }
         .flatMap { network ->
             network.inetAddresses.toList()
-                .filterIsInstance<Inet4Address>()
-                .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+                .filter { isLocalNetworkAddress(it) && !it.isLoopbackAddress }
                 .mapNotNull { address -> address.hostAddress?.let { LocalAddress(network.name, it) } }
         }
 

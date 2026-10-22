@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.core.export
 
 import java.io.Closeable
 import java.io.IOException
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -57,7 +58,7 @@ class HttpTripExportServer(
     /** @throws IOException when the port cannot be bound. */
     override fun start(): Int = synchronized(lifecycleLock) {
         running?.let { return it.serverSocket.localPort }
-        val serverSocket = ServerSocket(config.port, ACCEPT_BACKLOG).also { it.reuseAddress = true }
+        val serverSocket = bindServerSocket(config.port)
         val workers = ThreadPoolExecutor(
             WORKER_THREADS, WORKER_THREADS, 0, TimeUnit.MILLISECONDS,
             ArrayBlockingQueue(PENDING_CONNECTIONS), daemonThreads("trip-export-worker"),
@@ -87,6 +88,22 @@ class HttpTripExportServer(
         current.scheduler.shutdownNow()
     }
 
+    /**
+     * Listens on every interface (Java binds dual-stack even for 0.0.0.0, so [acceptLoop] filters the
+     * peers instead). Reuse is set before the bind, so a restart right after a stop gets the same port.
+     */
+    private fun bindServerSocket(port: Int): ServerSocket {
+        val socket = ServerSocket()
+        try {
+            socket.reuseAddress = true
+            socket.bind(InetSocketAddress(port), ACCEPT_BACKLOG)
+        } catch (e: IOException) {
+            closeQuietly(socket)
+            throw e
+        }
+        return socket
+    }
+
     /** Stops the server when no request has arrived for the configured idle time. */
     internal fun checkIdle() {
         if (running == null || activeConnections.get() > 0) return
@@ -113,6 +130,12 @@ class HttpTripExportServer(
                 // Closed by stop() (the loop condition ends it), or a real failure: pause so the
                 // thread does not spin while the failure lasts.
                 if (!pauseAfterFailedAccept(serverSocket, backoff)) return
+                continue
+            }
+            if (!isLocalNetworkAddress(socket.inetAddress)) {
+                // Not from a Wi-Fi or hotspot network: an IPv6 or public peer, e.g. over mobile data,
+                // where the head unit may have a public IPv6 address. No answer at all.
+                closeQuietly(socket)
                 continue
             }
             try {

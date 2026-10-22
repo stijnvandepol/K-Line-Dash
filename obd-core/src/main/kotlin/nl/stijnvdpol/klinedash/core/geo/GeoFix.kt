@@ -13,7 +13,7 @@ fun isValidPosition(lat: Double, lon: Double): Boolean =
 /** A WGS84 position in decimal degrees. */
 data class LatLon(val lat: Double, val lon: Double) {
     init {
-        require(isValidPosition(lat, lon)) { "Not a valid position: $lat, $lon" }
+        require(isValidPosition(lat, lon)) { "Not a valid position (latitude or longitude out of range)" }
     }
 }
 
@@ -36,7 +36,7 @@ data class GeoFix(
     val satellites: Int? = null,
 ) {
     init {
-        require(isValidPosition(lat, lon)) { "Not a valid position: $lat, $lon" }
+        require(isValidPosition(lat, lon)) { "Not a valid position (latitude or longitude out of range)" }
     }
 
     val position: LatLon get() = LatLon(lat, lon)

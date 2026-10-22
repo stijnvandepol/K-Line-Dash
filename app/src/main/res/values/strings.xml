@@ -260,11 +260,11 @@
     <string name="display_cluster_default">Theme default</string>
     <string name="display_cluster_bar">Race bar</string>
     <string name="display_cluster_twin">Twin dials</string>
-    <string name="display_cluster_center">Centre tach</string>
+    <string name="display_cluster_center">Center tach</string>
     <string name="display_cluster_arc">Digital arc</string>
     <string name="display_cluster_virtual">Virtual cockpit</string>
     <string name="cluster_tach_scale">x1000</string>
-    <string name="display_accent_title">Accent colour</string>
+    <string name="display_accent_title">Accent color</string>
     <string name="display_accent_default">Theme default</string>
     <string name="step_lower">lower</string>
     <string name="step_raise">raise</string>
@@ -405,7 +405,7 @@
     <string name="units_title">Units</string>
     <string name="units_metric">Metric</string>
     <string name="units_imperial">Imperial</string>
-    <string name="units_hint">Metric: km/h, km, °C, kPa, litres. Imperial: mph, miles, °F, psi, US gallons. Exports to a PC stay metric.</string>
+    <string name="units_hint">Metric: km/h, km, °C, kPa, liters. Imperial: mph, miles, °F, psi, US gallons. Exports to a PC stay metric.</string>
 
     <!-- Dashboard before an adapter is chosen -->
     <string name="empty_dash_title">Connect your adapter to see live data</string>
@@ -544,7 +544,7 @@
     <string name="help_tr_headunit_h">The head unit closes the app after the ignition goes off</string>
     <string name="help_tr_headunit_b">Many head units stop apps shortly after the ignition is switched off. Add K-Line Dash to the sleep whitelist of the unit and allow background running. Setup, Startup explains how for FYT / UIS and Microntek units. Open the app once by hand afterwards.</string>
     <string name="help_tr_gps_h">No GPS fix</string>
-    <string name="help_tr_gps_b">GPS needs the location permission (Setup, GPS and Tracks, Allow location), the location switch of Android on, and a clear view of the sky. The first fix can take a few minutes. Some head units have no GPS antenna connected; trips then record from the adapter only, without a route or laps.</string>
+    <string name="help_tr_gps_b">GPS needs the location permission (Setup, GPS &amp; Tracks, Allow location), the location switch of Android on, and a clear view of the sky. The first fix can take a few minutes. Some head units have no GPS antenna connected; trips then record from the adapter only, without a route or laps.</string>
     <string name="help_tr_trip_h">A trip did not record</string>
     <string name="help_tr_trip_b">Automatic recording starts when the engine runs and the adapter is connected, and ends two minutes after the engine stops. Without an adapter, switch on \"When the car moves\" on the Trips page: it starts above 10 km/h (6 mph) with a GPS fix. Check that the switch is on and that the unit has free storage.</string>
 
@@ -565,7 +565,7 @@
     <string name="help_lap_drive_h">5. Drive</string>
     <string name="help_lap_drive_b">Current lap, last lap, best lap and the delta to your best show on Trips. A green delta means you are ahead of your best lap.</string>
     <string name="help_lap_review_h">6. Look back</string>
-    <string name="help_lap_review_b">Open the trip in the Trips list for the lap table, the route and graphs of speed and RPM. The track is saved under Setup, GPS and Tracks and offered again for your next session.</string>
+    <string name="help_lap_review_b">Open the trip in the Trips list for the lap table, the route and graphs of speed and RPM. The track is saved under Setup, GPS &amp; Tracks and offered again for your next session.</string>
 
     <string name="help_ex_how_h">Export a trip</string>
     <string name="help_ex_how_b">Open a trip on the Trips page and tap Export for PC. Choose a format. Lap sessions also give a CSV with one row per lap.</string>

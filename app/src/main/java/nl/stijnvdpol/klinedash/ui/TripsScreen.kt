@@ -39,8 +39,10 @@ import nl.stijnvdpol.klinedash.service.ExportState
 import nl.stijnvdpol.klinedash.service.RecordingState
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
+import nl.stijnvdpol.klinedash.ui.theme.LocalScreenProfile
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.trips.ChooseTrackDialog
+import nl.stijnvdpol.klinedash.ui.trips.SessionActions
 import nl.stijnvdpol.klinedash.ui.trips.SessionPanel
 import nl.stijnvdpol.klinedash.ui.trips.SessionViewModel
 import nl.stijnvdpol.klinedash.ui.trips.TripDetailScreen
@@ -124,17 +126,22 @@ private fun SessionColumn(vm: TripsViewModel, session: SessionViewModel, setting
         }
         hadReport = hasReport
     }
-    Column(modifier.verticalScroll(scroll)) {
-        SessionPanel(session, recordingHint(canStart, settings?.autoRecord != false), onChooseTrack)
-        SectionTitle(stringResource(R.string.trips_section_auto))
-        SwitchRow(stringResource(R.string.trips_auto_record), settings?.autoRecord == true, vm::setAutoRecord, Modifier.height(Spacing.touchMin))
-        HorizontalRule()
-        SwitchRow(
-            stringResource(R.string.trips_auto_moving), settings?.autoStartWhenMoving == true, vm::setAutoStartWhenMoving,
-            Modifier.height(Spacing.touchMin), enabled = settings?.autoRecord == true,
-        )
-        HorizontalRule()
-        ExportSection(vm, export, copy)
+    // On a phone the buttons of a running session stay at the bottom, out of the scroll.
+    val pinnedActions = areSessionActionsPinned(LocalScreenProfile.current)
+    Column(modifier) {
+        Column(Modifier.weight(1f).verticalScroll(scroll)) {
+            SessionPanel(session, recordingHint(canStart, settings?.autoRecord != false), onChooseTrack, pinnedActions)
+            SectionTitle(stringResource(R.string.trips_section_auto))
+            SwitchRow(stringResource(R.string.trips_auto_record), settings?.autoRecord == true, vm::setAutoRecord, Modifier.height(Spacing.touchMin))
+            HorizontalRule()
+            SwitchRow(
+                stringResource(R.string.trips_auto_moving), settings?.autoStartWhenMoving == true, vm::setAutoStartWhenMoving,
+                Modifier.height(Spacing.touchMin), enabled = settings?.autoRecord == true,
+            )
+            HorizontalRule()
+            ExportSection(vm, export, copy)
+        }
+        if (pinnedActions) SessionActions(session, isPinned = true)
     }
 }
 

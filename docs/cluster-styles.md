@@ -23,7 +23,7 @@ smaller of width and height, never stretch.
 |---|---|---|
 | `bar` | Race bar | The existing 45-segment bar with RPM / KM/H / WATER numerals. |
 | `twin` | Twin dials | Tachometer left, speedometer right, round, about 500 dp across, 250 degree sweep from bottom-left; between them a slim coolant dial (90 degree arc) with the value under it. Digital RPM small inside the tach, digital speed inside the speedo. |
-| `center` | Centre tach | One large tachometer in the middle (about 520 dp), digital speed large on its left, coolant and battery stacked on its right. |
+| `center` | Center tach | One large tachometer in the middle (about 520 dp), digital speed large on its left, coolant and battery stacked on its right. |
 | `arc` | Digital arc | A row of 10 shift lights across the top (green, then amber, then red, lighting up over the last 1 500 rpm before the shift point); below it a 200 degree segmented arc tachometer with the speed as the hero numeral in its centre and the RPM smaller under it. |
 | `virtual` | Virtual cockpit | Two thin ring gauges cut by the screen's left and right edges (tach left, speed right) with large light-weight numerals in their centres; the middle shows four values as a calm list. |
 
@@ -118,7 +118,7 @@ are plain functions in `ClusterGeometry.kt` with unit tests.
   Between them the slim coolant dial: a 90 degree arc across the top, "C" left and "H" right, its
   bands at the caution and danger limits of SETUP > Warnings, the value and "WATER °C" under it. The
   three are centred as one group.
-- **Centre tach**: the dial with the rpm in it; speed, coolant and battery are the dashboard's own
+- **Center tach**: the dial with the rpm in it; speed, coolant and battery are the dashboard's own
   fields (label, unit, value at the bottom) left and right of it, separated by rules.
 - **Digital arc**: ten shift lights across the top, burning one by one over the last 1 500 rpm
   before the shift point (4 green, 3 amber, 3 red; all ten at the shift point). The shift point is

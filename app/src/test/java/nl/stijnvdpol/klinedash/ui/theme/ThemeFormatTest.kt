@@ -59,20 +59,20 @@ class ThemeFormatTest {
 
     @Test
     fun aMissingColourIsNamed() {
-        assertEquals("Missing colour \"caution\".", invalidReason(themeJson(overrides = mapOf("caution" to null))))
+        assertEquals("Missing color \"caution\".", invalidReason(themeJson(overrides = mapOf("caution" to null))))
     }
 
     @Test
     fun colourTextThatIsNotSixDigitHexIsRejectedWithTheValue() {
         for (bad in listOf("red", "#FFF", "#GGGGGG", "FFFFFF", "#FFFFFFFF", "")) {
             val reason = invalidReason(themeJson(overrides = mapOf("ink" to bad)))
-            assertTrue("$bad: $reason", reason.startsWith("Colour \"ink\" is \"$bad\": write it as #RRGGBB"))
+            assertTrue("$bad: $reason", reason.startsWith("Color \"ink\" is \"$bad\": write it as #RRGGBB"))
         }
     }
 
     @Test
     fun aNumberInsteadOfTextIsRejected() {
-        assertTrue(invalidReason(themeJson(overrides = mapOf("rule" to "12345"))).startsWith("Colour \"rule\" is 12345"))
+        assertTrue(invalidReason(themeJson(overrides = mapOf("rule" to "12345"))).startsWith("Color \"rule\" is 12345"))
     }
 
     @Test

@@ -66,17 +66,17 @@ fun parseTheme(text: String): ThemeParseResult {
     if (name.isEmpty()) return ThemeParseResult.Invalid("Missing \"$NAME_KEY\": give the theme a short name.")
     if (name.length > MAX_NAME_LENGTH) return ThemeParseResult.Invalid("The name is longer than $MAX_NAME_LENGTH characters.")
     val colorObject = root.optJSONObject(COLORS_KEY)
-        ?: return ThemeParseResult.Invalid("Missing \"$COLORS_KEY\": an object with the colour tokens.")
+        ?: return ThemeParseResult.Invalid("Missing \"$COLORS_KEY\": an object with the color tokens.")
 
     val values = HashMap<String, Color>()
     for (token in RequiredTokens + OptionalTokens) {
         val raw = colorObject.opt(token)
         if (raw == null) {
             if (token in OptionalTokens) continue
-            return ThemeParseResult.Invalid("Missing colour \"$token\".")
+            return ThemeParseResult.Invalid("Missing color \"$token\".")
         }
         values[token] = parseHexColor(raw) ?: return ThemeParseResult.Invalid(
-            "Colour \"$token\" is ${describe(raw)}: write it as #RRGGBB, for example #FF8800.",
+            "Color \"$token\" is ${describe(raw)}: write it as #RRGGBB, for example #FF8800.",
         )
     }
     val ink = values.getValue("ink")
@@ -96,7 +96,7 @@ fun parseTheme(text: String): ThemeParseResult {
     if (contrast < MIN_LABEL_CONTRAST) {
         return ThemeParseResult.Invalid(
             "Labels are too faint: inkMuted on background has a contrast of ${String.format(Locale.US, "%.1f", contrast)}:1, " +
-                "at least $MIN_LABEL_CONTRAST:1 is needed. Move inkMuted further away from the background colour.",
+                "at least $MIN_LABEL_CONTRAST:1 is needed. Move inkMuted further away from the background color.",
         )
     }
     val faceProblem = dialContrastProblem(colors, values)
@@ -122,7 +122,7 @@ private fun dialContrastProblem(colors: KLineColors, values: Map<String, Color>)
     val contrast = contrastRatio(colors.faceInk, colors.face)
     if (contrast >= MIN_LABEL_CONTRAST) return null
     return "Dial numbers are too faint: faceInk on face has a contrast of ${String.format(Locale.US, "%.1f", contrast)}:1, " +
-        "at least $MIN_LABEL_CONTRAST:1 is needed. Move faceInk further away from the face colour."
+        "at least $MIN_LABEL_CONTRAST:1 is needed. Move faceInk further away from the face color."
 }
 
 /** The cluster style and numerals the file names (the defaults when it names none); null when one of them is unknown. */

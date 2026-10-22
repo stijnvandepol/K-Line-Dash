@@ -50,6 +50,9 @@ private val RouteWidth = 500.dp
 private val RouteMinWidth = 260.dp
 private const val ROUTE_SHARE = 0.4f
 
+/** The statistics and lap tables read as one block up to this width; on a wider unit the route gets the rest. */
+private val TablesMaxWidth = 880.dp
+
 /**
  * The trip detail page: a strip with the way back, the date and track, "Export for PC" and "Delete";
  * the route on the left; the statistics, the lap table and the graph of the selected lap on the
@@ -158,7 +161,10 @@ private fun DetailBody(vm: TripDetailViewModel, detail: TripDetail) {
     val trace by vm.lapTrace.collectAsStateWithLifecycle()
     val lapRoute = (trace as? LapTraceState.Ready)?.takeIf { it.lapNumber == selected }?.trace?.route
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val routeWidth = sideColumnWidth(maxWidth, ROUTE_SHARE, RouteMinWidth, RouteWidth)
+        val routeWidth = maxOf(
+            sideColumnWidth(maxWidth, ROUTE_SHARE, RouteMinWidth, RouteWidth),
+            maxWidth - TablesMaxWidth - Spacing.ruleThickness,
+        )
         Row(Modifier.fillMaxSize()) {
             if (detail.hasGps) {
                 RouteView(

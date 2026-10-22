@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
@@ -42,6 +43,10 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 private val StatusHeight = 80.dp
 private val GridRowHeight = 96.dp
 private val HeroRowHeight = 136.dp
+
+/** The rows on a short screen, where the buttons are pinned below (see areSessionActionsPinned); the numerals shrink to fit. */
+private val CompactGridRowHeight = 80.dp
+private val CompactHeroRowHeight = 112.dp
 private val SplitsHeight = 48.dp
 private val SplitsLineGap = 2.dp
 private val SplitsCellGap = Spacing.grid
@@ -57,26 +62,82 @@ private const val DELTA_SAMPLE = "+88.88"
 private const val COUNT_SAMPLE = "888"
 private const val TRIP_FIELD_SAMPLE = "8:88:88"
 
+/** Heights of the session rows: the design ones, or the lower ones of a short screen. */
+private class SessionRows(val hero: Dp, val grid: Dp)
+
+private fun sessionRows(isCompact: Boolean) =
+    if (isCompact) SessionRows(CompactHeroRowHeight, CompactGridRowHeight) else SessionRows(HeroRowHeight, GridRowHeight)
+
 /**
  * The session at the top of the TRIPS page. Not recording: the two ways to start, and the track a
  * lap session would use. Recording a trip: its live statistics. A lap session: the lap timer and the
  * buttons for the start/finish and sector lines. The text of the state comes from [recordingHint]
- * when idle.
+ * when idle. With [pinnedActions] the buttons of a running session are left out (the caller shows
+ * [SessionActions] where they cannot scroll away) and the rows are lower.
  */
 @Composable
-internal fun SessionPanel(vm: SessionViewModel, hint: RecordingHint, onChooseTrack: () -> Unit) {
+internal fun SessionPanel(vm: SessionViewModel, hint: RecordingHint, onChooseTrack: () -> Unit, pinnedActions: Boolean) {
     val recording by vm.recording.collectAsStateWithLifecycle()
     val isLapSession by vm.isLapSession.collectAsStateWithLifecycle()
     val error by vm.recordingError.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val rows = sessionRows(pinnedActions)
     Column(Modifier.fillMaxWidth()) {
         when {
             recording !is RecordingState.Recording -> IdlePanel(vm, hint, onChooseTrack)
-            isLapSession -> LapSessionPanel(vm, recording as RecordingState.Recording)
-            else -> TripPanel(vm, recording as RecordingState.Recording)
+            isLapSession -> LapSessionPanel(vm, recording as RecordingState.Recording, rows)
+            else -> TripPanel(vm, recording as RecordingState.Recording, rows)
         }
+        if (!pinnedActions) SessionActions(vm, isPinned = false)
         error?.let { NoticeLine(it, KLineTheme.colors.danger) }
         message?.let { NoticeLine(it, KLineTheme.colors.ink) }
+    }
+}
+
+/**
+ * The buttons of a running session: Stop and Start lap timing for a trip; Add sector here (once the
+ * start/finish line exists) and Stop for a lap session, with the reason when the lines cannot be set.
+ * Nothing while idle. [isPinned]: drawn at the bottom of the column, so the rule goes above them.
+ */
+@Composable
+internal fun SessionActions(vm: SessionViewModel, isPinned: Boolean) {
+    val recording by vm.recording.collectAsStateWithLifecycle()
+    val isLapSession by vm.isLapSession.collectAsStateWithLifecycle()
+    if (recording !is RecordingState.Recording) return
+    if (isPinned) HorizontalRule()
+    if (isLapSession) LapActions(vm) else TripActions(vm)
+    if (!isPinned) HorizontalRule()
+}
+
+@Composable
+private fun TripActions(vm: SessionViewModel) {
+    ActionRow {
+        SecondaryButton(stringResource(R.string.trips_stop), vm::stop, Modifier.weight(1f).height(Spacing.touchMin))
+        SecondaryButton(stringResource(R.string.session_start_timing), vm::startLapTiming, Modifier.weight(1f).height(Spacing.touchMin))
+    }
+}
+
+@Composable
+private fun LapActions(vm: SessionViewModel) {
+    val live by vm.live.collectAsStateWithLifecycle()
+    val gateBlock by vm.gateBlock.collectAsStateWithLifecycle()
+    val hasLine = live.trackId != null
+    ActionRow {
+        if (hasLine) {
+            SecondaryButton(
+                stringResource(R.string.session_add_sector), vm::addSectorHere,
+                Modifier.weight(1f).height(Spacing.touchMin), enabled = gateBlock == null,
+            )
+        }
+        SecondaryButton(stringResource(R.string.trips_stop), vm::stop, Modifier.weight(1f).height(Spacing.touchMin))
+    }
+    if (hasLine && gateBlock != null) {
+        Text(
+            gateBlock.orEmpty(),
+            style = KLineType.caption,
+            color = KLineTheme.colors.inkMuted,
+            modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal).padding(bottom = Spacing.grid),
+        )
     }
 }
 
@@ -129,12 +190,12 @@ private fun RecordingHint.textRes(): Int = when (this) {
 }
 
 @Composable
-private fun TripPanel(vm: SessionViewModel, recording: RecordingState.Recording) {
+private fun TripPanel(vm: SessionViewModel, recording: RecordingState.Recording, rows: SessionRows) {
     val live by vm.live.collectAsStateWithLifecycle()
     SessionStatus(true, stringResource(R.string.trips_state_recording), recording.fileName)
     val cells = liveStatCells(live.stats, LocalUnitSystem.current)
     cells.chunked(2).forEach { pair ->
-        Row(Modifier.fillMaxWidth().height(GridRowHeight)) {
+        Row(Modifier.fillMaxWidth().height(rows.grid)) {
             pair.forEachIndexed { index, cell ->
                 if (index > 0) VerticalRule()
                 ValueField(cell.label, cell.unit, cell.value, FieldLook, TRIP_FIELD_SAMPLE, Modifier.weight(1f).fillMaxHeight())
@@ -142,11 +203,6 @@ private fun TripPanel(vm: SessionViewModel, recording: RecordingState.Recording)
         }
         HorizontalRule()
     }
-    ActionRow {
-        SecondaryButton(stringResource(R.string.trips_stop), vm::stop, Modifier.weight(1f).height(Spacing.touchMin))
-        SecondaryButton(stringResource(R.string.session_start_timing), vm::startLapTiming, Modifier.weight(1f).height(Spacing.touchMin))
-    }
-    HorizontalRule()
 }
 
 @Composable
@@ -159,7 +215,7 @@ private fun ActionRow(content: @Composable RowScope.() -> Unit) {
 }
 
 @Composable
-private fun LapSessionPanel(vm: SessionViewModel, recording: RecordingState.Recording) {
+private fun LapSessionPanel(vm: SessionViewModel, recording: RecordingState.Recording, rows: SessionRows) {
     val live by vm.live.collectAsStateWithLifecycle()
     val track by vm.activeTrack.collectAsStateWithLifecycle()
     val gateBlock by vm.gateBlock.collectAsStateWithLifecycle()
@@ -170,28 +226,10 @@ private fun LapSessionPanel(vm: SessionViewModel, recording: RecordingState.Reco
         if (hasLine) track?.name ?: recording.fileName else stringResource(R.string.session_no_line),
     )
     if (hasLine) {
-        LapTimer(lapPanel(live.lapTiming, track?.sectors?.size ?: 0))
+        LapTimer(lapPanel(live.lapTiming, track?.sectors?.size ?: 0), rows)
     } else {
         SetStartFinish(vm, gateBlock)
     }
-    ActionRow {
-        if (hasLine) {
-            SecondaryButton(
-                stringResource(R.string.session_add_sector), vm::addSectorHere,
-                Modifier.weight(1f).height(Spacing.touchMin), enabled = gateBlock == null,
-            )
-        }
-        SecondaryButton(stringResource(R.string.trips_stop), vm::stop, Modifier.weight(1f).height(Spacing.touchMin))
-    }
-    if (hasLine && gateBlock != null) {
-        Text(
-            gateBlock.orEmpty(),
-            style = KLineType.caption,
-            color = KLineTheme.colors.inkMuted,
-            modifier = Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal).padding(bottom = Spacing.grid),
-        )
-    }
-    HorizontalRule()
 }
 
 /** The way to the first line: what to do, the button, and why it cannot be pressed yet. */
@@ -212,20 +250,22 @@ private fun SetStartFinish(vm: SessionViewModel, block: String?) {
 
 /** CURRENT LAP as the hero, LAST and BEST, DELTA to best (green ahead, red behind) and the lap count, then the sector splits. */
 @Composable
-private fun LapTimer(panel: LapPanel) {
+private fun LapTimer(panel: LapPanel, rows: SessionRows) {
     val colors = KLineTheme.colors
     ValueField(
         stringResource(R.string.session_current_lap), null, panel.current, PrimaryLook, HERO_SAMPLE,
-        Modifier.fillMaxWidth().height(HeroRowHeight),
+        Modifier.fillMaxWidth().height(rows.hero),
     )
     HorizontalRule()
     FieldRow(
         FieldSpec(stringResource(R.string.session_last), panel.last, LAP_TIME_SAMPLE, colors.ink),
         FieldSpec(stringResource(R.string.session_best), panel.best, LAP_TIME_SAMPLE, colors.ink),
+        rows.grid,
     )
     FieldRow(
         FieldSpec(stringResource(R.string.session_delta), panel.delta, DELTA_SAMPLE, panel.deltaTone.color()),
         FieldSpec(stringResource(R.string.session_laps), "${panel.lapCount}", COUNT_SAMPLE, colors.ink),
+        rows.grid,
     )
     SectorSplits(panel.splits)
 }
@@ -272,8 +312,8 @@ private fun RowScope.SplitCell(split: SectorSplit, isCompact: Boolean) {
 private class FieldSpec(val label: String, val value: String, val sample: String, val color: Color)
 
 @Composable
-private fun FieldRow(left: FieldSpec, right: FieldSpec) {
-    Row(Modifier.fillMaxWidth().height(GridRowHeight)) {
+private fun FieldRow(left: FieldSpec, right: FieldSpec, height: Dp) {
+    Row(Modifier.fillMaxWidth().height(height)) {
         ValueField(left.label, null, left.value, FieldLook, left.sample, Modifier.weight(1f).fillMaxHeight(), left.color)
         VerticalRule()
         ValueField(right.label, null, right.value, FieldLook, right.sample, Modifier.weight(1f).fillMaxHeight(), right.color)

@@ -83,8 +83,8 @@ background.
 A file is rejected, with the reason shown in the Display section, when:
 
 - it is not valid JSON, or `name` or `colors` is missing, or `name` is longer than 24 characters;
-- a required colour is missing ("Missing colour "caution"");
-- a colour is not `#RRGGBB` ("Colour "ink" is "red": write it as #RRGGBB");
+- a required colour is missing ("Missing color "caution"");
+- a colour is not `#RRGGBB` ("Color "ink" is "red": write it as #RRGGBB");
 - `cluster` or `numerals` is not one of the values above ("Unknown cluster "round": use bar, twin,
   center, arc, virtual.");
 - `face` or `faceInk` is set and `faceInk` on `face` has a contrast below **4.5:1**, because the

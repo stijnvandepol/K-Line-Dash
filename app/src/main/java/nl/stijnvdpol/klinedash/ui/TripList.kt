@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +49,12 @@ private val TightDeleteCellWidth = 116.dp
 private val ColumnGap = 28.dp
 
 /**
+ * The date and the lap summary under it need no more than this; on a wide unit the numbers follow
+ * right after it instead of at the far end of the row, and the room left over sits before the delete cell.
+ */
+private val StartColumnMaxWidth = 480.dp
+
+/**
  * Widths of the two number columns: a slot for the value and, for distance, room for the unit. A
  * tight list writes the unit once in the header ("DIST KM") instead of in every row, which
  * leaves the date and time their room.
@@ -86,23 +93,26 @@ internal fun TripList(rows: List<TripRow>?, isAutoRecord: Boolean, onOpen: (Long
 @Composable
 private fun TripTable(rows: List<TripRow>, onOpen: (Long) -> Unit, onDelete: (TripRow) -> Unit, modifier: Modifier) {
     val columns = rememberTripColumns()
-    Column(modifier) {
-        Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight)) {
-            Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = Spacing.fieldPaddingHorizontal), contentAlignment = Alignment.CenterStart) {
+    BoxWithConstraints(modifier) {
+        val startWidth = (maxWidth - columns.totalWidth - columns.deleteWidth - Spacing.ruleThickness - Spacing.fieldPaddingHorizontal * 2)
+            .coerceIn(0.dp, StartColumnMaxWidth)
+        TripTableContent(rows, columns, startWidth, onOpen, onDelete)
+    }
+}
+
+@Composable
+private fun TripTableContent(rows: List<TripRow>, columns: TripColumns, startWidth: Dp, onOpen: (Long) -> Unit, onDelete: (TripRow) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(Spacing.tableHeaderHeight).padding(horizontal = Spacing.fieldPaddingHorizontal)) {
+            Box(Modifier.width(startWidth).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
                 HeaderLabel(R.string.trips_column_start, Modifier, TextAlign.Start)
             }
-            Box(
-                Modifier.fillMaxHeight().padding(end = Spacing.fieldPaddingHorizontal).width(columns.totalWidth),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeaderLabel(R.string.trips_column_duration, Modifier.width(columns.duration), TextAlign.End)
-                    Spacer(Modifier.width(columns.gap))
-                    HeaderLabel(distanceHeader(columns.isTight), Modifier.width(columns.distance), TextAlign.End)
-                    Spacer(Modifier.width(columns.unitRoom))
-                }
+            Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                HeaderLabel(R.string.trips_column_duration, Modifier.width(columns.duration), TextAlign.End)
+                Spacer(Modifier.width(columns.gap))
+                HeaderLabel(distanceHeader(columns.isTight), Modifier.width(columns.distance), TextAlign.End)
+                Spacer(Modifier.width(columns.unitRoom))
             }
-            Spacer(Modifier.width(columns.deleteWidth + Spacing.ruleThickness))
         }
         HorizontalRule()
         val listState = rememberLazyListState()
@@ -113,7 +123,7 @@ private fun TripTable(rows: List<TripRow>, onOpen: (Long) -> Unit, onDelete: (Tr
         }
         LazyColumn(Modifier.fillMaxSize(), listState) {
             items(rows, key = { it.id }) { row ->
-                TripRowView(row, columns, onOpen, onDelete)
+                TripRowView(row, columns, startWidth, onOpen, onDelete)
                 HorizontalRule()
             }
         }
@@ -145,7 +155,7 @@ private fun HeaderLabel(label: String, modifier: Modifier, align: TextAlign) {
 
 /** A row is a button that opens the trip; the delete cell is the full height. The trip being recorded cannot be opened. */
 @Composable
-private fun TripRowView(row: TripRow, columns: TripColumns, onOpen: (Long) -> Unit, onDelete: (TripRow) -> Unit) {
+private fun TripRowView(row: TripRow, columns: TripColumns, startWidth: Dp, onOpen: (Long) -> Unit, onDelete: (TripRow) -> Unit) {
     val colors = KLineTheme.colors
     Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
         Row(
@@ -154,7 +164,7 @@ private fun TripRowView(row: TripRow, columns: TripColumns, onOpen: (Long) -> Un
                 .padding(horizontal = Spacing.fieldPaddingHorizontal),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.width(startWidth)) {
                 Text(row.start, style = KLineType.body, color = colors.ink, maxLines = 1)
                 row.lapSummary?.let { Text(it, style = KLineType.caption, color = colors.inkMuted, maxLines = 1) }
             }
@@ -162,6 +172,7 @@ private fun TripRowView(row: TripRow, columns: TripColumns, onOpen: (Long) -> Un
             Spacer(Modifier.width(columns.gap))
             NumberText(row.distance, columns.distance)
             if (!columns.isTight) UnitText(LocalUnitSystem.current.label(Quantity.DISTANCE))
+            Spacer(Modifier.weight(1f))
         }
         VerticalRule()
         Box(Modifier.width(columns.deleteWidth).fillMaxHeight(), contentAlignment = Alignment.Center) {

@@ -2,6 +2,17 @@ package nl.stijnvdpol.klinedash.core.export
 
 import java.io.FilterOutputStream
 import java.io.OutputStream
+import java.net.Inet4Address
+import java.net.InetAddress
+
+/**
+ * True for an IPv4 address that only exists on a local network: the private ranges 10/8, 172.16/12
+ * and 192.168/16 that Wi-Fi routers and hotspots hand out, and loopback. The export server only
+ * talks to such peers and the app only shows such addresses, so a public or carrier address
+ * (mobile data, 100.64/10) never reaches the PIN page.
+ */
+fun isLocalNetworkAddress(address: InetAddress): Boolean =
+    address is Inet4Address && (address.isSiteLocalAddress || address.isLoopbackAddress)
 
 /**
  * Delay before the next accept after a failed one. A failing accept that is not a shutdown (out of

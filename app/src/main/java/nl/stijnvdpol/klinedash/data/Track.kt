@@ -30,7 +30,7 @@ const val MAX_SECTOR_LINES = 20
  */
 data class GateSpec(val lat: Double, val lon: Double, val headingDeg: Double, val widthM: Double = Gate.DEFAULT_WIDTH_M) {
     init {
-        require(isValidPosition(lat, lon)) { "Not a valid position: $lat, $lon" }
+        require(isValidPosition(lat, lon)) { "Not a valid position (latitude or longitude out of range)" }
         require(headingDeg.isFinite() && headingDeg >= 0.0 && headingDeg < MAX_HEADING_DEG) { "Heading out of range: $headingDeg" }
         require(widthM.isFinite() && widthM > 0.0 && widthM <= MAX_WIDTH_M) { "Gate width out of range: $widthM" }
     }

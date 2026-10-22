@@ -41,6 +41,17 @@ private const val LAP_TABLE_ALL_COLUMNS_MIN_WIDTH_DP = 680f
 /** From this width a page of two halves (wizard, About) shows them side by side; below it they stack. */
 internal const val TWO_PANE_MIN_WIDTH_DP = 840f
 
+/**
+ * A screen with a canvas lower than this (the phones: 480 and 548 dp) cannot show a running lap
+ * session and its buttons at once. The Stop and sector buttons then stay at the bottom of the TRIPS
+ * session column while the rest scrolls, and the lap timer rows are lower, so the driver never has to
+ * scroll for them. Decided by the screen, not by the room left over, so a warning banner that comes
+ * and goes does not rearrange the panel.
+ */
+private const val SESSION_ACTIONS_PINNED_BELOW_DP = 600f
+
+internal fun areSessionActionsPinned(profile: ScreenProfile): Boolean = profile.heightDp < SESSION_ACTIONS_PINNED_BELOW_DP
+
 internal fun isWarningsStacked(sectionWidthDp: Float): Boolean = sectionWidthDp < WARNINGS_STACKED_BELOW_DP
 
 internal fun lapTableShowsAllColumns(tableWidthDp: Float): Boolean = tableWidthDp >= LAP_TABLE_ALL_COLUMNS_MIN_WIDTH_DP

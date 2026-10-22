@@ -126,3 +126,35 @@ mapping and `retrace` (Android SDK `cmdline-tools`):
 gunzip -k kline-dash-1.0.1-mapping.txt.gz
 retrace kline-dash-1.0.1-mapping.txt crash.txt
 ```
+
+## Running the instrumented UI tests
+
+`app/src/androidTest` holds end-to-end tests of the critical flows (setup wizard, dashboard, DIAG
+clear-codes, trips and export, units, navigation on a head unit and on a phone). They drive the real
+app against the built-in simulator, so no adapter or car is needed, but they need an emulator or
+device with a screen. Run them before a release, next to the gate above:
+
+```bash
+export ANDROID_SERIAL=emulator-5554        # a connected* task installs on EVERY attached device unless restricted
+./gradlew :app:connectedDebugAndroidTest
+```
+
+- **Always set `ANDROID_SERIAL`** (check `adb devices` first). Without it the tests are installed on
+  every device that is attached, wireless-debugging ones included, and the orchestrator clears the
+  app's data on each of them.
+- **Isolation**: `testOptions.execution = "ANDROIDX_TEST_ORCHESTRATOR"` with `clearPackageData`
+  runs every test in its own process on freshly cleared app data, which is a first run every time.
+  Clearing state from inside a test would not do: the connection, the simulated engine and the trip
+  recorder live in process-wide singletons. The cost is about 5 seconds per test.
+- **Time**: about 4 minutes for the whole suite on a healthy emulator. Each flow waits on the simulator, which answers in
+  about 0.5 s per request, so connecting takes 5 to 15 seconds; waits use `waitUntil` with timeouts
+  (`CAR_TIMEOUT_MS`), never fixed sleeps.
+- **Phone size**: `NavigationSmokeTest` runs once on the device's own display and once after
+  `wm size 2400x1080` and `wm density 420`, which the test sets once the app is on screen (the activity
+  is recreated for it) and resets afterwards, also when it fails. If a run
+  is killed half-way, reset by hand: `adb -s emulator-5554 shell wm size reset` and `wm density reset`.
+- **A failure** writes the semantics tree of the screen to logcat under the tag `KLineDashUiTest`
+  (`adb -s emulator-5554 logcat -d -s KLineDashUiTest`); the HTML report is in
+  `app/build/reports/androidTests/connected/debug/index.html`.
+- Do not use the same emulator for anything else during a run: an `installDebug` kills the test process and
+  a `wm size` from another session changes the screen under a running test.

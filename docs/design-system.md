@@ -494,8 +494,13 @@ The rules are pure functions in `ui/ScreenLayout.kt` (tested), in canvas dp:
 | Diagnostics readiness and freeze frame | one cell per row (panel under 520) | two |
 | Side columns (adapter list, themes, pages, help topics, session, route) | take 32 to 50 % of the width, never under a minimum | the design width (400, 440, 320, 280, 480, 500 dp) |
 | Running text | | never wider than 800 dp (one column wizard steps 960 dp, centred) |
+| Trips list | the date column takes what the numbers leave | the date column stops at 480 dp, so duration and distance follow the date; the rest of the row lies before the delete cell |
+| Trip detail | route column as above | the statistics and lap tables stop at 880 dp, the route takes the rest |
 
-On the smallest phone SETUP is a menu of two columns of rows; a section opens with a back strip
+On a phone (a canvas lower than 600 dp) the buttons of a running trip or lap session (Stop, Start lap
+timing, Add sector here) sit at the bottom of the TRIPS session column and do not scroll, and the lap
+timer rows are lower (hero 112 dp, fields 80 dp), so the driver never scrolls for Stop
+(`areSessionActionsPinned`). On the smallest phone SETUP is a menu of two columns of rows; a section opens with a back strip
 (a full-height 72 dp cell with an arrow) along its left edge, and the back key or tapping SETUP in
 the bottom bar returns to the menu. The wizard has no header on a phone: "Step n of m" and "Skip
 setup" join the footer row. The Trips list writes the distance unit once in the header ("DIST KM")

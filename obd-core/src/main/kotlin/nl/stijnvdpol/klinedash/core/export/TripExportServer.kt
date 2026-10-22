@@ -8,7 +8,8 @@ import java.io.File
  *
  * Security model (documented deviation from guidelines §6, see CODE GUIDELINES.md "Known
  * oddities"): plain HTTP on the local network only, because an offline head unit cannot present a
- * trusted TLS certificate. Mitigations: off by default and started only by the user, a one-time
+ * trusted TLS certificate. Mitigations: off by default and started only by the user, only IPv4
+ * peers on a private network ([isLocalNetworkAddress]), a one-time
  * PIN shown on the head unit, a session cookie after the PIN, a lockout after repeated wrong PINs,
  * read-only (GET downloads of listed files only, never a path from the request), and an automatic
  * stop after [ExportServerConfig.idleTimeoutMs] without requests.

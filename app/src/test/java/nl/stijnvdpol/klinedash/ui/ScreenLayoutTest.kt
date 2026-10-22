@@ -61,6 +61,12 @@ class ScreenLayoutTest {
     }
 
     @Test
+    fun `the session buttons are pinned on a phone and stay in the flow from a small head unit up`() {
+        listOf(SmallPhone, TypicalPhone).forEach { assertTrue("$it", areSessionActionsPinned(it)) }
+        listOf(SmallUnit, ReferenceUnit, WideUnit, Tablet).forEach { assertFalse("$it", areSessionActionsPinned(it)) }
+    }
+
+    @Test
     fun `the lap table drops two columns when it is narrower than 680 dp`() {
         assertFalse(lapTableShowsAllColumns(512f))
         assertTrue(lapTableShowsAllColumns(680f))
