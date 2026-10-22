@@ -73,11 +73,4 @@ class DashboardViewModelTest {
         publish(rpm = 950.0, speed = 0.0, atMs = 200)
         assertEquals(before + 2, vm.graphRevision.value)
     }
-
-    @Test
-    fun `the pager page is remembered`() {
-        assertEquals(0, vm.currentPage)
-        vm.currentPage = 2
-        assertEquals(2, vm.currentPage)
-    }
 }

@@ -244,8 +244,10 @@
     <string name="display_now_showing">Now showing</string>
     <string name="display_accent_title">Accent colour</string>
     <string name="display_accent_default">Theme default</string>
-    <string name="display_earlier">Earlier</string>
-    <string name="display_later">Later</string>
+    <string name="step_lower">lower</string>
+    <string name="step_raise">raise</string>
+    <string name="display_earlier">earlier</string>
+    <string name="display_later">later</string>
     <string name="display_swatch_description">Accent %1$s</string>
 
     <!-- Setup: startup -->

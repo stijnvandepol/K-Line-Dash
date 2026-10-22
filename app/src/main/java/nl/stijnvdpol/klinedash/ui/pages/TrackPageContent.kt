@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -22,7 +23,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Reading
-
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.TrackPage
 import nl.stijnvdpol.klinedash.ui.COOLANT_ID
@@ -59,7 +59,8 @@ private val PeakLook = ValueLook(KLineType.fieldValue)
 /**
  * The track page: RPM bar on top, the rpm as the big numeral on the left, coolant and speed on the
  * right with the peak hold and its reset cell below. From the shift point the bar and a 12 dp frame
- * flash in the danger colour.
+ * flash in the danger colour. The frame has its own margin around the content, kept also while it
+ * is dark, so it never covers a value and nothing moves when it flashes.
  */
 @Composable
 internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Peaks>, onResetPeaks: () -> Unit) {
@@ -71,7 +72,7 @@ internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Pea
             if (shiftLight.isLit) drawFrame(danger, ShiftFrameThickness.toPx())
         },
     ) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(ShiftFrameThickness)) {
             RpmBarRow(live, shiftLight)
             HorizontalRule()
             Row(Modifier.weight(1f).fillMaxWidth()) {

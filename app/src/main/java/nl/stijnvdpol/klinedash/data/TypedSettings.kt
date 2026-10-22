@@ -1,8 +1,10 @@
 package nl.stijnvdpol.klinedash.data
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,9 +22,15 @@ class TypedSettings<T>(
 ) {
     private val writeLock = Mutex()
 
-    /** Re-emits on every row change in the table (also other groups' rows), hence the distinctUntilChanged. */
-    val flow: Flow<T> =
-        dao.observeAll().map { rows -> decode(rows.associate { it.key to it.value }) }.distinctUntilChanged()
+    /**
+     * Re-emits on every row change in the table (also other groups' rows), hence the
+     * distinctUntilChanged. Decoded off the main thread: the dashboard layout is JSON, and the table
+     * changes with every wake or sleep broadcast the service notes down.
+     */
+    val flow: Flow<T> = dao.observeAll()
+        .map { rows -> decode(rows.associate { it.key to it.value }) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     /** Read-modify-write under a lock; only rows that actually changed are written. */
     suspend fun update(transform: (T) -> T) {

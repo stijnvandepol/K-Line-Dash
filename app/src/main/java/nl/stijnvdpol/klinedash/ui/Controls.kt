@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -120,6 +121,22 @@ private fun RaceButton(label: String, onClick: () -> Unit, modifier: Modifier, e
         contentAlignment = Alignment.Center,
     ) {
         Text(label.uppercase(), style = KLineType.fieldLabel, color = textColor, textAlign = TextAlign.Center, maxLines = 2)
+    }
+}
+
+/**
+ * One row of equal 72 dp cells separated by rules, of which exactly one is chosen: the chosen cell
+ * is filled, the others are text. Used where the choice switches what the rest of the page shows
+ * (grid size, day or night theme).
+ */
+@Composable
+fun ChoiceCells(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().height(Spacing.touchMin)) {
+        labels.forEachIndexed { index, label ->
+            if (index > 0) VerticalRule()
+            val cell = Modifier.weight(1f).fillMaxHeight()
+            if (index == selectedIndex) PrimaryButton(label, { onSelect(index) }, cell) else TextActionButton(label, { onSelect(index) }, cell)
+        }
     }
 }
 

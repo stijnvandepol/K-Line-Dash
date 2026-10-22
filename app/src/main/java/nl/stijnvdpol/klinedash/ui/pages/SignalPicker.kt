@@ -16,6 +16,7 @@ import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Signal
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.WidgetType
+import nl.stijnvdpol.klinedash.ui.ChoiceCells
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.RaceDialog
 import nl.stijnvdpol.klinedash.ui.SecondaryButton

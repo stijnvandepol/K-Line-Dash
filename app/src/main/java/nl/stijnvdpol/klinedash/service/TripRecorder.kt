@@ -109,6 +109,18 @@ class TripRecorder internal constructor(
         }
     }
 
+    /**
+     * The ignition went off (the head unit's ACC-off broadcast): the running trip, manual or
+     * automatic, is finished now. The unit may cut power or stop the app within seconds, long before
+     * the automatic stop's grace period is over, which would leave the trip unfinished. No automatic
+     * trip starts until the engine has been seen off, so the last fresh rpm reading of the drive
+     * that just ended cannot start a new one; the next drive records as usual.
+     */
+    suspend fun finishForIgnitionOff() = lock.withLock {
+        policy.suppressStartUntilEngineStops()
+        finishLocked()
+    }
+
     /** See [TripRecovery]. Safe to call while recording: the active trip is left alone. */
     suspend fun recoverUnfinished() = lock.withLock { recovery.recover(active?.tripId) }
 

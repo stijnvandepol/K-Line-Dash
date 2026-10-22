@@ -27,21 +27,25 @@ internal val BuiltInThemeIds = listOf(DEFAULT_THEME_ID, "minimal", "retro", "day
 
 class InvalidThemeFile(val fileName: String, val reason: String)
 
-/** Built-in themes first, then the user's files by name; [invalid] are the user's files that were ignored. */
-class ThemeCatalog(val themes: List<ThemeDefinition>, val invalid: List<InvalidThemeFile>) {
+/**
+ * Built-in themes first, then the user's files by name; [invalid] are the user's files that were
+ * ignored. [userFolderPath] is where the user puts theme files, to show on screen.
+ */
+class ThemeCatalog(val themes: List<ThemeDefinition>, val invalid: List<InvalidThemeFile>, val userFolderPath: String) {
     fun find(id: String): ThemeDefinition? = themes.firstOrNull { it.id == id }
 }
 
 /**
- * Reads the built-in themes through [readBuiltIn] (an asset in the app) and every `*.json` in
- * [userDir]. Blocking file I/O: call it off the main thread.
+ * Reads the built-in themes through [readBuiltIn] (an asset in the app) and every `*.json` in the
+ * folder [userDir] gives. Blocking file I/O, finding the folder included: call it off the main thread.
  */
-class ThemeLoader(private val readBuiltIn: (id: String) -> String, private val userDir: File) {
+class ThemeLoader(private val readBuiltIn: (id: String) -> String, private val userDir: () -> File) {
     fun load(): ThemeCatalog {
         val builtIn = BuiltInThemeIds.mapNotNull { id -> loadBuiltIn(id) }
         val invalid = ArrayList<InvalidThemeFile>()
-        val user = loadUserThemes(invalid)
-        return ThemeCatalog(builtIn + user, invalid)
+        val dir = userDir()
+        val user = loadUserThemes(dir, invalid)
+        return ThemeCatalog(builtIn + user, invalid, dir.path)
     }
 
     private fun loadBuiltIn(id: String): ThemeDefinition? {
@@ -58,7 +62,7 @@ class ThemeLoader(private val readBuiltIn: (id: String) -> String, private val u
         }
     }
 
-    private fun loadUserThemes(invalid: MutableList<InvalidThemeFile>): List<ThemeDefinition> {
+    private fun loadUserThemes(userDir: File, invalid: MutableList<InvalidThemeFile>): List<ThemeDefinition> {
         val files = userDir.listFiles { f -> f.isFile && f.name.endsWith(JSON_EXTENSION, ignoreCase = true) }
             ?.sortedBy { it.name.lowercase() }
             .orEmpty()

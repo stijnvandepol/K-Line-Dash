@@ -14,7 +14,7 @@ class ThemeLoaderTest {
 
     private val builtIns: (String) -> String = { id -> File("src/main/assets/themes/$id.json").readText() }
 
-    private fun loader(dir: File = folder.root) = ThemeLoader(builtIns, dir)
+    private fun loader(dir: File = folder.root) = ThemeLoader(builtIns) { dir }
 
     @Test
     fun emptyFolderGivesJustTheBuiltInsInOrder() {
@@ -22,6 +22,7 @@ class ThemeLoaderTest {
         assertEquals(listOf("race", "minimal", "retro", "day"), catalog.themes.map { it.id })
         assertTrue(catalog.themes.all { it.isBuiltIn })
         assertTrue(catalog.invalid.isEmpty())
+        assertEquals(folder.root.path, catalog.userFolderPath)
     }
 
     @Test
@@ -58,6 +59,17 @@ class ThemeLoaderTest {
     fun anOversizedFileIsRejectedWithoutBeingParsed() {
         folder.newFile("huge.json").writeText(" ".repeat(70 * 1024) + themeJson())
         assertEquals("The file is larger than 64 KB.", loader().load().invalid.single().reason)
+    }
+
+    @Test
+    fun aDeeplyNestedFileIsRejectedInsteadOfOverflowingTheParser() {
+        // Fits in 64 KB. Android's own org.json recurses per level without a limit: this file ended the
+        // app with a StackOverflowError at every start. (The org.json of the JVM tests has a limit.)
+        folder.newFile("deep.json").writeText("""{"name":"Deep","colors":""" + "[".repeat(60_000))
+        folder.newFile("quoted.json").writeText("""{"name":"Q","colors":'"',"x":""" + "[".repeat(60_000))
+        val catalog = loader().load()
+        assertEquals(listOf("deep.json", "quoted.json"), catalog.invalid.map { it.fileName })
+        assertTrue(catalog.invalid.all { it.reason.contains("nested too deeply") })
     }
 
     @Test

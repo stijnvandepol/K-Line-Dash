@@ -12,6 +12,12 @@ private const val MAX_NAME_LENGTH = 24
 private const val MAX_SHOWN_VALUE_LENGTH = 16
 private const val OPAQUE = 0xFF000000.toInt()
 private const val HEX_RADIX = 16
+
+/**
+ * A theme is two levels deep. The JSON parser recurses per level, so a file nested thousands of
+ * levels deep (which still fits in the size limit) would overflow its stack and end the app.
+ */
+private const val MAX_NESTING = 8
 private val HexColor = Regex("^#[0-9A-Fa-f]{6}$")
 
 /** The colours every theme file must define, in the order of docs/themes.md. */
@@ -32,6 +38,9 @@ sealed interface ThemeParseResult {
  * [ThemeParseResult.Invalid] with the first problem found; a file is never half-accepted.
  */
 fun parseTheme(text: String): ThemeParseResult {
+    if (isNestedDeeperThan(text, MAX_NESTING)) {
+        return ThemeParseResult.Invalid("Not a theme: lists or objects are nested too deeply. A theme has only \"$NAME_KEY\" and \"$COLORS_KEY\".")
+    }
     val root = try {
         JSONObject(text)
     } catch (e: JSONException) {
@@ -75,6 +84,32 @@ fun parseTheme(text: String): ThemeParseResult {
         )
     }
     return ThemeParseResult.Valid(name, colors)
+}
+
+/**
+ * Whether [text] opens more than [limit] objects or arrays inside each other. Brackets inside
+ * strings do not count; the parser accepts strings in single and in double quotes, so both are skipped.
+ */
+private fun isNestedDeeperThan(text: String, limit: Int): Boolean {
+    var depth = 0
+    var quote: Char? = null
+    var isEscaped = false
+    for (c in text) {
+        if (quote != null) {
+            when {
+                isEscaped -> isEscaped = false
+                c == '\\' -> isEscaped = true
+                c == quote -> quote = null
+            }
+            continue
+        }
+        when (c) {
+            '"', '\'' -> quote = c
+            '{', '[' -> if (++depth > limit) return true
+            '}', ']' -> depth--
+        }
+    }
+    return false
 }
 
 private fun parseHexColor(raw: Any): Color? {

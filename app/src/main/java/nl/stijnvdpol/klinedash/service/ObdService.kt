@@ -170,6 +170,8 @@ class ObdService : LifecycleService() {
             // This is how the user learns which action their unit sends.
             lifecycleScope.launch { appGraph.startupSettingsRepository.recordReceived(action, System.currentTimeMillis()) }
         }
+        // Whatever happens to the link: the drive is over, and the unit may kill the app any second now.
+        if (event == PowerEvent.ACC_OFF) lifecycleScope.launch { appGraph.tripRecorder.finishForIgnitionOff() }
         val state = ObdServiceState.link.value?.state?.value ?: ConnectionState.Idle
         val decision = decideWakeAction(event, linkPhaseOf(state, linkSuspended.value), settings.reconnectOnWake)
         Log.i(TAG, "Signal $action ($event) while ${state::class.simpleName}: $decision")

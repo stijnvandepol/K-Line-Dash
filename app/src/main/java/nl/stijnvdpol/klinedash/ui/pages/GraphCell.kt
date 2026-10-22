@@ -44,20 +44,16 @@ import nl.stijnvdpol.klinedash.ui.slotSample
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
-import kotlin.math.pow
 
 private val LineWidth = 2.dp
 private val LabelGap = 8.dp
 private val PlotPaddingBottom = 12.dp
 
-/** A flat line sits in the middle of this share of the signal's display range instead of filling the cell. */
-private const val MIN_SPAN_SHARE = 0.05
-
 private val UnknownSignalLook = ValueLook(KLineType.fieldValue)
 
 /**
  * A graph of the last 60 s of one signal: label top-left, the current value top-right, the line
- * in ink and the lowest and highest value of the window at the left edge of the plot. A signal
+ * in ink and the bottom and top of its axis ([graphAxis]) at the left edge of the plot. A signal
  * this version does not know shows as an empty field.
  */
 @Composable
@@ -105,7 +101,6 @@ private fun KnownGraphCell(signal: Signal, live: LiveState, history: GraphHistor
 private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory, revision: State<Int>, modifier: Modifier) {
     val colors = KLineTheme.colors
     val measurer = rememberTextMeasurer()
-    val minSpan = remember(signal) { minPlotSpan(signal) }
     Spacer(
         modifier.fillMaxSize().drawWithCache {
             val path = Path()
@@ -126,30 +121,25 @@ private fun GraphPlot(signal: Signal, nowMs: State<Long>, history: GraphHistory,
                 val data = series?.rangeSince(sinceMs)
                 if (series == null || data == null || newestRevision < 0) return@onDrawBehind
 
-                val range = plotRange(data, minSpan)
+                val axis = graphAxis(data, signal)
                 val plotHeight = size.height - 2 * lineInset
                 val first = series.firstIndexAtOrAfter(sinceMs)
                 path.rewind()
                 for (i in first until series.size) {
                     val x = plotLeft + (series.timeAt(i) - sinceMs).toFloat() / GRAPH_WINDOW_MS * plotWidth
-                    val share = ((series.valueAt(i) - range.low) / (range.high - range.low)).toFloat()
+                    val share = ((series.valueAt(i) - axis.low) / (axis.high - axis.low)).toFloat()
                     val y = lineInset + (1f - share) * plotHeight
                     if (i == first) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawPath(path, colors.ink, style = stroke)
 
-                val highLayout = high.layoutOf(data.high)
-                val lowLayout = low.layoutOf(data.low)
+                val highLayout = high.layoutOf(axis.high)
+                val lowLayout = low.layoutOf(axis.low)
                 drawText(highLayout, colors.inkMuted, Offset(0f, 0f))
                 drawText(lowLayout, colors.inkMuted, Offset(0f, size.height - lowLayout.size.height))
             }
         },
     )
-}
-
-private fun minPlotSpan(signal: Signal): Double {
-    val oneDisplayStep = 10.0.pow(-signal.decimals)
-    return maxOf((signal.max - signal.min) * MIN_SPAN_SHARE, oneDisplayStep)
 }
 
 /** Lays out the text of a value, and keeps the layout while the value stays the same. */

@@ -120,6 +120,8 @@ De signalen kun je zelf versturen. De service moet draaien (open de app, kies **
    van **never**. Het werkt met en zonder `-p nl.stijnvdpol.klinedash`.
 2. **Contact uit sluit de verbinding.** Na `ACCOFF` zegt de meldingenbalk "Car off. Waiting for the
    unit to wake up." en rechtsonder in de app staat **Not connected**. Een tweede `ACCOFF` doet niets.
+   Liep er een rit, dan is die meteen afgesloten: onder TRIPS staat hij met duur en afstand, niet als
+   **Recording**.
 3. **Contact aan verbindt opnieuw.** Stuur `adb shell am broadcast -a
    android.intent.action.ACTION_MT_COMMAND_SLEEP_OUT`: binnen een paar seconden staat er weer
    **Connected** en heeft die actie een tijd. In `adb logcat -s ObdService` staat per signaal wat de app
@@ -237,7 +239,9 @@ de editor van de gekozen pagina. De pagina's zelf staan in `fase-5-dashboard-mai
   en er zijn er hooguit 12.
 - **Main:** tik een veld en kies uit de lijst welk signaal erin staat (drie grote en zes kleine velden).
 - **Grid:** kies **2 x 2**, **3 x 2** of **3 x 3**. Tik een cel, kies het signaal en of de cel een
-  **Number** of een **Graph** (de laatste 60 seconden als lijn) toont.
+  **Number** of een **Graph** (de laatste 60 seconden als lijn) toont. De getallen links van de grafiek
+  zijn de onder- en bovenkant van de as, op ronde stappen; een watertemperatuur die 2 °C beweegt is
+  een bijna vlakke lijn.
 - **Track:** stel het **Shift point** in (standaard 7 800 rpm, stappen van 100).
 - Wijzigingen werken direct. Is de auto niet verbonden, dan toont de lijst alle signalen; wat de auto
   niet kent staat als `--`.

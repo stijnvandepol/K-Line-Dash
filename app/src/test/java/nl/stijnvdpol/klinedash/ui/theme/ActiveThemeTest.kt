@@ -123,7 +123,7 @@ class ResolveThemeTest {
     private fun theme(id: String, accent: Color = Color.White) =
         ThemeDefinition(id, id.uppercase(), RaceColors.copy(accent = accent), isBuiltIn = true)
 
-    private val catalog = ThemeCatalog(listOf(theme("race"), theme("day", Color.Black)), emptyList())
+    private val catalog = ThemeCatalog(listOf(theme("race"), theme("day", Color.Black)), emptyList(), "")
 
     @Test
     fun theActiveThemeOfTheCatalogIsReturned() {
@@ -140,7 +140,7 @@ class ResolveThemeTest {
 
     @Test
     fun withoutAnyThemeLoadedTheCompiledRaceColoursApply() {
-        val resolved = resolveTheme(ThemeSettings(), ThemeCatalog(emptyList(), emptyList()), 0, false)
+        val resolved = resolveTheme(ThemeSettings(), ThemeCatalog(emptyList(), emptyList(), ""), 0, false)
         assertEquals(RaceColors, resolved.colors)
     }
 

@@ -25,12 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
-import nl.stijnvdpol.klinedash.appGraph
 import nl.stijnvdpol.klinedash.data.DayNightMode
 import nl.stijnvdpol.klinedash.data.ThemeSettings
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
@@ -39,6 +37,7 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.LocalActiveThemeName
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalog
+import nl.stijnvdpol.klinedash.ui.theme.formatMinuteOfDay
 
 private val HeaderHeight = 56.dp
 private val ThemeColumnWidth = 440.dp
@@ -58,7 +57,6 @@ private val ModeRows = listOf(
  */
 @Composable
 internal fun DisplayScreen() {
-    val graph = LocalContext.current.appGraph
     val vm = graphViewModel { DisplayViewModel(it.themeSettingsRepository, it.themeCatalog) }
     val loadedSettings by vm.settings.collectAsStateWithLifecycle()
     val loadedCatalog by vm.catalog.collectAsStateWithLifecycle()
@@ -68,7 +66,7 @@ internal fun DisplayScreen() {
     val catalog = loadedCatalog ?: return
     var slot by remember { mutableStateOf(ThemeSlot.DAY) }
     Row(Modifier.fillMaxSize()) {
-        ThemeColumn(settings, catalog, slot, { slot = it }, graph.themesDir.path, vm, Modifier.width(ThemeColumnWidth).fillMaxHeight())
+        ThemeColumn(settings, catalog, slot, { slot = it }, vm, Modifier.width(ThemeColumnWidth).fillMaxHeight())
         VerticalRule()
         OptionsColumn(settings, vm, Modifier.weight(1f).fillMaxHeight())
     }
@@ -88,7 +86,6 @@ private fun ThemeColumn(
     catalog: ThemeCatalog,
     slot: ThemeSlot,
     onSlot: (ThemeSlot) -> Unit,
-    folderPath: String,
     vm: DisplayViewModel,
     modifier: Modifier,
 ) {
@@ -98,36 +95,37 @@ private fun ThemeColumn(
         slot == ThemeSlot.DAY -> settings.dayThemeId
         else -> settings.nightThemeId
     }
-    Column(modifier.verticalScroll(rememberScrollState())) {
+    // The list scrolls on its own and Reload stays at the bottom, so on a short screen (or under a
+    // warning banner) nothing ends up out of reach below the fold.
+    Column(modifier) {
         ColumnHeader(R.string.display_theme_title)
         if (!isManual) {
             SlotToggle(slot, onSlot)
             HorizontalRule()
         }
-        catalog.themes.forEach { theme ->
-            SelectableRow(selected = theme.id == selectedId, onClick = { vm.chooseTheme(slot, theme.id) }) {
-                Text(theme.name, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
-                SwatchStrip(theme.colors)
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+            catalog.themes.forEach { theme ->
+                SelectableRow(selected = theme.id == selectedId, onClick = { vm.chooseTheme(slot, theme.id) }) {
+                    Text(theme.name, style = KLineType.body, color = KLineTheme.colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
+                    SwatchStrip(theme.colors)
+                }
             }
+            UserThemes(catalog)
         }
-        UserThemes(catalog, folderPath, vm::reload)
+        HorizontalRule()
+        TextActionButton(stringResource(R.string.display_reload), vm::reload, Modifier.fillMaxWidth().height(Spacing.touchMin))
     }
 }
 
-/** Day or night: which of the two the list below chooses. The chosen cell is filled. */
+/** Day or night: which of the two the list below chooses. */
 @Composable
 private fun SlotToggle(slot: ThemeSlot, onSlot: (ThemeSlot) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(Spacing.touchMin)) {
-        listOf(ThemeSlot.DAY to R.string.display_day_theme, ThemeSlot.NIGHT to R.string.display_night_theme).forEachIndexed { index, (entry, labelRes) ->
-            if (index > 0) VerticalRule()
-            val cell = Modifier.weight(1f).fillMaxHeight()
-            if (entry == slot) {
-                PrimaryButton(stringResource(labelRes), { onSlot(entry) }, cell)
-            } else {
-                TextActionButton(stringResource(labelRes), { onSlot(entry) }, cell)
-            }
-        }
-    }
+    val slots = ThemeSlot.entries
+    ChoiceCells(
+        labels = slots.map { stringResource(if (it == ThemeSlot.DAY) R.string.display_day_theme else R.string.display_night_theme) },
+        selectedIndex = slots.indexOf(slot),
+        onSelect = { onSlot(slots[it]) },
+    )
 }
 
 /** Background, ink, accent, caution and danger side by side: enough to tell the themes apart at a glance. */
@@ -141,28 +139,26 @@ private fun SwatchStrip(colors: KLineColors) {
 }
 
 @Composable
-private fun UserThemes(catalog: ThemeCatalog, folderPath: String, onReload: () -> Unit) {
+private fun UserThemes(catalog: ThemeCatalog) {
     val colors = KLineTheme.colors
     ColumnHeader(R.string.display_your_themes)
     val hasUserThemes = catalog.themes.any { !it.isBuiltIn }
     Column(Modifier.padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical), verticalArrangement = Arrangement.spacedBy(Spacing.grid)) {
-        Text(folderPath, style = KLineType.caption, color = colors.ink)
+        Text(catalog.userFolderPath, style = KLineType.caption, color = colors.ink)
         Text(stringResource(R.string.display_folder_hint), style = KLineType.caption, color = colors.inkMuted)
         if (!hasUserThemes && catalog.invalid.isEmpty()) {
             Text(stringResource(R.string.display_no_user_themes), style = KLineType.caption, color = colors.inkMuted)
         }
     }
-    HorizontalRule()
-    TextActionButton(stringResource(R.string.display_reload), onReload, Modifier.fillMaxWidth().height(Spacing.touchMin))
     if (catalog.invalid.isNotEmpty()) {
         HorizontalRule()
         ColumnHeader(R.string.display_invalid_header)
-        catalog.invalid.forEach { file ->
+        catalog.invalid.forEachIndexed { index, file ->
+            if (index > 0) HorizontalRule()
             Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.fieldPaddingHorizontal, vertical = Spacing.fieldPaddingVertical)) {
                 Text(file.fileName, style = KLineType.body, color = colors.ink)
                 Text(file.reason, style = KLineType.caption, color = colors.danger)
             }
-            HorizontalRule()
         }
     }
 }
@@ -181,8 +177,16 @@ private fun OptionsColumn(settings: ThemeSettings, vm: DisplayViewModel, modifie
             }
         }
         if (settings.mode == DayNightMode.SCHEDULE) {
-            ScheduleRow(R.string.display_day_starts, settings.dayStartMinute) { vm.stepSchedule(ScheduleTime.DAY_START, it) }
-            ScheduleRow(R.string.display_night_starts, settings.nightStartMinute) { vm.stepSchedule(ScheduleTime.NIGHT_START, it) }
+            StepperRow(
+                stringResource(R.string.display_day_starts), formatMinuteOfDay(settings.dayStartMinute), unit = null,
+                StepWords.EARLIER_LATER, { vm.stepSchedule(ScheduleTime.DAY_START, it) },
+            )
+            HorizontalRule()
+            StepperRow(
+                stringResource(R.string.display_night_starts), formatMinuteOfDay(settings.nightStartMinute), unit = null,
+                StepWords.EARLIER_LATER, { vm.stepSchedule(ScheduleTime.NIGHT_START, it) },
+            )
+            HorizontalRule()
         }
         if (settings.mode != DayNightMode.MANUAL) NowShowing()
         ColumnHeader(R.string.display_accent_title)

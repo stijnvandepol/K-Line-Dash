@@ -81,14 +81,3 @@ internal fun SignalHistory.rangeSince(sinceMs: Long): ValueRange? {
 }
 
 internal data class ValueRange(val low: Double, val high: Double)
-
-/**
- * The span the plot shows: the data range, but at least [minSpan] wide and centred on the data, so
- * a flat line sits in the middle and noise on a steady signal does not fill the whole cell.
- */
-internal fun plotRange(data: ValueRange, minSpan: Double): ValueRange {
-    val span = data.high - data.low
-    if (span >= minSpan) return data
-    val middle = (data.high + data.low) / 2
-    return ValueRange(middle - minSpan / 2, middle + minSpan / 2)
-}

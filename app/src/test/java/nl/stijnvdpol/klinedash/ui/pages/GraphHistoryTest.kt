@@ -91,16 +91,3 @@ class GraphHistoryTest {
         assertNull(history.of("coolant"))
     }
 }
-
-class PlotRangeTest {
-    @Test
-    fun `a range wider than the minimum is used as it is`() {
-        assertEquals(ValueRange(10.0, 50.0), plotRange(ValueRange(10.0, 50.0), minSpan = 5.0))
-    }
-
-    @Test
-    fun `a flat or narrow range is widened around its middle`() {
-        assertEquals(ValueRange(85.0, 95.0), plotRange(ValueRange(90.0, 90.0), minSpan = 10.0))
-        assertEquals(ValueRange(6.0, 14.0), plotRange(ValueRange(9.0, 11.0), minSpan = 8.0))
-    }
-}

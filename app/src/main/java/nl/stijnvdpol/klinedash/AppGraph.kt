@@ -101,8 +101,11 @@ class AppGraph(val appContext: Context) {
 
     val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(database.settingsDao()) }
 
-    /** Where users put their own theme files; created on first use. Internal storage when no external storage exists. */
-    val themesDir: File by lazy {
+    /**
+     * Where users put their own theme files; created on first use, by the theme loader off the main
+     * thread. Internal storage when no external storage exists.
+     */
+    private val themesDir: File by lazy {
         val dir = appContext.getExternalFilesDir(THEMES_DIR_NAME) ?: File(appContext.filesDir, THEMES_DIR_NAME)
         if (!dir.isDirectory && !dir.mkdirs()) Log.w(TAG, "Could not create the themes folder")
         dir
@@ -110,7 +113,10 @@ class AppGraph(val appContext: Context) {
 
     /** Built-in themes (assets) and the user's files, loaded off the main thread right away. */
     val themeCatalog: ThemeCatalogSource by lazy {
-        val loader = ThemeLoader({ id -> appContext.assets.open("$THEMES_DIR_NAME/$id.json").bufferedReader().use { it.readText() } }, themesDir)
+        val loader = ThemeLoader(
+            readBuiltIn = { id -> appContext.assets.open("$THEMES_DIR_NAME/$id.json").bufferedReader().use { it.readText() } },
+            userDir = { themesDir },
+        )
         ThemeCatalogSource(loader, loadScope).also { it.reload() }
     }
 }

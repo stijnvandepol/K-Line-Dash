@@ -234,6 +234,13 @@ the reason and ignored. Day/night switching: **Manual**, **Schedule** (day theme
 time) or **Follow head unit** (Android night mode, which many head units drive from the headlight
 input). One day theme and one night theme are chosen for the automatic modes.
 
+As built: the left column is the theme list (each row with a strip of five swatches: background,
+ink, accent, caution, danger) followed by the user folder and any ignored files; it scrolls on its
+own, and **Reload themes** stays as a 72 dp cell at the bottom of the column, so nothing is out of
+reach on a short screen or under a warning banner. In the automatic modes a Day theme / Night theme
+choice sits above the list. The right column holds the mode rows, the schedule steppers and the
+accent swatches.
+
 File format and validation rules: `docs/themes.md`. The token values of the built-in themes are the
 files in `app/src/main/assets/themes/`.
 
@@ -245,7 +252,10 @@ the page name shows for 1 s at the top in `fieldLabel`. Page templates:
 - **Main:** the layout above; the user picks the three primary signals and the six field-row
   signals.
 - **Grid:** 2 x 2, 3 x 2 or 3 x 3 cells; each cell is a **Number** (label, unit, big value) or a
-  **Graph** (last 60 s as a 2 dp line in `ink`, min/max labels, current value top-right).
+  **Graph** (last 60 s as a 2 dp line in `ink`, current value top-right, the bottom and top of the
+  axis as labels at the left). The axis spans at least 15 % of the signal's display range and ends
+  on whole 1-2-5 steps ("78" and "94", "0" and "9000"), so a coolant temperature that moves 2 °C
+  reads as the small change it is; it stays inside the display range while the data does.
 - **Track:** see below.
 
 The editor shows the page as a scaled preview; tapping a cell opens a list of supported signals
@@ -256,8 +266,9 @@ As built: the editor has the page list on the left (320 dp, 72 dp rows, move lef
 add/delete cells under it) and the sketch on the right, sized to the room that is left. A page has
 no name of its own: it is called after its template ("Main", "Grid", "Track"), numbered when the
 template occurs more than once ("Grid 2"). Up to 12 pages; the last page cannot be deleted. A grid
-page has a size choice above the sketch, the track page a shift point stepper (100 rpm steps,
-4 000 to 9 000). The signal list shows what the car supports, or everything with a note while not
+page has a size choice above the sketch (72 dp cells separated by rules, the chosen one filled),
+the track page a shift point stepper (100 rpm steps, 4 000 to 9 000) in the 72 dp −/value/+ cells
+of the Warnings and Display steppers. The signal list shows what the car supports, or everything with a note while not
 connected. A stored signal this version does not know shows "--" until the user picks another. All
 numbers of one grid page share one size, so "0.0" and "13.9" read at the same height. Peak hold is
 kept per session only.
@@ -269,7 +280,9 @@ coolant (`primaryValue`) and speed on the right, and **peak hold** below them: m
 speed since the last reset, with a 72 dp "Reset peaks" cell. **Shift light:** from the shift
 point (default 7 800 rpm, set in SETUP > Dashboard) the whole RPM bar and a 12 dp frame around
 the screen flash `danger` at 4 Hz. This is the one place the app flashes: on a track it is the
-convention and the point, and it only happens above the user's own shift point.
+convention and the point, and it only happens above the user's own shift point. The page keeps a
+12 dp margin for the frame also while it is dark, so the flash never covers a value and nothing
+moves when it starts.
 
 ### Startup (SETUP > Startup)
 
@@ -279,7 +292,8 @@ apps"; the row explains and links to the permission screen when it is missing). 
 ACC broadcast lists, one for **Wake (ignition on)** and one for **Sleep (ignition off)** (action
 strings in `mono`, one per 72 dp row, remove cell) with the defaults from
 docs/research/headunit-autostart.md, and per action the last time it was received ("never" until it
-fires) so the user can see which one their unit sends. Under the lists one text field with **Add as
+fires) so the user can see which one their unit sends. A sleep signal also finishes the running
+trip at once (the unit may stop the app seconds later), whether or not reconnecting is on. Under the lists one text field with **Add as
 wake** and **Add as sleep** (the direction is not in the action's name); a problem with the text
 (empty, too long, characters other than letters, digits, dots and underscores, duplicate) shows as
 a `danger` line above the field, because below it is off screen while the keyboard is open. Then

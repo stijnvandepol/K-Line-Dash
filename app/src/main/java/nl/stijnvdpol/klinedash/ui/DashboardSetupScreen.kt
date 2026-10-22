@@ -1,6 +1,5 @@
 package nl.stijnvdpol.klinedash.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,11 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
@@ -38,7 +35,6 @@ import nl.stijnvdpol.klinedash.data.PageTemplate
 import nl.stijnvdpol.klinedash.data.TrackPage
 import nl.stijnvdpol.klinedash.data.GridCell
 import nl.stijnvdpol.klinedash.data.signalAt
-import nl.stijnvdpol.klinedash.ui.pages.ChoiceCells
 import nl.stijnvdpol.klinedash.ui.pages.PagePreview
 import nl.stijnvdpol.klinedash.ui.pages.SignalPickerDialog
 import nl.stijnvdpol.klinedash.ui.pages.pickableSignals
@@ -151,12 +147,22 @@ private fun PageEditorColumn(
     Column(modifier) {
         SectionTitle(title, Modifier.height(HeaderHeight))
         HorizontalRule()
+        // The page's one setting, if it has one, directly under the title.
         when (page) {
             is MainPage -> Unit
-            is GridPage -> GridSizeChoice(page.size, vm::setGridSize)
-            is TrackPage -> ShiftPointStepper(page.shiftRpm, vm::stepShiftRpm)
+            is GridPage -> {
+                GridSizeChoice(page.size, vm::setGridSize)
+                HorizontalRule()
+            }
+            is TrackPage -> {
+                StepperRow(
+                    stringResource(R.string.dash_shift_point), formatNumber(page.shiftRpm.toDouble(), 0), stringResource(R.string.unit_rpm),
+                    StepWords.LOWER_RAISE, vm::stepShiftRpm,
+                    canStep = { direction -> if (direction < 0) page.shiftRpm > MIN_SHIFT_RPM else page.shiftRpm < MAX_SHIFT_RPM },
+                )
+                HorizontalRule()
+            }
         }
-        HorizontalRule()
         Text(
             stringResource(hintRes(page.template)),
             style = KLineType.caption,
@@ -181,29 +187,6 @@ private fun GridSizeChoice(current: GridSize, onSelect: (GridSize) -> Unit) {
         selectedIndex = sizes.indexOf(current),
         onSelect = { onSelect(sizes[it]) },
     )
-}
-
-/** Shift point: [-] value [+] in 100 rpm steps between [MIN_SHIFT_RPM] and [MAX_SHIFT_RPM]. */
-@Composable
-private fun ShiftPointStepper(shiftRpm: Int, onStep: (direction: Int) -> Unit) {
-    val colors = KLineTheme.colors
-    val label = stringResource(R.string.dash_shift_point)
-    Row(Modifier.fillMaxWidth().height(Spacing.touchMin), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = KLineType.body, color = colors.ink, modifier = Modifier.weight(1f).padding(horizontal = Spacing.fieldPaddingHorizontal))
-        VerticalRule()
-        StepButton(MINUS, "$label, lower", shiftRpm > MIN_SHIFT_RPM) { onStep(-1) }
-        VerticalRule()
-        Row(
-            Modifier.width(StepValueWidth + StepValueWidth / 2),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.grid / 2, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(formatNumber(shiftRpm.toDouble(), 0), style = KLineType.rowValue, color = colors.ink, textAlign = TextAlign.End, maxLines = 1)
-            Text(stringResource(R.string.unit_rpm), style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
-        }
-        VerticalRule()
-        StepButton(PLUS, "$label, raise", shiftRpm < MAX_SHIFT_RPM) { onStep(1) }
-    }
 }
 
 @Composable

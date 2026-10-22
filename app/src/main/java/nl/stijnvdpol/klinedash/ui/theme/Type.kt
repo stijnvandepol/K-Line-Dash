@@ -6,6 +6,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
@@ -54,11 +55,17 @@ object KLineType {
     val title = textStyle(size = 24, lineHeight = 32, weight = FontWeight.Medium)
     val body = textStyle(size = 20, lineHeight = 28, weight = FontWeight.Normal)
     val caption = textStyle(size = 16, lineHeight = 22, weight = FontWeight.Normal)
+    /**
+     * Every line exactly [TextStyle.lineHeight] high, the first and last too (no trim): a glyph from a
+     * fallback font, like the ⏎ that ends a received line in the Debug log, then cannot make one log
+     * row taller than another, and the log stays a whole number of lines high.
+     */
     val mono = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
         lineHeight = 22.sp,
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
     )
 }
 

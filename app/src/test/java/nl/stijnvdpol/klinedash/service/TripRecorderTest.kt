@@ -120,6 +120,41 @@ class TripRecorderTest {
     }
 
     @Test
+    fun ignitionOffFinishesTheTripAtOnceAndTheNextDriveRecordsAgain() = runTest {
+        val recorder = newRecorder()
+        backgroundScope.launch { recorder.run() }
+        engineRunning()
+        advanceTimeBy(5_000)
+        assertTrue(recorder.state.value is RecordingState.Recording)
+
+        recorder.finishForIgnitionOff()
+        assertEquals("finished without waiting for the grace period", RecordingState.Idle, recorder.state.value)
+        assertTrue(dao.rows.value.single().endMs != null)
+        advanceTimeBy(3_000)
+        assertEquals("the last fresh rpm of this drive starts no new trip", RecordingState.Idle, recorder.state.value)
+
+        pollerFlow.value = null // ACC off closed the link: the engine counts as off
+        advanceTimeBy(2_000)
+        pollerFlow.value = poller
+        engineRunning()
+        advanceTimeBy(3_000)
+        assertTrue("the next drive starts its own trip", recorder.state.value is RecordingState.Recording)
+        assertEquals(2, dao.rows.value.size)
+    }
+
+    @Test
+    fun ignitionOffAlsoEndsAManualRecording() = runTest {
+        val recorder = newRecorder()
+        backgroundScope.launch { recorder.run() }
+        assertEquals(StartResult.Started, recorder.start())
+        engineRunning()
+        advanceTimeBy(3_000)
+        recorder.finishForIgnitionOff()
+        assertEquals(RecordingState.Idle, recorder.state.value)
+        assertTrue(dao.rows.value.single().endMs != null)
+    }
+
+    @Test
     fun cancellingTheLoopFinishesTheRunningTrip() = runTest {
         val recorder = newRecorder()
         val loop = backgroundScope.launch { recorder.run() }

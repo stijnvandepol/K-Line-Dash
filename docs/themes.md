@@ -57,6 +57,8 @@ A file is rejected, with the reason shown in the Display section, when:
 - it is not valid JSON, or `name` or `colors` is missing, or `name` is longer than 24 characters;
 - a required colour is missing ("Missing colour "caution"");
 - a colour is not `#RRGGBB` ("Colour "ink" is "red": write it as #RRGGBB");
+- objects or lists are nested more than 8 levels deep (a theme needs 2; the parser would run out of
+  stack on a file nested thousands of levels deep);
 - `inkMuted` on `background` has a contrast ratio (WCAG 2.x) below **4.5:1**, because labels and
   units are read at a glance ("Labels are too faint: inkMuted on background has a contrast of 3.2:1").
 
