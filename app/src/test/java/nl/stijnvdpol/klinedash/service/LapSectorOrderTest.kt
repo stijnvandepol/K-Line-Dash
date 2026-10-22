@@ -12,6 +12,7 @@ import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.LapTimingState
 import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
+import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.TrackRepository
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.encodeSectors
@@ -32,7 +33,7 @@ class LapSectorOrderTest {
 
     private val tripDao = FakeTripDao()
     private val trackDao = FakeTrackDao()
-    private val tracks = TrackRepository(trackDao, tripDao, GpsSettingsRepository(FakeSettingsDao()))
+    private val tracks = TrackRepository(trackDao, tripDao, GpsSettingsRepository(FakeSettingsDao(), Dispatchers.Unconfined))
     private val location = FakeLocationSource()
     private val liveLaps = FakeLiveLaps()
     private val tripsDir get() = File(folder.root, "trips").also { it.mkdirs() }
@@ -62,8 +63,10 @@ class LapSectorOrderTest {
     private fun timing(referenceLap: List<GeoFix>) =
         LapTimingState(true, 0L, emptyList(), null, null, 1, null, null, referenceLap)
 
-    private suspend fun trackWith(vararg sectorDistances: Double) =
-        sessions().createTrack("Circuit", circuitStartLine(), sectorDistances.map(::sectorAt))
+    private suspend fun trackWith(vararg sectorDistances: Double): Track {
+        val track = circuitTrack(sectors = sectorDistances.map(::sectorAt))
+        return track.copy(id = tracks.add(track))
+    }
 
     @Test
     fun aSectorEarlierInTheLapGoesBeforeAnExistingOneOnTheLatestCompleteLap() = runTest {

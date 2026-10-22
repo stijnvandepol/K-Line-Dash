@@ -2,11 +2,8 @@ package nl.stijnvdpol.klinedash.service
 
 import nl.stijnvdpol.klinedash.core.geo.Lap
 import nl.stijnvdpol.klinedash.core.geo.LatLon
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 import nl.stijnvdpol.klinedash.core.trip.TripSample
-
-private const val SPEED_ID = "speed"
-private const val RPM_ID = "rpm"
-private const val KMH_PER_MPS = 3.6
 
 /** A lap drawn on the trip detail graph is thinned to at most this many points. */
 const val MAX_TRACE_POINTS = 1_500
@@ -33,8 +30,8 @@ internal fun lapTraceOf(samples: Sequence<TripSample>, lap: Lap): LapTrace {
     if (inLap.isEmpty()) return LapTrace(emptyList(), emptyList(), lap.lapTimeMs)
     val points = inLap.map { sample ->
         val fix = checkNotNull(sample.gps)
-        val speedKmh = fix.speedMps?.times(KMH_PER_MPS) ?: sample.values[SPEED_ID]
-        TracePoint(fix.timeMs - lap.startMs, speedKmh, sample.values[RPM_ID])
+        val speedKmh = fix.speedMps?.times(KMH_PER_MPS) ?: sample.values[SignalIds.SPEED]
+        TracePoint(fix.timeMs - lap.startMs, speedKmh, sample.values[SignalIds.RPM])
     }
     return LapTrace(routeOf(inLap.mapNotNull { it.gps }), thinPoints(points), lap.lapTimeMs)
 }

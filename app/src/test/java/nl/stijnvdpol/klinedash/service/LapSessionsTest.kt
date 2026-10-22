@@ -28,7 +28,7 @@ class LapSessionsTest {
     private val tripDao = FakeTripDao()
     private val trackDao = FakeTrackDao()
     private val settingsDao = FakeSettingsDao()
-    private val gpsSettings = GpsSettingsRepository(settingsDao)
+    private val gpsSettings = GpsSettingsRepository(settingsDao, Dispatchers.Unconfined)
     private val tracks = TrackRepository(trackDao, tripDao, gpsSettings)
     private val location = FakeLocationSource()
     private val liveLaps = FakeLiveLaps()
@@ -116,17 +116,6 @@ class LapSessionsTest {
         assertNull(trip.lapCount)
         assertNull(trip.bestLapMs)
     }
-
-    @Test
-    fun aTrackFromARecordedTraceIsNotActiveUntilChosen() = runBlocking {
-        val sessions = sessions()
-        val track = sessions.createTrack("From trace", circuitStartLine(), listOf(circuitStartLine()))
-        assertNull(sessions.activeTrack.first())
-        sessions.setActiveTrack(track.id)
-        assertEquals(track.id, sessions.activeTrack.first()?.id)
-        sessions.setActiveTrack(null)
-        assertNull(sessions.activeTrack.first())
-    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -177,7 +166,7 @@ class LocationHubTest {
 class TripSettingsPersistenceTest {
     @Test
     fun theNewOptionsDefaultToOffAndSurviveARoundTrip() = runBlocking {
-        val repository = TripSettingsRepository(FakeSettingsDao())
+        val repository = TripSettingsRepository(FakeSettingsDao(), Dispatchers.Unconfined)
         assertEquals(nl.stijnvdpol.klinedash.data.TripSettings(), repository.settings.first())
         repository.update { it.copy(autoStartWhenMoving = true) }
         assertTrue(repository.settings.first().autoStartWhenMoving)
@@ -186,7 +175,7 @@ class TripSettingsPersistenceTest {
 
     @Test
     fun gpsSettingsKeepTheActiveTrackAndTheSimulationOptIn() = runBlocking {
-        val repository = GpsSettingsRepository(FakeSettingsDao())
+        val repository = GpsSettingsRepository(FakeSettingsDao(), Dispatchers.Unconfined)
         assertEquals(nl.stijnvdpol.klinedash.data.GpsSettings(), repository.settings.first())
         assertFalse(repository.settings.first().useSimulatedGps)
         repository.update { it.copy(activeTrackId = 7, useSimulatedGps = true) }

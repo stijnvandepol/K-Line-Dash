@@ -23,12 +23,17 @@ fun tripFileName(startMs: Long, zone: ZoneId, index: Int = FIRST_FILE_INDEX): St
     return "$TRIP_FILE_PREFIX$time$suffix.$TRIP_FILE_EXTENSION"
 }
 
+/** "." and ".." pass the plain-name check but name the trips folder itself and its parent. */
+private val DIRECTORY_ALIASES = setOf(".", "..")
+
 /**
  * The file [fileName] inside [tripsDir], or null when the name is not a plain file name. Names come
  * from the database; a corrupted row must never reach outside the trips folder.
  */
-fun resolveTripFile(tripsDir: File, fileName: String): File? =
-    if (fileName.isNotEmpty() && File(fileName).name == fileName) File(tripsDir, fileName) else null
+fun resolveTripFile(tripsDir: File, fileName: String): File? {
+    val isPlainName = fileName.isNotEmpty() && fileName !in DIRECTORY_ALIASES && File(fileName).name == fileName
+    return if (isPlainName) File(tripsDir, fileName) else null
+}
 
 /**
  * The files generated from a trip CSV for analysis on a PC, named after the trip: the trip
@@ -52,13 +57,18 @@ enum class ExportFormat(val suffix: String, val needsGps: Boolean) {
     LAPS_CSV(".laps.csv", needsGps = false),
 }
 
+/** The trip file name without its extension: "trip-20261022-140307" for "trip-20261022-140307.csv". */
+internal fun tripBaseName(tripFileName: String): String = tripFileName.removeSuffix(".$TRIP_FILE_EXTENSION")
+
 /** File name of [format] for the trip file [tripFileName] ("trip-20261022-140307.csv"). */
-fun exportFileName(tripFileName: String, format: ExportFormat): String =
-    tripFileName.removeSuffix(".$TRIP_FILE_EXTENSION") + format.suffix
+fun exportFileName(tripFileName: String, format: ExportFormat): String = tripBaseName(tripFileName) + format.suffix
 
 /** The generated files of [tripFileName] that exist now. */
 fun derivedFiles(tripsDir: File, tripFileName: String): List<File> =
     ExportFormat.entries.mapNotNull { resolveTripFile(tripsDir, exportFileName(tripFileName, it))?.takeIf(File::isFile) }
+
+/** Starts the CSV files: Excel on Windows misreads UTF-8 without it (the headers hold a degree sign). */
+internal const val BYTE_ORDER_MARK = "\uFEFF"
 
 /** Suffix of a file being written; it is renamed when complete, so nobody downloads half a file. */
 const val PARTIAL_FILE_SUFFIX = ".part"

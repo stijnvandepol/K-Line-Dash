@@ -30,9 +30,6 @@ class TrackRepository(private val dao: TrackDao, private val tripDao: TripDao, p
 
     suspend fun setSectors(id: Long, sectors: List<GateSpec>) = dao.setSectors(id, encodeSectors(sectors))
 
-    suspend fun setStartFinish(id: Long, gate: GateSpec) =
-        dao.setStartFinish(id, gate.lat, gate.lon, gate.headingDeg, gate.widthM)
-
     /** Makes [id] the track for lap timing; null switches lap timing off. */
     suspend fun setActive(id: Long?) = settings.update { it.copy(activeTrackId = id) }
 

@@ -40,7 +40,6 @@ import nl.stijnvdpol.klinedash.core.elm.ElmConnectionManager
 import nl.stijnvdpol.klinedash.core.obd.ObdPollScheduler
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.data.StartupSettings
-import nl.stijnvdpol.klinedash.ui.MainActivity
 
 /**
  * Foreground service that owns the one [ElmConnectionManager] and the [ObdPollScheduler] on top of
@@ -54,9 +53,9 @@ import nl.stijnvdpol.klinedash.ui.MainActivity
  * source; if that throws it logs and carries on without GPS (trips record from OBD alone). See
  * [superviseLocation] and docs/research/gps-laps-export.md section 1.4.
  *
- * Decision (phase 1): no partial wake lock. The foreground service keeps the process alive and the
- * link is idle-light; a head unit that sleeps the CPU also powers down the ELM adapter's USB/BT
- * rail in practice. Revisit when polling runs with the screen off (phase 5).
+ * No partial wake lock (so none is declared in the manifest): the foreground service keeps the
+ * process alive and the link is idle-light; a head unit that sleeps the CPU also powers down the ELM
+ * adapter's USB/BT rail in practice, and ACC off suspends the link anyway (see [onWakeSignal]).
  */
 class ObdService : LifecycleService() {
 
@@ -154,7 +153,7 @@ class ObdService : LifecycleService() {
         linkScope.launch { alertMonitor.run(poller, link.state) }
         try {
             // Throttled: init steps can follow each other within milliseconds and the system sheds
-            // notification updates above ~5/s, which could leave a stale "Initialiseren" text.
+            // notification updates above ~5/s, which could leave a stale "Initializing" text.
             // StateFlow is conflated, so after the pause the latest state is shown.
             link.state.collect {
                 if (updateNotification(it.describe(resources))) delay(NOTIFICATION_MIN_INTERVAL_MS)
@@ -314,7 +313,7 @@ class ObdService : LifecycleService() {
     private fun buildNotification(text: String): Notification {
         val open = PendingIntent.getActivity(
             this, REQUEST_OPEN_APP,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            dashboardIntent(this).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val stop = PendingIntent.getService(
@@ -359,9 +358,18 @@ class ObdService : LifecycleService() {
         }
 
         /**
+         * The app's launcher activity (the dashboard). Resolved through the package manager, so the
+         * service layer does not depend on the UI classes; the manifest always declares it.
+         */
+        internal fun dashboardIntent(context: Context): Intent =
+            checkNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName)) {
+                "The manifest declares no launcher activity"
+            }
+
+        /**
          * API 31+ throws ForegroundServiceStartNotAllowedException (an IllegalStateException) when
          * the app is not considered foreground, e.g. a head unit that resumes the activity behind
-         * its launcher. Not worth a crash: the user can tap Verbinden again.
+         * its launcher. Not worth a crash: the user can tap Connect again.
          */
         private fun startSafely(context: Context, intent: Intent) {
             try {

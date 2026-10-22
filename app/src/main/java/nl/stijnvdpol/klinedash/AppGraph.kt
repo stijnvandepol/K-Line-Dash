@@ -68,7 +68,12 @@ class AppGraph(val appContext: Context) {
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(database.settingsDao()) }
     val protocolStore: ProtocolStore by lazy { RoomProtocolStore(database.settingsDao()) }
 
-    private val exportScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * For work that belongs to the process rather than to a screen or the service: the shared GPS
+     * and settings flows, the export server, background loads, boot handling. Never cancelled on
+     * purpose, it ends with the process; a failing child does not cancel the others.
+     */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(database.settingsDao()) }
     val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(database.settingsDao()) }
@@ -90,8 +95,6 @@ class AppGraph(val appContext: Context) {
         TrackRepository(database.trackDao(), database.tripDao(), gpsSettingsRepository)
     }
 
-    private val gpsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     /** True while the simulated circuit replaces the device GPS: simulator transport selected and the GPS setting on. */
     val useSimulatedGps: StateFlow<Boolean> by lazy {
         combine(
@@ -99,7 +102,7 @@ class AppGraph(val appContext: Context) {
             settingsRepository.connectionSettings.map { it.kind == TransportKind.SIMULATOR },
         ) { wanted, isSimulator -> wanted && isSimulator }
             .distinctUntilChanged()
-            .stateIn(gpsScope, SharingStarted.Eagerly, false)
+            .stateIn(applicationScope, SharingStarted.Eagerly, false)
     }
 
     /**
@@ -108,10 +111,10 @@ class AppGraph(val appContext: Context) {
      */
     val location: LocationSource by lazy {
         LocationHub(
-            device = LocationTracker(appContext, gpsScope),
-            simulated = SimulatedLocationSource(ObdServiceState.poller, gpsScope),
+            device = LocationTracker(appContext, applicationScope),
+            simulated = SimulatedLocationSource(ObdServiceState.poller, applicationScope),
             useSimulated = useSimulatedGps,
-            scope = gpsScope,
+            scope = applicationScope,
         )
     }
 
@@ -145,14 +148,12 @@ class AppGraph(val appContext: Context) {
 
     /** Wi-Fi export of the trip files; stopped by ObdService when it ends. */
     val exportController: ExportController by lazy {
-        ExportController(TripFileSource { listTripFiles(tripsDir) }, exportScope)
+        ExportController(TripFileSource { listTripFiles(tripsDir) }, applicationScope)
     }
-
-    private val loadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Started on first use and parsed off the main thread; every caller awaits the same load. */
     private val dtcDescriptions: Deferred<DtcDescriptions> by lazy {
-        loadScope.async {
+        applicationScope.async(Dispatchers.IO) {
             try {
                 BundledDtcDescriptions.load()
             } catch (e: Exception) {
@@ -182,7 +183,7 @@ class AppGraph(val appContext: Context) {
             readBuiltIn = { id -> appContext.assets.open("$THEMES_DIR_NAME/$id.json").bufferedReader().use { it.readText() } },
             userDir = { themesDir },
         )
-        ThemeCatalogSource(loader, loadScope).also { it.reload() }
+        ThemeCatalogSource(loader, applicationScope).also { it.reload() }
     }
 }
 

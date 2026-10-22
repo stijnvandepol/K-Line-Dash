@@ -10,6 +10,7 @@ import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.LapGates
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signal
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.core.trip.CsvTripWriter
 import nl.stijnvdpol.klinedash.core.trip.DEFAULT_TRIP_FRESHNESS_MS
@@ -18,11 +19,10 @@ import nl.stijnvdpol.klinedash.core.trip.tripSampleOf
 import nl.stijnvdpol.klinedash.data.TripSummaryCache
 
 /** Signals that always get a column, because the trip summary is built from them. */
-internal val SUMMARY_SIGNAL_IDS = listOf("rpm", "speed", "coolant")
+internal val SUMMARY_SIGNAL_IDS = listOf(SignalIds.RPM, SignalIds.SPEED, SignalIds.COOLANT)
 
 private const val COLUMNS_SETTLE_MS = 20_000L
 private const val FLUSH_EVERY_SAMPLES = 10
-private const val BYTE_ORDER_MARK = "\uFEFF"
 
 /**
  * One trip file being written: CSV (with GPS columns) through a [CsvTripWriter] on a buffered file
@@ -43,7 +43,7 @@ private const val BYTE_ORDER_MARK = "\uFEFF"
  * the time.
  *
  * Every [flushEverySamples] rows the data is flushed and synced to storage, so a power cut (ACC
- * off) loses at most that many seconds.
+ * off) loses at most that many rows (10 s at the slowest sample rate of one row per second).
  */
 internal class TripSession(
     val file: File,

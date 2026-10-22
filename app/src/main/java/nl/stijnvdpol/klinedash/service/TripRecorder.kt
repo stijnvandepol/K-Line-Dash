@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripDao
@@ -31,8 +32,6 @@ import nl.stijnvdpol.klinedash.data.updateSummary
 
 private const val TAG = "TripRecorder"
 private const val DEMAND_OWNER = "trip"
-private const val RPM_ID = "rpm"
-private const val KMH_PER_MPS = 3.6
 private const val MAX_FILE_NAME_ATTEMPTS = 100
 
 /** What the recorder is doing; shown by the UI as a recording indicator. */
@@ -227,7 +226,7 @@ class TripRecorder internal constructor(
     private fun updateDemand(currentPoller: ObdPoller?, isAutoRecordEnabled: Boolean) {
         val wanted = when {
             active != null -> SUMMARY_SIGNAL_IDS.toSet()
-            isAutoRecordEnabled -> setOf(RPM_ID)
+            isAutoRecordEnabled -> setOf(SignalIds.RPM)
             else -> emptySet()
         }
         if (currentPoller === demandedOn && wanted == demandedIds) return
@@ -327,7 +326,11 @@ class TripRecorder internal constructor(
         _live.value = current.session.liveState()
     }
 
-    /** Closes the file and stores the summary; a trip without any sample is deleted again. */
+    /**
+     * Closes the file and stores the summary; a trip without any sample is deleted again. When the
+     * row cannot be written (storage full) it stays unfinished and [recoverUnfinished] repairs it
+     * from the file at the next app start; the recording itself is over either way.
+     */
     private suspend fun finishLocked() {
         val finished = active ?: return
         active = null
@@ -341,25 +344,34 @@ class TripRecorder internal constructor(
                 Log.e(TAG, "Closing the trip file failed", e)
                 _lastError.value = "The last seconds of the trip may be missing from the file."
             }
-            val summary = finished.session.summary()
-            if (summary == null) {
-                finished.session.file.delete()
-                tripDao.deleteById(finished.tripId)
-            } else {
-                tripDao.finish(
-                    id = finished.tripId,
-                    endMs = summary.endMs,
-                    sampleCount = summary.sampleCount,
-                    distanceKm = summary.distanceKm,
-                    maxRpm = summary.maxRpm,
-                    maxSpeedKmh = summary.maxSpeedKmh,
-                    maxCoolantC = summary.maxCoolantC,
-                )
-                tripDao.updateSummary(finished.tripId, finished.session.cache())
-                if (finished.session.trackId != null) refreshLapSummary(finished.tripId)
+            try {
+                storeFinished(finished)
+            } catch (e: SQLException) {
+                Log.e(TAG, "Could not store the end of trip ${finished.tripId}, left for recovery", e)
+                _lastError.value = "The end of the trip could not be saved. Check the free storage of the head unit."
             }
             finished.session.trackId?.let { releaseActiveTrack(it) }
         }
+    }
+
+    private suspend fun storeFinished(finished: Active) {
+        val summary = finished.session.summary()
+        if (summary == null) {
+            finished.session.file.delete()
+            tripDao.deleteById(finished.tripId)
+            return
+        }
+        tripDao.finish(
+            id = finished.tripId,
+            endMs = summary.endMs,
+            sampleCount = summary.sampleCount,
+            distanceKm = summary.distanceKm,
+            maxRpm = summary.maxRpm,
+            maxSpeedKmh = summary.maxSpeedKmh,
+            maxCoolantC = summary.maxCoolantC,
+        )
+        tripDao.updateSummary(finished.tripId, finished.session.cache())
+        if (finished.session.trackId != null) refreshLapSummary(finished.tripId)
     }
 
     /** The lap session is over: the next trip is not timed on [trackId] unless the user chooses it again. */

@@ -193,7 +193,8 @@ class TripLibrary internal constructor(
     }
 
     /**
-     * Copies the CSV files of [tripIds] (null: every finished trip) into the folder [treeUri]
+     * Copies the CSV files of [tripIds] (null: every finished trip of the list, the newest
+     * [MAX_LISTED_TRIPS]) into the folder [treeUri]
      * chosen by the user. A selected trip that is still recording is reported as a failure;
      * with null it is left out. With [includeExports] the PC files that were generated for these
      * trips (see [TripExporter]; only those that exist) are copied too, so [CopyProgress.total]

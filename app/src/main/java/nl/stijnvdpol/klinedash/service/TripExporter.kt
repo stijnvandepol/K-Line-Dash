@@ -19,7 +19,6 @@ import nl.stijnvdpol.klinedash.core.trip.TripCsv
 import nl.stijnvdpol.klinedash.data.TripDao
 
 private const val TAG = "TripExporter"
-private const val BYTE_ORDER_MARK = "\uFEFF"
 
 /** A format that was not written, with a sentence for the user. */
 data class SkippedExport(val format: ExportFormat, val reason: String)
@@ -108,7 +107,7 @@ class TripExporter internal constructor(
 
     private fun write(format: ExportFormat, csv: TripCsv, tripFileName: String, detail: TripDetail, out: Appendable) {
         val input = TripExportInput(
-            title = tripFileName.removeSuffix(".csv"),
+            title = tripBaseName(tripFileName),
             createdMs = clock(),
             columns = csv.columns,
             samples = csv.samples,

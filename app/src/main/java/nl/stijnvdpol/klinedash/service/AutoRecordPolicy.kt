@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.service
 
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 
 /** Engine speed from which the engine counts as running (cranking is about 200-300 rpm). */
 internal const val ENGINE_RUNNING_RPM = 400.0
@@ -14,11 +15,9 @@ internal const val ENGINE_READING_FRESH_MS = 10_000L
 /** How long the engine (or the link) may be gone before an automatic recording ends. */
 internal const val AUTO_STOP_GRACE_MS = 2 * 60 * 1000L
 
-private const val RPM_SIGNAL_ID = "rpm"
-
 /** True when [readings] hold a fresh RPM at or above [ENGINE_RUNNING_RPM]. */
 internal fun isEngineRunning(readings: Map<String, Reading>, nowMs: Long): Boolean {
-    val rpm = readings[RPM_SIGNAL_ID] ?: return false
+    val rpm = readings[SignalIds.RPM] ?: return false
     return nowMs - rpm.timestampMs <= ENGINE_READING_FRESH_MS && rpm.value >= ENGINE_RUNNING_RPM
 }
 

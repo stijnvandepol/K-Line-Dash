@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.data
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 
 /** Minutes in a day; schedule times are minutes after midnight, 0 until this. */
@@ -51,8 +53,8 @@ data class ThemeSettings(
 )
 
 /** Persists [ThemeSettings] under "theme.*" keys of the settings table. */
-class ThemeSettingsRepository(dao: SettingsDao) {
-    private val store = TypedSettings(dao, ::decodeThemeSettings, ::encodeThemeSettings)
+class ThemeSettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val store = TypedSettings(dao, ::decodeThemeSettings, ::encodeThemeSettings, decodeDispatcher)
 
     val settings: Flow<ThemeSettings> = store.flow
 

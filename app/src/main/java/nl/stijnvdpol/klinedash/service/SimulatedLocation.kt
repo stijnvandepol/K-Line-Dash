@@ -15,6 +15,7 @@ import nl.stijnvdpol.klinedash.core.geo.GeoFix
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.core.geo.LatLon
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
+import nl.stijnvdpol.klinedash.core.obd.SignalIds
 
 /**
  * A stadium-shaped circuit: two straights of [straightM] joined by two half circles, driven
@@ -65,12 +66,10 @@ class SimulatedCircuit(
 }
 
 private const val SIMULATED_FIX_INTERVAL_MS = 200L
-private const val SPEED_SIGNAL_ID = "speed"
 private const val DEMAND_OWNER = "gps-sim"
 private const val SPEED_MAX_AGE_MS = 3_000L
 private const val SIMULATED_ACCURACY_M = 3.0
 private const val SIMULATED_SATELLITES = 12
-private const val KMH_PER_MPS = 3.6
 
 /** The car starts this far before the line, so the first lap begins moments after the start. */
 private const val START_OFFSET_M = -40.0
@@ -151,14 +150,14 @@ class SimulatedLocationSource(
     private fun currentSpeedKmh(nowMs: Long): Double {
         val current = poller.value
         demandSpeed(current)
-        val reading = current?.readings?.value?.get(SPEED_SIGNAL_ID) ?: return 0.0
+        val reading = current?.readings?.value?.get(SignalIds.SPEED) ?: return 0.0
         return if (nowMs - reading.timestampMs <= SPEED_MAX_AGE_MS) reading.value else 0.0
     }
 
     /** A reconnect gives a new poller, which has to be asked for the speed again. */
     private fun demandSpeed(current: ObdPoller?) {
         if (current === demandedOn) return
-        current?.demand(DEMAND_OWNER, setOf(SPEED_SIGNAL_ID))
+        current?.demand(DEMAND_OWNER, setOf(SignalIds.SPEED))
         demandedOn = current
     }
 

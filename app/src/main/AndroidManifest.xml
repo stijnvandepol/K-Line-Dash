@@ -17,9 +17,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Wi-Fi adapters (WifiTransport) and the Wi-Fi trip export (TripExportServer): plain sockets only. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!--
         Normal permission, only declared so a connectedDevice foreground service may start on
         API 34+ even when the Bluetooth runtime permissions were denied (simulator / Wi-Fi mode).
@@ -31,7 +30,6 @@
     <!-- Added to the running service while the app is visible (ObdService.addLocationForegroundType). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Start the service after a boot or an app update (BootReceiver). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

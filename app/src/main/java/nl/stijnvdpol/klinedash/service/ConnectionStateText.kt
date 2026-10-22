@@ -26,7 +26,7 @@ fun ConnectionState.describe(res: Resources): String = when (this) {
     is ConnectionState.Failed -> res.getString(R.string.state_failed, reason)
 }
 
-/** Short state name for a single line, e.g. "Verbonden". Details come from [detail]. */
+/** Short state name for a single line, e.g. "Connected". Details come from [detail]. */
 fun ConnectionState.headline(res: Resources): String = res.getString(
     when (this) {
         ConnectionState.Idle -> R.string.state_idle

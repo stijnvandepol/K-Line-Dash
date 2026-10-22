@@ -1,6 +1,8 @@
 package nl.stijnvdpol.klinedash.data
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import nl.stijnvdpol.klinedash.core.alert.AlertKind
 import nl.stijnvdpol.klinedash.core.alert.AlertSettings
@@ -9,8 +11,8 @@ private const val TAG = "AlertSettings"
 private const val SEPARATOR = ","
 
 /** Persists [AlertSettings] under "alerts.*" keys of the settings table. */
-class AlertSettingsRepository(dao: SettingsDao) {
-    private val store = TypedSettings(dao, ::decodeAlertSettings, ::encodeAlertSettings)
+class AlertSettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val store = TypedSettings(dao, ::decodeAlertSettings, ::encodeAlertSettings, decodeDispatcher)
 
     val settings: Flow<AlertSettings> = store.flow
 

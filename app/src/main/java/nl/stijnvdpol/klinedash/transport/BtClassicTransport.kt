@@ -6,7 +6,6 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,7 +74,7 @@ class BtClassicTransport(
             throw TransportException(invalidAddressMessage(address))
         }
         val device = adapter.getRemoteDevice(address)
-        deviceName = device.name
+        deviceName = device.nameOrNull()
 
         // Needs BLUETOOTH_SCAN on API 31+; if that is denied we simply carry on (we are not scanning).
         try {
@@ -119,7 +118,11 @@ class BtClassicTransport(
         throw TransportException(classicConnectFailedMessage(isBonded = device.bondState == BluetoothDevice.BOND_BONDED), lastError)
     }
 
-    /** Runs the blocking connect() off-thread and closes the socket if it takes too long. */
+    /**
+     * Runs the blocking connect() off-thread and closes the socket if it takes too long. The
+     * connect coroutine is detached on purpose: closing the socket is what ends it, and the caller
+     * must not hang on a head-unit stack where close() is slow to abort a pending connect().
+     */
     private suspend fun connectWithTimeout(candidate: BluetoothSocket) {
         val result = CompletableDeferred<Unit>()
         CoroutineScope(Dispatchers.IO).launch {
@@ -135,10 +138,8 @@ class BtClassicTransport(
         } catch (e: TimeoutCancellationException) {
             closeQuietly(candidate) // makes the blocked connect() throw
             throw IOException("Timed out while connecting (${CONNECT_TIMEOUT_MS / 1000}s)", e)
-        } catch (e: CancellationException) {
-            closeQuietly(candidate)
-            throw e
         } catch (e: Throwable) {
+            // Also a cancelled caller: the detached connect() must not keep the socket.
             closeQuietly(candidate)
             throw e
         }

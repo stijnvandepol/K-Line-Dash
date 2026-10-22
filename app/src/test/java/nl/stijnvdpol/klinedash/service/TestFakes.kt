@@ -124,9 +124,6 @@ class FakeTrackDao : TrackDao {
 
     override suspend fun setSectors(id: Long, sectorsJson: String) = update(id) { it.copy(sectorsJson = sectorsJson) }
 
-    override suspend fun setStartFinish(id: Long, lat: Double, lon: Double, headingDeg: Double, widthM: Double) =
-        update(id) { it.copy(startLat = lat, startLon = lon, startHeadingDeg = headingDeg, startWidthM = widthM) }
-
     override suspend fun get(id: Long): Track? = rows.value.firstOrNull { it.id == id }
 
     override fun observeAll(): Flow<List<Track>> = rows.map { list -> list.sortedByDescending { it.createdMs } }

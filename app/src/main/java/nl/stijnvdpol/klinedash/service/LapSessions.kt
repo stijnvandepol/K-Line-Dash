@@ -13,6 +13,7 @@ import nl.stijnvdpol.klinedash.core.geo.Gate
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.core.geo.SectorOrder
 import nl.stijnvdpol.klinedash.data.GateSpec
+import nl.stijnvdpol.klinedash.data.MAX_SECTOR_LINES
 import nl.stijnvdpol.klinedash.data.MAX_TRIPS_PER_TRACK
 import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.TrackRepository
@@ -27,11 +28,6 @@ const val GATE_MAX_ACCURACY_M = 15.0
 
 /** The heading of a GPS fix is only trustworthy above walking pace; 2 m/s is 7.2 km/h. */
 const val GATE_MIN_SPEED_MPS = 2.0
-
-/** Most sector lines on one track. */
-const val MAX_SECTOR_LINES = 20
-
-private const val KMH_PER_MPS = 3.6
 
 /** The trip being recorded, as lap sessions see it; implemented by [TripRecorder]. */
 interface LiveLaps {
@@ -89,8 +85,8 @@ internal fun placeGateAt(fix: GeoFix?, widthM: Double = Gate.DEFAULT_WIDTH_M): G
  * gates of the trip's track (see [TripAnalysisRepository]). What is stored is the track, the track
  * of each trip, and a per-trip cache of lap count and best lap for the trip list.
  *
- * A gate changed or a track assigned recomputes the cache of the affected trips from their CSV and
- * removes their generated PC files (they would show the old laps; the next export rewrites them).
+ * A changed sector list recomputes the cache of the affected trips from their CSV and removes their
+ * generated PC files (they would show the old laps; the next export rewrites them).
  */
 class LapSessions(
     private val tracks: TrackRepository,
@@ -186,18 +182,6 @@ class LapSessions(
         }
     }
 
-    /** A track from gates the user picked on a recorded trace (no live position needed). Not made active. */
-    suspend fun createTrack(name: String, startFinish: GateSpec, sectors: List<GateSpec> = emptyList()): Track {
-        val track = newTrack(name, startFinish, sectors, clock())
-        return track.copy(id = tracks.add(track))
-    }
-
-    /** Replaces the start/finish line of [trackId]; recomputes the trips on this track. */
-    suspend fun setStartFinish(trackId: Long, gate: GateSpec) {
-        tracks.setStartFinish(trackId, gate)
-        recomputeTrack(trackId)
-    }
-
     /** Replaces the sector lines of [trackId] (driving order); recomputes the trips on this track. */
     suspend fun setSectors(trackId: Long, sectors: List<GateSpec>) {
         require(sectors.size <= MAX_SECTOR_LINES) { "At most $MAX_SECTOR_LINES sector lines" }
@@ -215,14 +199,6 @@ class LapSessions(
         val trips = tripDao.getByTrack(trackId, MAX_TRIPS_PER_TRACK)
         tracks.delete(trackId)
         trips.forEach { exporter.deleteExports(it.fileName) }
-    }
-
-    /** Uses [trackId] (null: none) for the laps of trip [tripId] and recomputes its cached summary. */
-    suspend fun assignTrackToTrip(tripId: Long, trackId: Long?) {
-        val trip = tripDao.get(tripId) ?: return
-        tripDao.setTrack(tripId, trackId)
-        exporter.deleteExports(trip.fileName)
-        analysis.refreshSummary(tripId)
     }
 
     private suspend fun recomputeTrack(trackId: Long) {

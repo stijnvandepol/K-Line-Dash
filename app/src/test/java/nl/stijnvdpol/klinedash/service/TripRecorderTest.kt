@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.service
 
+import android.database.SQLException
 import java.io.File
 import java.time.ZoneOffset
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,8 +14,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.TripSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -32,9 +35,9 @@ class TripRecorderTest {
     private val pollerFlow = MutableStateFlow<ObdPoller?>(poller)
     private val settings = MutableStateFlow(TripSettings(autoRecord = true))
 
-    private fun TestScope.newRecorder() = TripRecorder(
+    private fun TestScope.newRecorder(tripDao: TripDao = dao) = TripRecorder(
         tripsDir = File(folder.root, "trips"),
-        tripDao = dao,
+        tripDao = tripDao,
         settings = settings,
         poller = pollerFlow,
         clock = { baseMs + currentTime },
@@ -166,5 +169,42 @@ class TripRecorderTest {
         assertEquals(RecordingState.Idle, recorder.state.value)
         assertTrue(dao.rows.value.single().endMs != null)
         assertNull("the demand is released with the loop", poller.demands["trip"])
+    }
+
+    /** The trip table of [rows] on storage that turns full: writing the end of a trip then fails. */
+    private class FullDiskTripDao(private val rows: FakeTripDao) : TripDao by rows {
+        var isFull = false
+
+        override suspend fun finish(
+            id: Long,
+            endMs: Long,
+            sampleCount: Int,
+            distanceKm: Double,
+            maxRpm: Double?,
+            maxSpeedKmh: Double?,
+            maxCoolantC: Double?,
+        ) {
+            if (isFull) throw SQLException("database or disk is full")
+            rows.finish(id, endMs, sampleCount, distanceKm, maxRpm, maxSpeedKmh, maxCoolantC)
+        }
+    }
+
+    @Test
+    fun aTripWhoseEndCannotBeSavedIsLeftForRecoveryInsteadOfCrashing() = runTest {
+        val fullDisk = FullDiskTripDao(dao)
+        val recorder = newRecorder(fullDisk)
+        val loop = backgroundScope.launch { recorder.run() }
+        assertEquals(StartResult.Started, recorder.start())
+        engineRunning()
+        advanceTimeBy(3_000)
+        fullDisk.isFull = true
+
+        recorder.stop()
+
+        assertEquals(RecordingState.Idle, recorder.state.value)
+        assertNotNull("the user is told why", recorder.lastError.value)
+        assertNull("the row stays unfinished, so the next app start recovers it", dao.rows.value.single().endMs)
+        advanceTimeBy(3_000)
+        assertTrue("the sampling loop keeps running", loop.isActive)
     }
 }

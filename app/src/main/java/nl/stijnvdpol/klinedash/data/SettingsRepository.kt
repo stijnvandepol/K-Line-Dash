@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.data
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.WifiTransport
@@ -15,8 +17,8 @@ data class ConnectionSettings(
     val autoConnect: Boolean = true,
 )
 
-class SettingsRepository(dao: SettingsDao) {
-    private val store = TypedSettings(dao, { it.toConnectionSettings() }, { it.toRows() })
+class SettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val store = TypedSettings(dao, { it.toConnectionSettings() }, { it.toRows() }, decodeDispatcher)
 
     /** Re-emits only when the connection settings themselves change (not for protocol.* rows). */
     val connectionSettings: Flow<ConnectionSettings> = store.flow

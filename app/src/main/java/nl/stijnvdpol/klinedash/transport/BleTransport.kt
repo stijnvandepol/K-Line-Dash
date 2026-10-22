@@ -4,16 +4,10 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
-import android.bluetooth.BluetoothProfile
-import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
@@ -31,7 +25,6 @@ import nl.stijnvdpol.klinedash.core.transport.TransportException
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
 import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
-import java.util.UUID
 
 /**
  * ELM327 over Bluetooth Low Energy. Cheap BLE clones expose a "serial over GATT" service whose
@@ -40,8 +33,8 @@ import java.util.UUID
  * Once connected the transport asks for the high connection priority: the default connection
  * interval (30-50 ms) would otherwise cap the request rate on a fast CAN car.
  *
- * Flow control: Android allows exactly one GATT operation at a time, so every operation sets a
- * [CompletableDeferred] that the callback completes, and writes are serialised by [opMutex].
+ * Flow control: Android allows exactly one GATT operation at a time, so every operation waits for
+ * its callback (see [GattCallback] and BleGattSteps.kt), and writes are serialised by [opMutex].
  * Writes are split into (MTU - 3)-byte chunks. Replies arrive as notifications of at most MTU-3
  * bytes and are reassembled through [PromptBuffer], exactly like the stream transports.
  *
@@ -73,7 +66,7 @@ class BleTransport(
 
     @Volatile private var connected = false
     @Volatile private var channel: Channel<String>? = null
-    @Volatile private var active: GattHandler? = null
+    @Volatile private var active: GattCallback? = null
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var writeChar: BluetoothGattCharacteristic? = null
     @Volatile private var writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
@@ -100,7 +93,7 @@ class BleTransport(
             deviceName = device.nameOrNull()
 
             val ch = Channel<String>(Channel.UNLIMITED)
-            val handler = GattHandler(ch)
+            val handler = GattCallback(ch, events)
             synchronized(lock) {
                 promptBuffer.clear()
                 channel = ch
@@ -120,28 +113,7 @@ class BleTransport(
                     g.close()
                     throw TransportException("The connection to the adapter was closed")
                 }
-                awaitStep(handler.connectResult, CONNECT_TIMEOUT_MS, "connecting")
-                // Some stacks return GATT_ERROR/133 when discovering immediately after connect.
-                delay(POST_CONNECT_DELAY_MS)
-
-                discoverServices(g, handler)
-                Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
-                val candidates = findBleUartCandidates(g)
-                if (candidates.isEmpty()) {
-                    throw UnsupportedAdapterException(
-                        "This device has no serial BLE service. " +
-                            "It is probably a Bluetooth Classic adapter: choose Bluetooth Classic instead.",
-                    )
-                }
-                val uart = selectUart(g, handler, candidates)
-                if (!g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)) {
-                    Log.w(TAG, "BLE high connection priority was not accepted")
-                }
-                // Last, because it is optional (it only enlarges chunks): the stack queues GATT
-                // operations, so a clone that is slow to answer the MTU exchange used to push the
-                // mandatory discovery/CCCD steps into their timeouts.
-                requestMtu(g, handler)
-
+                val uart = openUart(g, handler)
                 synchronized(lock) {
                     // gatt !== g: close() tore the session down between two steps.
                     if (handler.disconnected.isCompleted || active !== handler || gatt !== g) {
@@ -160,6 +132,35 @@ class BleTransport(
         }
     }
 
+    /**
+     * The GATT steps of a connect once the client exists: wait for the link, find and probe the
+     * serial characteristics, then tune the connection. Returns the UART that answered.
+     */
+    private suspend fun openUart(g: BluetoothGatt, handler: GattCallback): BleUart {
+        awaitStep(handler.connectResult, CONNECT_TIMEOUT_MS, "connecting")
+        // Some stacks return GATT_ERROR/133 when discovering immediately after connect.
+        delay(POST_CONNECT_DELAY_MS)
+
+        discoverServices(g, handler)
+        Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
+        val candidates = findBleUartCandidates(g)
+        if (candidates.isEmpty()) {
+            throw UnsupportedAdapterException(
+                "This device has no serial BLE service. " +
+                    "It is probably a Bluetooth Classic adapter: choose Bluetooth Classic instead.",
+            )
+        }
+        val uart = selectUart(g, handler, candidates)
+        if (!g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)) {
+            Log.w(TAG, "BLE high connection priority was not accepted")
+        }
+        // Last, because it is optional (it only enlarges chunks): the stack queues GATT
+        // operations, so a clone that is slow to answer the MTU exchange used to push the
+        // mandatory discovery/CCCD steps into their timeouts.
+        requestMtu(g, handler)
+        return uart
+    }
+
     override suspend fun write(data: String) {
         val g = gatt
         val c = writeChar
@@ -170,14 +171,14 @@ class BleTransport(
         sendBytes(g, h, c, data.toByteArray(Charsets.US_ASCII))
     }
 
-    private suspend fun sendBytes(g: BluetoothGatt, h: GattHandler, c: BluetoothGattCharacteristic, bytes: ByteArray) {
+    private suspend fun sendBytes(g: BluetoothGatt, h: GattCallback, c: BluetoothGattCharacteristic, bytes: ByteArray) {
         opMutex.withLock {
             var offset = 0
             while (offset < bytes.size) {
                 // gatt is cleared by teardown(), so this also notices a close() between two chunks.
                 if (gatt !== g) throw TransportException("The BLE connection dropped")
                 val end = minOf(offset + maxChunk, bytes.size)
-                writeChunk(g, h, c, bytes.copyOfRange(offset, end))
+                writeChunk(g, h, c, bytes.copyOfRange(offset, end), writeType)
                 offset = end
             }
         }
@@ -210,64 +211,6 @@ class BleTransport(
         teardown()
     }
 
-    // ---------------------------------------------------------------- GATT steps
-
-    private suspend fun requestMtu(g: BluetoothGatt, h: GattHandler) {
-        val d = CompletableDeferred<Int>()
-        h.mtuResult = d
-        try {
-            if (g.requestMtu(REQUESTED_MTU)) {
-                // Plenty of clones never answer or reject; the default 20-byte chunk still works.
-                try {
-                    withTimeout(MTU_TIMEOUT_MS) { d.await() }
-                } catch (e: TimeoutCancellationException) {
-                    Log.w(TAG, "MTU request timed out, staying at $maxChunk-byte chunks")
-                }
-            }
-        } finally {
-            h.mtuResult = null
-        }
-    }
-
-    /**
-     * Full service discovery can stall on cheap adapters: the Konnwei KW905 answers the first
-     * handles (1800/1801/180A) and then the walk fails or never ends, on an ESP32 and on Windows
-     * alike, while its FFF0 service is perfectly usable (docs/research/esp32-obd2-lessons.md).
-     * So a failed or timed-out discovery is not fatal when the services found so far already hold
-     * a usable known UART; otherwise discovery is retried once before giving up.
-     */
-    private suspend fun discoverServices(g: BluetoothGatt, h: GattHandler) {
-        var lastStatus: Int? = null
-        for (attempt in 1..DISCOVERY_ATTEMPTS) {
-            val status = discoverOnce(g, h)
-            lastStatus = status
-            if (status == BluetoothGatt.GATT_SUCCESS) return
-            val outcome = if (status == null) "timed out" else "failed (GATT status $status)"
-            val found = g.services.joinToString { it.uuid.toString() }
-            if (findBleUartCandidates(g, knownOnly = true).isNotEmpty()) {
-                Log.w(TAG, "BLE service discovery $outcome, but a known UART service is present ($found); using it")
-                return
-            }
-            Log.w(TAG, "BLE service discovery $outcome (attempt $attempt of $DISCOVERY_ATTEMPTS), services so far: $found")
-            if (attempt < DISCOVERY_ATTEMPTS) delay(DISCOVERY_RETRY_DELAY_MS)
-        }
-        throw TransportException(
-            if (lastStatus == null) "Timed out while discovering BLE services" else "Reading the adapter services failed (GATT status $lastStatus)",
-        )
-    }
-
-    /** One discovery round. Returns the GATT status, or null when the callback never came. */
-    private suspend fun discoverOnce(g: BluetoothGatt, h: GattHandler): Int? {
-        val d = CompletableDeferred<Int>()
-        h.servicesResult = d
-        try {
-            if (!g.discoverServices()) throw TransportException("Could not read the services of the adapter")
-            return withTimeoutOrNull(SERVICES_TIMEOUT_MS) { d.await() }
-        } finally {
-            h.servicesResult = null
-        }
-    }
-
     /**
      * The first of [candidates] that answers an ELM327 probe, left activated. Known layouts come
      * first, so a normal adapter costs one probe. If none answers but a known layout is among
@@ -275,7 +218,7 @@ class BleTransport(
      * merely slow to wake is not "locked"); with only guessed pairs the adapter is declared
      * unusable.
      */
-    private suspend fun selectUart(g: BluetoothGatt, h: GattHandler, candidates: List<BleUart>): BleUart {
+    private suspend fun selectUart(g: BluetoothGatt, h: GattCallback, candidates: List<BleUart>): BleUart {
         for (candidate in candidates) {
             if (answersProbe(g, h, candidate)) return candidate
             Log.w(TAG, "No ELM327 answer on notify=${candidate.notify.uuid} write=${candidate.write.uuid}")
@@ -287,7 +230,7 @@ class BleTransport(
     }
 
     /** Activates [uart], sends "ATI" and reports whether any prompt came back within [PROBE_TIMEOUT_MS]. */
-    private suspend fun answersProbe(g: BluetoothGatt, h: GattHandler, uart: BleUart): Boolean {
+    private suspend fun answersProbe(g: BluetoothGatt, h: GattCallback, uart: BleUart): Boolean {
         val ch = channel ?: throw TransportException("The connection to the adapter was closed")
         try {
             activate(g, h, uart)
@@ -304,7 +247,7 @@ class BleTransport(
         }
     }
 
-    private suspend fun activate(g: BluetoothGatt, h: GattHandler, uart: BleUart) {
+    private suspend fun activate(g: BluetoothGatt, h: GattCallback, uart: BleUart) {
         writeChar = uart.write
         // Chosen from the characteristic's own properties: the Konnwei KW905's FFF2 only
         // supports write-without-response (props 0x04), a WRITE_TYPE_DEFAULT write fails there.
@@ -317,92 +260,7 @@ class BleTransport(
         enableNotifications(g, h, uart.notify)
     }
 
-    private suspend fun enableNotifications(g: BluetoothGatt, h: GattHandler, notify: BluetoothGattCharacteristic) {
-        if (!g.setCharacteristicNotification(notify, true)) {
-            throw TransportException("Could not enable notifications from the adapter")
-        }
-        // Without the CCCD write the peripheral never sends; a few clones lack the descriptor but
-        // push data after setCharacteristicNotification alone, so a missing CCCD is tolerated.
-        val cccd = notify.getDescriptor(CCCD_UUID)
-        if (cccd == null) {
-            Log.w(TAG, "No CCCD descriptor on ${notify.uuid}, continuing without it")
-            return
-        }
-        val value = if (notify.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
-            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        } else {
-            BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
-        }
-        val d = CompletableDeferred<Int>()
-        h.descriptorResult = d
-        try {
-            if (!writeDescriptorCompat(g, cccd, value)) {
-                throw TransportException("Could not enable notifications from the adapter (CCCD)")
-            }
-            val status = awaitStep(d, DESCRIPTOR_TIMEOUT_MS, "enabling notifications")
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                throw TransportException("Enabling notifications failed (GATT status $status)")
-            }
-        } finally {
-            h.descriptorResult = null
-        }
-    }
-
-    private suspend fun writeChunk(g: BluetoothGatt, h: GattHandler, c: BluetoothGattCharacteristic, chunk: ByteArray) {
-        val type = writeType
-        if (type == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) {
-            // Not waiting for onCharacteristicWrite (unreliable for write-without-response). The
-            // stack rejects a new write while the previous one is in flight, so retry briefly.
-            var attempts = 0
-            while (!startWrite(g, c, chunk, type)) {
-                if (++attempts >= MAX_WRITE_RETRIES) throw TransportException("Writing to the adapter failed")
-                delay(WRITE_RETRY_DELAY_MS)
-            }
-        } else {
-            val d = CompletableDeferred<Int>()
-            h.writeResult = d
-            try {
-                if (!startWrite(g, c, chunk, type)) throw TransportException("Writing to the adapter failed")
-                val status = awaitStep(d, WRITE_TIMEOUT_MS, "writing to the adapter")
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    throw TransportException("Writing to the adapter failed (GATT status $status)")
-                }
-            } finally {
-                h.writeResult = null
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- API-level shims
-
-    /** API 33 replaced value-on-characteristic with an explicit value argument. */
-    @Suppress("DEPRECATION")
-    private fun startWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray, type: Int): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(c, value, type) == BluetoothStatusCodes.SUCCESS
-        } else {
-            c.writeType = type
-            c.value = value
-            g.writeCharacteristic(c)
-        }
-
-    @Suppress("DEPRECATION")
-    private fun writeDescriptorCompat(g: BluetoothGatt, d: BluetoothGattDescriptor, value: ByteArray): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeDescriptor(d, value) == BluetoothStatusCodes.SUCCESS
-        } else {
-            d.value = value
-            g.writeDescriptor(d)
-        }
-
-    // ---------------------------------------------------------------- helpers
-
-    private suspend fun <T> awaitStep(d: CompletableDeferred<T>, timeoutMs: Long, what: String): T =
-        try {
-            withTimeout(timeoutMs) { d.await() }
-        } catch (e: TimeoutCancellationException) {
-            throw TransportException("Timed out while $what", e)
-        }
+    // ---------------------------------------------------------------- teardown
 
     /** Idempotent. Runs non-cancellable so a cancelled caller still releases the GATT client. */
     private suspend fun teardown() {
@@ -436,98 +294,35 @@ class BleTransport(
 
     // ---------------------------------------------------------------- callbacks
 
-    private inner class GattHandler(private val ch: Channel<String>) : BluetoothGattCallback() {
-        val connectResult = CompletableDeferred<Unit>()
-        val disconnected = CompletableDeferred<Unit>()
+    /** Binder-thread events of the current session's [GattCallback]. */
+    private val events = object : GattEvents {
+        override fun isCurrent(callback: GattCallback): Boolean = active === callback
 
-        @Volatile var mtuResult: CompletableDeferred<Int>? = null
-        @Volatile var servicesResult: CompletableDeferred<Int>? = null
-        @Volatile var descriptorResult: CompletableDeferred<Int>? = null
-        @Volatile var writeResult: CompletableDeferred<Int>? = null
-        @Volatile var notifyUuid: UUID? = null
-
-        private val isCurrent: Boolean get() = active === this
-
-        fun failAll(ex: TransportException) {
-            connectResult.completeExceptionally(ex)
-            mtuResult?.completeExceptionally(ex)
-            servicesResult?.completeExceptionally(ex)
-            descriptorResult?.completeExceptionally(ex)
-            writeResult?.completeExceptionally(ex)
+        override fun onMtuChanged(mtu: Int) {
+            maxChunk = (mtu - ATT_HEADER_BYTES).coerceAtLeast(DEFAULT_CHUNK)
         }
 
-        override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            if (!isCurrent) return
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        connectResult.complete(Unit)
-                    } else {
-                        connectResult.completeExceptionally(TransportException("BLE connection failed (GATT status $status)"))
-                    }
-                }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.w(TAG, "BLE disconnected, status=$status")
-                    disconnected.complete(Unit)
-                    val ex = TransportException(
-                        if (connected) {
-                            "The BLE connection to the adapter dropped (status $status)"
-                        } else {
-                            // Typically 133 / 62 while connecting: adapter asleep, out of range or busy.
-                            "BLE connection failed (GATT status $status). Is the adapter in range and not already connected to a phone?"
-                        },
-                    )
-                    synchronized(lock) {
-                        connected = false
-                        ch.close(ex)
-                    }
-                    failAll(ex)
-                }
-            }
-        }
-
-        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-            if (!isCurrent) return
-            if (status == BluetoothGatt.GATT_SUCCESS) maxChunk = (mtu - ATT_HEADER_BYTES).coerceAtLeast(DEFAULT_CHUNK)
-            mtuResult?.complete(status)
-        }
-
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (!isCurrent) return
-            servicesResult?.complete(status)
-        }
-
-        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            if (!isCurrent) return
-            descriptorResult?.complete(status)
-        }
-
-        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            if (!isCurrent) return
-            writeResult?.complete(status)
-        }
-
-        /** API 33+: value delivered as a parameter (the characteristic's cached value may be stale). */
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            value: ByteArray,
-        ) {
-            deliver(characteristic.uuid, value)
-        }
-
-        /** Pre-33 path; on API 33+ the platform calls the overload above instead. */
-        @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            deliver(characteristic.uuid, characteristic.value)
-        }
-
-        private fun deliver(uuid: UUID, value: ByteArray?) {
-            if (value == null || value.isEmpty()) return
-            if (uuid != notifyUuid) return
+        override fun onDisconnected(callback: GattCallback, status: Int): TransportException {
+            Log.w(TAG, "BLE disconnected, status=$status")
+            val ex = TransportException(
+                if (connected) {
+                    "The BLE connection to the adapter dropped (status $status)"
+                } else {
+                    // Typically 133 / 62 while connecting: adapter asleep, out of range or busy.
+                    "BLE connection failed (GATT status $status). Is the adapter in range and not already connected to a phone?"
+                },
+            )
             synchronized(lock) {
-                if (!isCurrent) return
-                for (response in promptBuffer.feed(value)) ch.trySend(response)
+                connected = false
+                callback.responses.close(ex)
+            }
+            return ex
+        }
+
+        override fun onNotification(callback: GattCallback, value: ByteArray) {
+            synchronized(lock) {
+                if (active !== callback) return
+                for (response in promptBuffer.feed(value)) callback.responses.trySend(response)
             }
         }
     }
@@ -535,7 +330,6 @@ class BleTransport(
     private companion object {
         const val TAG = "KLineDash"
 
-        const val REQUESTED_MTU = 185
         const val DEFAULT_CHUNK = 20
         const val CONNECT_TIMEOUT_MS = 15_000L
         const val POST_CONNECT_DELAY_MS = 250L
@@ -543,19 +337,9 @@ class BleTransport(
         /** The cheapest command every ELM327 and clone answers with at least a prompt. Not a bare CR: that repeats the last command. */
         const val PROBE_COMMAND = "ATI\r"
         const val PROBE_TIMEOUT_MS = 2_500L
-        const val MTU_TIMEOUT_MS = 3_000L
-        const val SERVICES_TIMEOUT_MS = 10_000L
-        const val DISCOVERY_ATTEMPTS = 2
-        const val DISCOVERY_RETRY_DELAY_MS = 500L
-        const val DESCRIPTOR_TIMEOUT_MS = 5_000L
-        const val WRITE_TIMEOUT_MS = 5_000L
         const val DISCONNECT_WAIT_MS = 1_000L
-        const val MAX_WRITE_RETRIES = 60
-        const val WRITE_RETRY_DELAY_MS = 10L
 
         /** Bytes of every ATT packet taken by the opcode and handle, so payload = MTU - 3. */
         const val ATT_HEADER_BYTES = 3
-
-        val CCCD_UUID: UUID = uuid16(0x2902)
     }
 }

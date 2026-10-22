@@ -201,24 +201,20 @@ class TripExportTest {
 
     @Test
     fun changingTheGatesRecomputesTheCacheAndDropsStaleExports() = runBlocking {
-        val tracks = TrackRepository(trackDao, tripDao, GpsSettingsRepository(FakeSettingsDao()))
+        val tracks = TrackRepository(trackDao, tripDao, GpsSettingsRepository(FakeSettingsDao(), Dispatchers.Unconfined))
         val sessions = LapSessions(tracks, tripDao, NoLocation, analysis, exporter, FakeLiveLaps()) { TEST_BASE_MS }
-        val track = sessions.createTrack("Circuit", circuitStartLine())
-        val trip = storeTrip(trackId = track.id)
+        val trackId = tracks.add(circuitTrack())
+        val trip = storeTrip(trackId = trackId)
         analysis.refreshSummary(trip.id)
         exporter.exportTrip(trip.id)
         assertEquals(3, tripDao.get(trip.id)?.lapCount)
 
-        // A narrower start line: the laps are still found, but the exports made for the old gate are stale.
-        val other = circuitStartLine().let { GateSpec(it.lat, it.lon, it.headingDeg, widthM = 5.0) }
-        sessions.setStartFinish(track.id, other)
+        // A sector line halfway round: the laps are still found, but the exports made without it are stale.
+        val halfway = testCircuit.pointAt(testCircuit.lengthM / 2).let { (point, heading) -> GateSpec(point.lat, point.lon, heading) }
+        sessions.setSectors(trackId, listOf(halfway))
 
         assertTrue("old exports are gone, the next export rewrites them", derivedFiles(tripsDir, trip.fileName).isEmpty())
-        assertNotNull(tripDao.get(trip.id)?.lapCount)
-
-        sessions.assignTrackToTrip(trip.id, null)
-        assertEquals(null, tripDao.get(trip.id)?.trackId)
-        assertEquals(null, tripDao.get(trip.id)?.lapCount)
+        assertEquals(3, tripDao.get(trip.id)?.lapCount)
     }
 
     @Test

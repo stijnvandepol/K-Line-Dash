@@ -40,7 +40,7 @@ class ActiveTrackReleaseTest {
 
     private val tripDao = FakeTripDao()
     private val trackDao = FakeTrackDao()
-    private val gpsSettings = GpsSettingsRepository(FakeSettingsDao())
+    private val gpsSettings = GpsSettingsRepository(FakeSettingsDao(), Dispatchers.Unconfined)
     private val tracks = TrackRepository(trackDao, tripDao, gpsSettings)
     private val poller = FakePoller()
     private val pollerFlow = MutableStateFlow<ObdPoller?>(poller)

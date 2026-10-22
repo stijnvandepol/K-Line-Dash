@@ -9,6 +9,9 @@ import nl.stijnvdpol.klinedash.core.geo.GeoFix
 /** A fix older than this (monotonic clock) no longer describes where the car is. */
 const val FIX_MAX_AGE_MS = 3_000L
 
+/** GPS speeds are metres per second; the app shows and compares km/h. */
+internal const val KMH_PER_MPS = 3.6
+
 /** What the GPS chip on the screens shows. */
 sealed interface GpsStatus {
     /** The fine location permission is missing (or only approximate location was granted). */

@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.data
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -15,7 +17,7 @@ import kotlinx.coroutines.flow.Flow
 data class GpsSettings(val activeTrackId: Long? = null, val useSimulatedGps: Boolean = false)
 
 /** Persists [GpsSettings] under "gps.*" keys of the settings table. */
-class GpsSettingsRepository(dao: SettingsDao) {
+class GpsSettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
     private val store = TypedSettings(
         dao,
         { rows ->
@@ -26,6 +28,7 @@ class GpsSettingsRepository(dao: SettingsDao) {
             )
         },
         { mapOf(ACTIVE_TRACK to it.activeTrackId?.toString(), SIMULATE to it.useSimulatedGps.toString()) },
+        decodeDispatcher,
     )
 
     val settings: Flow<GpsSettings> = store.flow

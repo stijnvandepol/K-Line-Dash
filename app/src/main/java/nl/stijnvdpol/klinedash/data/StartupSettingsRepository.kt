@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.data
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 
 /** Which way a head-unit broadcast points: the car (and the unit) waking up, or going to sleep. */
@@ -90,8 +92,8 @@ fun actionProblem(raw: String, existing: Collection<String>): ActionProblem? {
 }
 
 /** Persists [StartupSettings] under "startup.*" keys of the settings table. */
-class StartupSettingsRepository(dao: SettingsDao) {
-    private val store = TypedSettings(dao, ::decodeStartupSettings, ::encodeStartupSettings)
+class StartupSettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
+    private val store = TypedSettings(dao, ::decodeStartupSettings, ::encodeStartupSettings, decodeDispatcher)
 
     val settings: Flow<StartupSettings> = store.flow
 

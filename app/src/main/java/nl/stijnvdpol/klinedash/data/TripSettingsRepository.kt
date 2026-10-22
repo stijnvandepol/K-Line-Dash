@@ -1,5 +1,7 @@
 package nl.stijnvdpol.klinedash.data
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -14,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
 data class TripSettings(val autoRecord: Boolean = true, val autoStartWhenMoving: Boolean = false)
 
 /** Persists [TripSettings] under "trip.*" keys of the settings table. */
-class TripSettingsRepository(dao: SettingsDao) {
+class TripSettingsRepository(dao: SettingsDao, decodeDispatcher: CoroutineDispatcher = Dispatchers.Default) {
     private val store = TypedSettings(
         dao,
         { rows ->
@@ -25,6 +27,7 @@ class TripSettingsRepository(dao: SettingsDao) {
             )
         },
         { mapOf(AUTO_RECORD to it.autoRecord.toString(), AUTO_START_MOVING to it.autoStartWhenMoving.toString()) },
+        decodeDispatcher,
     )
 
     val settings: Flow<TripSettings> = store.flow

@@ -41,4 +41,12 @@ class TripFilesTest {
         assertNull(resolveTripFile(dir, ""))
         assertNotNull(resolveTripFile(dir, "a.csv"))
     }
+
+    @Test
+    fun theFolderItselfAndItsParentAreNotTripFiles() {
+        val dir = File("trips")
+        assertNull("the parent folder", resolveTripFile(dir, ".."))
+        assertNull("the trips folder itself", resolveTripFile(dir, "."))
+        assertNotNull("a name that merely starts with dots", resolveTripFile(dir, "..trip.csv"))
+    }
 }
