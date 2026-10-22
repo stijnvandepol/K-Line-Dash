@@ -237,6 +237,10 @@ Known oddities:   obd-core has no Android imports on purpose, so its tests run o
                   ignition off is the normal state, not an error.
                   UI strings and user-facing errors are English (numbers: Locale.US); the install/test
                   guides in docs/ are Dutch.
+                  Trip export over Wi-Fi is plain HTTP, an approved exception to §6 (user decision
+                  2026-10-22): an offline head unit cannot present a trusted certificate. It is off by
+                  default, started by the user, PIN-protected, read-only and stops itself when idle
+                  (see core/export/TripExportServer.kt).
 Do not touch:     app/schemas/ (generated Room schema, committed on purpose as the migration
                   baseline), gradle/wrapper/.
 ```

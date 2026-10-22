@@ -113,9 +113,10 @@ measured request rate ("ISO 9141-2  4.4/s").
 - **Field row:** six equal fields (the ECU-supported ones from the default list; unsupported
   ones are replaced by the next supported signal). Same label/unit/value arrangement;
   `fieldValue` stays at its design size (it only shrinks), so all six read as one row.
-- **Values outside their normal range** switch the value colour, not the field background:
-  coolant ≥ 100 °C `caution`, ≥ 105 °C `danger`; battery < 12.0 V or > 15.0 V `caution` with
-  the engine running. (Configurable thresholds and alarms come in phase 4.)
+- **Values outside their normal range** switch the value colour, not the field background. The
+  limits are the warning thresholds from SETUP > Warnings (one source of truth, `AlertSettings`):
+  coolant from the caution limit `caution`, from the danger limit `danger`; battery outside the
+  running/engine-off limits `caution`.
 - **Engine off:** the RPM field shows "0" and the bottom bar status reads "Engine off, saving
   power".
 
@@ -128,6 +129,53 @@ down the right, a vertical rule between them. Per cell: name (`body`, left-align
 `inkMuted`, left-aligned next to the slot; flags have none), update rate (`caption`, `inkMuted`,
 right-aligned). All four share one baseline. Header row in `fieldLabel`. Rows 56 dp with 1 dp
 rules. No cards.
+
+### Navigation (from phase 4)
+
+Five pages: **DASH · SENSORS · DIAG · TRIPS · SETUP**. Driving pages first, setup last. SETUP has
+its own left menu (240 dp, 72 dp rows, selected row with the 4 dp white left bar like the adapter
+list): **Connection**, **Warnings**, **Debug** (and in phase 5 Display and Startup). The right
+part shows the chosen section; Connection and Debug keep their layouts below, narrowed to the
+remaining width (Connection's 400 dp adapter column becomes the section's left column).
+
+### Warnings overlay (all pages)
+
+A warning must be seen without blocking the screen:
+
+- A 6 dp frame around the whole screen in the warning's colour (`caution` or `danger`) while any
+  warning is active. It does not cover content (content insets by 6 dp only while it shows).
+- A 56 dp banner directly above the bottom bar: severity colour fill, black `fieldLabel` text for
+  `caution` and white for `danger`, saying what and how much ("WATER 106 °C", "BATTERY 11.4 V",
+  "NEW FAULT CODE: check DIAG", "CHECK ENGINE LIGHT ON", "ADAPTER CONNECTION LOST"). With several
+  warnings the most severe shows, then the oldest, with "+2" at the right end.
+- Tapping the banner hides it for that warning until it clears and comes back (the frame stays).
+  Nothing else is interactive; no dialogs, no sound from the UI (the service beeps).
+- `danger` banners blink never; colour and position are enough and blinking distracts a driver.
+
+### Trips
+
+Two columns separated by a rule:
+
+- **Left (480 dp), recording:** the state in `title` ("Recording" with a `danger` dot, or
+  "Not recording"), elapsed time and sample count as `fieldValue` numerals, the file name in
+  `caption`; one 72 dp action cell: **Record** (white fill) or **Stop** (outline). Below it the
+  "Record automatically when the engine runs" switch row. Below that **Export**: "Copy to USB or
+  SD card" (outline cell, opens the folder picker), and the Wi-Fi export block: **Start Wi-Fi
+  export** / **Stop**; while it runs, the address in `title` ("http://192.168.43.50:8080"), the
+  PIN as a `fieldValue` numeral labelled PIN, and "Stops by itself after 10 minutes without use."
+  in `caption`.
+- **Right, the trip list:** newest first, 72 dp rows: date and start time (`body`), duration,
+  distance, max RPM as tabular values in fixed slots (`rowValue`, units `caption`), a delete cell
+  at the right end (text "Delete", `danger` text). Delete asks once in a dialog ("Delete trip of
+  21 Oct 14:05? The CSV file is removed."). The trip being recorded shows "Recording" instead of
+  a delete cell. Empty list: "No trips yet. Recording starts when the engine runs."
+
+### Warnings (SETUP section)
+
+One row per warning, 72 dp: name (`body`), on/off toggle, sound toggle (labelled "Sound"), and for
+thresholds a stepper: **−** and **+** cells (72 x 72 dp) around the value in `rowValue` with its
+unit. No keyboard input while driving. Steps: coolant 1 °C, voltage 0.1 V. The two coolant limits
+cannot cross (caution stays below danger). "Reset to defaults" as a text cell at the bottom.
 
 ### Connection
 
