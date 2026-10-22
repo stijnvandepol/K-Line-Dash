@@ -159,6 +159,7 @@ class SimulatorTransport(
         val reply = when {
             cmd.isEmpty() -> textReply(echoText, emptyList(), config.atLatencyMs)
             cmd.startsWith("AT") -> handleAt(cmd, echoText)
+            cmd == "STI" -> textReply(echoText, listOf(config.stnDeviceId ?: "?"), config.atLatencyMs)
             else -> handleObd(cmd, echoText)
         }
         return if (chance(config.garbageRate)) corrupted(reply) else reply
@@ -246,9 +247,20 @@ class SimulatorTransport(
             return textReply(echoText, listOf("?"), config.atLatencyMs)
         }
         val cmd = if (hasCount) received.dropLast(1) else received
-        val request = IntArray(cmd.length / 2) { cmd.substring(it * 2, it * 2 + 2).toInt(16) }
+        var request = IntArray(cmd.length / 2) { cmd.substring(it * 2, it * 2 + 2).toInt(16) }
+        if (request.size > SINGLE_PID_REQUEST_SIZE) {
+            when (config.longRequestQuirk) {
+                LongRequestQuirk.NONE -> Unit
+                LongRequestQuirk.TRUNCATES -> request = request.copyOf(SINGLE_PID_REQUEST_SIZE)
+                LongRequestQuirk.REJECTS -> return textReply(echoText, listOf("?"), config.atLatencyMs)
+            }
+        }
 
-        var latency = if (hasCount) responseCountLatency() else requestLatency()
+        var latency = when {
+            config.isCanCar -> drawLatency(config.canLatencyMinMs, config.canLatencyMaxMs)
+            hasCount -> responseCountLatency()
+            else -> requestLatency()
+        }
         var status: String? = null
 
         if (!busReady) {
@@ -265,7 +277,7 @@ class SimulatorTransport(
             busReady = true
             if (auto) detectedProtocol = config.carProtocol
             status = if (auto) "SEARCHING..." else "BUS INIT: ...OK"
-            latency += config.busInitMs
+            latency += if (config.isCanCar) config.canBusInitMs else config.busInitMs
         }
 
         var frames = ecu.answer(request)
@@ -277,7 +289,7 @@ class SimulatorTransport(
             lines.add("NO DATA")
             latency += config.noDataLatencyMs
         } else {
-            for (frame in frames) lines.add(formatFrame(frame))
+            for (frame in frames) lines.addAll(if (config.isCanCar) canLines(frame) else listOf(formatFrame(frame)))
         }
         val partial = echoText + if (status != null) status + eol else ""
         return textReply(echoText, lines, latency, partial)
@@ -293,6 +305,22 @@ class SimulatorTransport(
         return if (hi == lo) lo else random.nextLong(lo, hi + 1)
     }
 
+    /**
+     * One CAN message as the ELM prints it with headers off: a single line up to seven bytes,
+     * otherwise a three-digit length line and numbered ISO-TP frames ("0:" carries six data bytes,
+     * every following frame seven).
+     */
+    private fun canLines(message: List<Int>): List<String> {
+        if (message.size <= CAN_SINGLE_FRAME_BYTES) return listOf(hexText(message))
+        val lines = arrayListOf(String.format(Locale.US, "%03X", message.size))
+        lines.add("0: " + hexText(message.take(CAN_FIRST_FRAME_BYTES)))
+        message.drop(CAN_FIRST_FRAME_BYTES).chunked(CAN_SINGLE_FRAME_BYTES).forEachIndexed { i, chunk ->
+            val frameNumber = Integer.toHexString((i + 1) % CAN_FRAME_INDEX_COUNT).uppercase()
+            lines.add("$frameNumber: " + hexText(chunk))
+        }
+        return lines
+    }
+
     /** One ECU response frame as the adapter prints it, honouring ATS and ATH. */
     private fun formatFrame(frame: List<Int>): String {
         val bytes = ArrayList<Int>(frame.size + 4)
@@ -305,7 +333,11 @@ class SimulatorTransport(
         }
         bytes.addAll(frame)
         if (headers) bytes.add(bytes.sum() and 0xFF)
+        return hexText(bytes)
+    }
 
+    /** Bytes as hex text, honouring ATS. */
+    private fun hexText(bytes: List<Int>): String {
         val sb = StringBuilder()
         for ((i, b) in bytes.withIndex()) {
             if (spaces && i > 0) sb.append(' ')
@@ -334,6 +366,15 @@ class SimulatorTransport(
         private const val HEX = "0123456789ABCDEF"
         private const val STRAY_CHARS = "#@%*"
         private val K_LINE_PROTOCOLS = setOf("3", "4", "5")
+
+        /** A request of service plus one PID; anything longer is a multi-PID request. */
+        private const val SINGLE_PID_REQUEST_SIZE = 2
+
+        private const val CAN_SINGLE_FRAME_BYTES = 7
+        private const val CAN_FIRST_FRAME_BYTES = 6
+
+        /** ISO-TP frame numbers on the ELM wrap after "F:". */
+        private const val CAN_FRAME_INDEX_COUNT = 16
 
         /** Shortest request with a count digit: a one-byte request such as "03" plus the digit ("031"). */
         private const val MIN_COUNT_REQUEST_LENGTH = 3

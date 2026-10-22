@@ -1,5 +1,8 @@
 package nl.stijnvdpol.klinedash.core.elm
 
+import nl.stijnvdpol.klinedash.core.diag.DtcFormat
+import nl.stijnvdpol.klinedash.core.diag.DtcParser
+
 /** Lifecycle of the adapter link as shown in the UI and used by the service. */
 sealed interface ConnectionState {
     data object Idle : ConnectionState
@@ -16,8 +19,23 @@ sealed interface ConnectionState {
     /** Waiting [delayMs] before reconnect attempt [attempt] after [reason]. */
     data class Reconnecting(val attempt: Int, val delayMs: Long, val reason: String) : ConnectionState
 
-    /** Gave up (e.g. permissions missing, adapter not paired). Requires user action. */
-    data class Failed(val reason: String) : ConnectionState
+    /**
+     * Gave up (e.g. permissions missing, adapter not paired). Requires user action. [reason] is an
+     * English sentence meant for the user; [kind] lets the UI treat the cases differently.
+     */
+    data class Failed(val reason: String, val kind: FailureKind = FailureKind.OTHER) : ConnectionState
+}
+
+/** Why a connection ended in [ConnectionState.Failed]. */
+enum class FailureKind {
+    /** Missing permission, bad configuration and the like. */
+    OTHER,
+
+    /**
+     * The adapter connects but cannot be used by this app (typically an app-locked dongle), so
+     * automatic retries are pointless. The UI should offer the list of compatible adapters.
+     */
+    UNSUPPORTED_ADAPTER,
 }
 
 data class AdapterInfo(
@@ -37,7 +55,16 @@ data class AdapterInfo(
     val usedSavedProtocol: Boolean,
     /** AT commands the adapter answered with "?" during init (e.g. "ATAT1"). */
     val unsupportedCommands: Set<String>,
-)
+    /** What the init probes revealed about the adapter itself; [AdapterProfile.UNKNOWN] when nothing is known. */
+    val profile: AdapterProfile = AdapterProfile.UNKNOWN,
+) {
+    /** True when the car talks CAN (ISO 15765, ELM protocols 6-9), in which multi-PID requests are possible. */
+    val isCan: Boolean get() = isCanProtocol(protocolNumber)
+}
+
+/** True for ELM protocol numbers 6-9 (also in the "A6" auto-detected spelling): ISO 15765-4 CAN. */
+internal fun isCanProtocol(protocolNumber: String): Boolean =
+    ElmParser.parseProtocolNumber(protocolNumber)?.let(DtcParser::formatFor) == DtcFormat.CAN
 
 /** Persists the detected protocol per adapter, so the next start can skip ATSP0 searching. */
 interface ProtocolStore {

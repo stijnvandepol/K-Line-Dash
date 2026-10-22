@@ -35,6 +35,9 @@ import java.util.UUID
  *  4. Reflection `createRfcommSocket(1)` - connects straight to RFCOMM channel 1 without SDP. A
  *     long-standing workaround for clones with a missing/broken SDP record. It is a non-SDK
  *     (greylisted) API and may be blocked on newer Android versions.
+ *  5. Reflection `createInsecureRfcommSocket(1)` and `(2)` - the same without link-key
+ *     authentication, on channel 1 and on channel 2, where a few clones put SPP (B4X and CANblue
+ *     threads, docs/research/elm327-clones.md).
  *
  * `BluetoothSocket.connect()` blocks without a timeout, so it runs on its own coroutine and the
  * socket is closed when [CONNECT_TIMEOUT_MS] elapses, which makes connect() throw and frees the thread.
@@ -84,7 +87,9 @@ class BtClassicTransport(
         val strategies: List<Pair<String, () -> BluetoothSocket>> = listOf(
             "secure SPP" to { device.createRfcommSocketToServiceRecord(SPP_UUID) },
             "insecure SPP" to { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
-            "reflection channel 1" to { createRfcommSocketReflectively(device) },
+            "reflection channel 1" to { createRfcommSocketReflectively(device, SECURE_CHANNEL_METHOD, 1) },
+            "reflection insecure channel 1" to { createRfcommSocketReflectively(device, INSECURE_CHANNEL_METHOD, 1) },
+            "reflection insecure channel 2" to { createRfcommSocketReflectively(device, INSECURE_CHANNEL_METHOD, 2) },
         )
 
         var lastError: Exception? = null
@@ -111,11 +116,7 @@ class BtClassicTransport(
                 delay(RETRY_DELAY_MS)
             }
         }
-        throw TransportException(
-            "Cannot connect to $address over Bluetooth. Check that the adapter is in the OBD port, " +
-                "the ignition is on and the device is paired in the Bluetooth settings.",
-            lastError,
-        )
+        throw TransportException(classicConnectFailedMessage(isBonded = device.bondState == BluetoothDevice.BOND_BONDED), lastError)
     }
 
     /** Runs the blocking connect() off-thread and closes the socket if it takes too long. */
@@ -133,7 +134,7 @@ class BtClassicTransport(
             withTimeout(CONNECT_TIMEOUT_MS) { result.await() }
         } catch (e: TimeoutCancellationException) {
             closeQuietly(candidate) // makes the blocked connect() throw
-            throw IOException("Time-out bij verbinden (${CONNECT_TIMEOUT_MS / 1000}s)", e)
+            throw IOException("Timed out while connecting (${CONNECT_TIMEOUT_MS / 1000}s)", e)
         } catch (e: CancellationException) {
             closeQuietly(candidate)
             throw e
@@ -143,9 +144,10 @@ class BtClassicTransport(
         }
     }
 
-    private fun createRfcommSocketReflectively(device: BluetoothDevice): BluetoothSocket {
-        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-        return method.invoke(device, SPP_FALLBACK_CHANNEL) as BluetoothSocket
+    /** Hidden `BluetoothDevice.<methodName>(int channel)`; throws if this Android version blocks or lacks it. */
+    private fun createRfcommSocketReflectively(device: BluetoothDevice, methodName: String, channel: Int): BluetoothSocket {
+        val method = device.javaClass.getMethod(methodName, Int::class.javaPrimitiveType)
+        return method.invoke(device, channel) as BluetoothSocket
     }
 
     private fun closeQuietly(s: BluetoothSocket) {
@@ -167,8 +169,8 @@ class BtClassicTransport(
         const val CONNECT_TIMEOUT_MS = 12_000L
         const val RETRY_DELAY_MS = 300L
 
-        /** RFCOMM channel clones put SPP on when their SDP record is missing. */
-        const val SPP_FALLBACK_CHANNEL = 1
+        const val SECURE_CHANNEL_METHOD = "createRfcommSocket"
+        const val INSECURE_CHANNEL_METHOD = "createInsecureRfcommSocket"
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 }

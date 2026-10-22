@@ -14,10 +14,24 @@ internal class SimulatorEcu(
 ) {
     private val diagnostics = SimulatorDiagnosticsEcu(config)
 
-    /** Response frames for [request], or null for "NO DATA". */
+    /** Response messages for [request], or null for "NO DATA". */
     fun answer(request: IntArray): List<List<Int>>? = when (request[0]) {
-        MODE_CURRENT_DATA -> if (request.size == 2) mode01(request[1])?.let { listOf(it) } else null
+        MODE_CURRENT_DATA -> currentData(request)
         else -> diagnostics.answer(request)
+    }
+
+    /**
+     * Mode 01. A CAN ECU answers a request for several PIDs with one message holding the blocks of
+     * the PIDs it supports ("41 0C d d 0D d"); with none supported it stays silent. A K-line ECU
+     * takes exactly one PID per request.
+     */
+    private fun currentData(request: IntArray): List<List<Int>>? {
+        val pids = request.drop(1)
+        val limit = if (config.isCanCar) config.maxPidsPerRequest else 1
+        if (pids.isEmpty() || pids.size > limit) return null
+        val blocks = pids.mapNotNull { mode01(it) }
+        if (blocks.isEmpty()) return null
+        return listOf(listOf(RESPONSE_CURRENT_DATA) + blocks.flatMap { it.drop(1) })
     }
 
     private fun mode01(pid: Int): List<Int>? {

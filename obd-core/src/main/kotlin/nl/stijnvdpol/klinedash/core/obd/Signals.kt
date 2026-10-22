@@ -34,6 +34,15 @@ object Signals {
 
     private const val BATTERY_COMMAND = "ATRV"
 
+    /** Data bytes per PID (SAE J1979 table), for every PID of the catalog. */
+    private val PID_DATA_LENGTHS: Map<Int, Int> = mapOf(
+        0x01 to 4,
+        0x04 to 1, 0x05 to 1, 0x06 to 1, 0x07 to 1, 0x08 to 1, 0x09 to 1, 0x0A to 1, 0x0B to 1,
+        0x0C to 2, 0x0D to 1, 0x0E to 1, 0x0F to 1, 0x10 to 2, 0x11 to 1,
+        0x14 to 2, 0x15 to 2, 0x16 to 2, 0x17 to 2, 0x18 to 2, 0x19 to 2, 0x1A to 2, 0x1B to 2,
+        0x1F to 2, 0x21 to 2, 0x2F to 1, 0x33 to 1, 0x42 to 2, 0x46 to 1, 0x5C to 1, 0x5E to 2,
+    )
+
     /** Texts and display range of a signal. */
     private class Display(
         val name: String,
@@ -217,6 +226,7 @@ object Signals {
             defaultTier = tier,
             decode = { data -> ObdReply.payload(data, MODE_CURRENT_DATA, pid)?.let(decodePayload) },
             decodePayload = decodePayload,
+            pidDataLength = PID_DATA_LENGTHS.getValue(pid),
         )
     }
 

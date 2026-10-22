@@ -33,6 +33,9 @@ enum class PollTier {
  *   not contain it (wrong PID echoed back, too few bytes, garbage).
  * @property decodePayload the PID's formula applied to its data bytes only (after service and PID
  *   echo); null for adapter commands. Lets freeze-frame data (Mode 02) reuse the Mode 01 formulas.
+ * @property pidDataLength exact number of data bytes the ECU sends for [pid] (SAE J1979), null for
+ *   adapter commands. Needed to split a multi-PID reply, where the blocks follow each other without
+ *   any separator.
  */
 class Signal(
     val id: String,
@@ -47,6 +50,7 @@ class Signal(
     val decimals: Int,
     val defaultTier: PollTier,
     val decodePayload: ((IntArray) -> Double?)? = null,
+    val pidDataLength: Int? = null,
     val decode: (ElmResult.Data) -> Double?,
 ) {
     override fun toString(): String = "Signal($id, $command)"

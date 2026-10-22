@@ -30,6 +30,22 @@ Play Services.
 | Adapter | ELM327 or clone. Verified: Konnwei KW905 over BLE (service `FFF0`). Classic SPP and Wi-Fi (`192.168.0.10:35000`) are supported too. |
 | Car | Any OBD2 car; tuned for K-line (ISO 9141-2 / KWP2000), where a request takes about 0.5 s. |
 
+## Supported adapters
+
+K-Line Dash speaks plain ELM327 text, so any adapter that works with generic apps (Torque, Car
+Scanner, OBD Fusion) should work. Details and sources: `docs/research/popular-obd-adapters.md`.
+
+- **Works well:** OBDLink LX, MX+ and CX (CX is BLE only), Vgate vLinker MC+/BM+/FS/MS, Vgate iCar
+  Pro 2S, Veepeak OBDCheck BLE+ and VP11. These have STN or newer ELM327 firmware and are the best
+  choice for CAN cars (2008 and later), where K-Line Dash sends several PIDs per request.
+- **Works, with caveats:** the cheap ELM327 "v1.5" and "v2.1" clones (Konnwei KW902/KW905, Viecar,
+  BAFX, Panlong, Vgate iCar2 / iCar Pro BLE). Some clones answer `?` to optional commands; the app
+  skips those. Pair Bluetooth Classic adapters first (PIN 1234, 0000 or 6789) and press the
+  adapter's button if it has one. The KW905 only works over BLE.
+- **Does not work:** dongles that only talk to their own app, such as BlueDriver, ThinkDiag,
+  Launch Golo/EasyDiag, TOPDON TopScan, ANCEL BD200 and Autel MaxiAP. K-Line Dash then reports
+  that the adapter does not answer standard OBD commands. FIXD is unverified.
+
 ## Build
 
 Requirements: JDK 17 and the Android SDK (platform 35). Android Studio provides both.

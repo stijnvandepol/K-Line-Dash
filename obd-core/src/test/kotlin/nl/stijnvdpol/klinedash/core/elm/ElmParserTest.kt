@@ -366,6 +366,12 @@ class ElmParserTest {
     }
 
     @Test
+    fun `stn identity is free text like an at answer`() {
+        assertData(listOf("STN1110 v4.2.0"), ElmParser.parse("STI", "STI\rSTN1110 v4.2.0\r\r"))
+        assertIs<ElmResult.Unknown>(ElmParser.parse("STI", "?\r\r"))
+    }
+
+    @Test
     fun `data results expose parsed lines through the sealed type`() {
         val result = ElmParser.parse("010C", "41 0C 1A F8\r\r")
         val data = assertIs<ElmResult.Data>(result)

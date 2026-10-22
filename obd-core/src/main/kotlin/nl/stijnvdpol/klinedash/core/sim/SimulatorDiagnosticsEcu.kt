@@ -3,9 +3,10 @@ package nl.stijnvdpol.klinedash.core.sim
 import kotlin.math.min
 
 /**
- * Diagnostic services of the simulated ECU, in the ISO 9141-2 formats of a pre-CAN car: trouble
- * codes (03, 07), clear (04), freeze frame (02) and vehicle info (09). Service 0A (permanent
- * codes) is not implemented, like on the real car. The readiness bits of PID 01 are also kept
+ * Diagnostic services of the simulated ECU, in the ISO 9141-2 formats of a pre-CAN car (or, with a
+ * CAN [SimulatorConfig.carProtocol], the ISO 15765 ones): trouble codes (03, 07), clear (04),
+ * freeze frame (02) and vehicle info (09). Service 0A (permanent codes) is not implemented, like
+ * on the real car. The readiness bits of PID 01 are also kept
  * here because service 04 resets them together with the codes.
  *
  * State lives in [config] (shared by every transport of a reconnecting manager), so a clear
@@ -82,14 +83,22 @@ internal class SimulatorDiagnosticsEcu(private val config: SimulatorConfig) {
                 listOf(listOf(RESPONSE_VEHICLE_INFO, PID_SUPPORTED) + supportedPidBitmap(pids, 0))
             }
             // ISO 9141-2 sends the VIN as 4-byte pieces behind three padding bytes.
-            PID_VIN -> vin?.let { numberedFrames(PID_VIN, List(VIN_PADDING_BYTES) { 0 } + ascii(it)) }
+            PID_VIN -> vin?.let { vehicleInfoFrames(PID_VIN, List(VIN_PADDING_BYTES) { 0 } + ascii(it), it.length) }
             PID_ECU_NAME -> name?.let {
                 val bytes = ascii(it.take(ECU_NAME_LENGTH))
-                numberedFrames(PID_ECU_NAME, bytes + List(ECU_NAME_LENGTH - bytes.size) { 0 })
+                vehicleInfoFrames(PID_ECU_NAME, bytes + List(ECU_NAME_LENGTH - bytes.size) { 0 }, ECU_NAME_LENGTH)
             }
             else -> null
         }
     }
+
+    /** CAN sends "49 PID 01 data" as one message, K-line as numbered 4-byte frames; [canLength] data bytes follow on CAN. */
+    private fun vehicleInfoFrames(pid: Int, kLinePayload: List<Int>, canLength: Int): List<List<Int>> =
+        if (config.isCanCar) {
+            listOf(listOf(RESPONSE_VEHICLE_INFO, pid, 1) + kLinePayload.takeLast(canLength))
+        } else {
+            numberedFrames(pid, kLinePayload)
+        }
 
     private fun numberedFrames(pid: Int, payload: List<Int>): List<List<Int>> =
         payload.chunked(BYTES_PER_VEHICLE_INFO_FRAME).mapIndexed { i, chunk ->
@@ -100,6 +109,10 @@ internal class SimulatorDiagnosticsEcu(private val config: SimulatorConfig) {
 
     private fun dtcFrames(responseMode: Int, codes: List<String>): List<List<Int>> {
         val encoded = codes.mapNotNull { encodeDtc(it) }
+        // CAN: one message, a count byte and then the codes; the adapter splits it into frames.
+        if (config.isCanCar) {
+            return listOf(listOf(responseMode, encoded.size) + encoded.flatMap { (high, low) -> listOf(high, low) })
+        }
         // With nothing stored the ECU still answers: one frame of zeros.
         if (encoded.isEmpty()) return listOf(listOf(responseMode) + List(CODES_PER_FRAME * 2) { 0 })
         return encoded.chunked(CODES_PER_FRAME).map { chunk ->

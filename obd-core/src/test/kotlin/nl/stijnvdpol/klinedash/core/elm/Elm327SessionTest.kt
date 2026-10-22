@@ -9,9 +9,12 @@ import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.core.log.RingCommLog
 import nl.stijnvdpol.klinedash.core.sim.SimulatorConfig
 import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
+import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
 import nl.stijnvdpol.klinedash.core.transport.TransportException
+import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,7 +44,7 @@ class Elm327SessionTest {
         assertTrue(info.unsupportedCommands.isEmpty())
         assertTrue(rig.steps.isNotEmpty())
         assertEquals(
-            listOf("ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATAT1", "ATI", "AT@1", "ATSP0", "0100", "ATDPN", "ATDP", "ATRV"),
+            listOf("ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATAT1", "ATI", "AT@1", "STI", "ATSP0", "0100", "ATDPN", "ATDP", "ATRV"),
             rig.sent(),
         )
     }
@@ -275,11 +278,106 @@ class Elm327SessionTest {
     }
 
     @Test
-    fun `adapter that is silent during setup fails fast`() = runTest {
+    fun `adapter that never answers atz is reported as locked after two attempts`() = runTest {
         val rig = Rig()
         rig.sim.connect()
         rig.config.timeoutRate = 1.0
+        val e = assertFails<UnsupportedAdapterException> { rig.session.initialize(null) {} }
+        assertEquals(LOCKED_ADAPTER_MESSAGE, e.message)
+        assertEquals(2, rig.sent().count { it == "ATZ" })
+        assertFalse("ATE0" in rig.sent())
+    }
+
+    @Test
+    fun `link lost after a good atz is an ordinary transport error`() = runTest {
+        val rig = Rig(SimulatorConfig().apply { dropConnectionAfterCommands = 2 })
+        rig.sim.connect()
         val e = assertFails<TransportException> { rig.session.initialize(null) {} }
-        assertTrue(e.message!!.contains("ATZ"))
+        assertFalse(e is UnsupportedAdapterException)
+    }
+
+    // ---- adapter fingerprint ----
+
+    @Test
+    fun `plain clone is fingerprinted and keeps adaptive timing 1 even on can`() = runTest {
+        val rig = Rig(SimulatorConfig().apply { carProtocol = "6" })
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals(ChipFamily.CLONE, info.profile.family)
+        assertEquals("ELM327 v1.5", info.profile.firmware)
+        assertEquals("OBDII to RS232 Interpreter", info.profile.description)
+        assertNull(info.profile.stnId)
+        assertFalse(info.profile.usesAdaptiveTiming2)
+        assertFalse("ATAT2" in rig.sent())
+        assertTrue(info.isCan)
+        assertTrue(info.unsupportedCommands.isEmpty())
+    }
+
+    @Test
+    fun `stn chip is recognised by sti and gets adaptive timing 2 on can`() = runTest {
+        val config = SimulatorConfig().apply {
+            carProtocol = "6"
+            elmVersion = "ELM327 v1.3a"
+            stnDeviceId = "STN1110 v4.2.0"
+        }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals(ChipFamily.STN, info.profile.family)
+        assertEquals("STN1110 v4.2.0", info.profile.stnId)
+        assertTrue(info.profile.usesAdaptiveTiming2)
+        assertEquals("ATAT2", rig.sent().last())
+        assertFalse("STI" in info.unsupportedCommands)
+    }
+
+    @Test
+    fun `adaptive timing 2 is never used on k-line`() = runTest {
+        val config = SimulatorConfig().apply {
+            elmVersion = "ELM327 v1.3a"
+            stnDeviceId = "STN1110 v4.2.0"
+        }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals(ChipFamily.STN, info.profile.family)
+        assertFalse(info.profile.usesAdaptiveTiming2)
+        assertFalse("ATAT2" in rig.sent())
+    }
+
+    @Test
+    fun `genuine looking elm gets adaptive timing 2 on can and a refusal is recorded`() = runTest {
+        val config = SimulatorConfig().apply {
+            carProtocol = "6"
+            elmVersion = "ELM327 v1.4b"
+        }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val accepted = rig.session.initialize(null) {}
+        assertEquals(ChipFamily.GENUINE_ELM, accepted.profile.family)
+        assertTrue(accepted.profile.usesAdaptiveTiming2)
+
+        config.cloneRejectsAt.add("ATAT2")
+        val refused = Rig(config).run {
+            sim.connect()
+            session.initialize(null) {}
+        }
+        assertFalse(refused.profile.usesAdaptiveTiming2)
+        assertTrue("ATAT2" in refused.unsupportedCommands)
+    }
+
+    @Test
+    fun `adapter that rejects ati and at at 1 still initialises with an unknown family`() = runTest {
+        val config = SimulatorConfig().apply { cloneRejectsAt.addAll(listOf("ATI", "AT@1")) }
+        val rig = Rig(config)
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        assertEquals("unknown", info.elmVersion)
+        assertEquals(ChipFamily.UNKNOWN, info.profile.family)
+        assertNull(info.profile.firmware)
+        assertNull(info.profile.description)
     }
 }

@@ -42,3 +42,17 @@ open class TransportException(message: String, cause: Throwable? = null) : Excep
 
 class TransportTimeoutException(val partial: String, timeoutMs: Long) :
     TransportException("No prompt within ${timeoutMs}ms (partial: \"${partial.take(80)}\")")
+
+/**
+ * The adapter is reachable but this app cannot talk to it, and trying again will not change that:
+ * an app-locked dongle that never answers ATZ, or a BLE device without any usable serial service.
+ * [nl.stijnvdpol.klinedash.core.elm.ElmConnectionManager] ends in
+ * [nl.stijnvdpol.klinedash.core.elm.ConnectionState.Failed] instead of retrying, unless it has
+ * talked to this adapter before (then the silence is an ordinary drop-out).
+ */
+class UnsupportedAdapterException(message: String, cause: Throwable? = null) : TransportException(message, cause)
+
+/** The explanation shown when an adapter connects but never answers the standard ELM327 commands. */
+const val LOCKED_ADAPTER_MESSAGE =
+    "This adapter doesn't answer standard OBD commands. It probably only works with its own app " +
+        "(for example BlueDriver, ThinkDiag, Golo or TopScan)."

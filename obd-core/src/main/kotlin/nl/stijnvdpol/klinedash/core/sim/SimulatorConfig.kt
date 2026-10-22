@@ -12,9 +12,22 @@ enum class Scenario {
     DRIVE_CYCLE,
 }
 
+/** How a simulated clone treats a request that carries more than one PID ("010C0D"). */
+enum class LongRequestQuirk {
+    /** Passes the request on unchanged. */
+    NONE,
+
+    /** Cuts the request to its first PID, so the reply holds only that block (ARM clones, see popular-obd-adapters.md). */
+    TRUNCATES,
+
+    /** Answers "?" (reported by users of SwiftOBD2 with some clones). */
+    REJECTS,
+}
+
 /**
  * Tunable behaviour of [SimulatorTransport]: the simulated car (a 2ZZ-GE Corolla T-Sport on
- * ISO 9141-2), timing, and fault injection for exercising reconnect and clone-quirk handling.
+ * ISO 9141-2 by default, or a CAN car with [carProtocol] "6"-"9"), timing, and fault injection for
+ * exercising reconnect and clone-quirk handling.
  *
  * All properties are @Volatile and the collections are copy-on-write, so a debug screen on the
  * UI thread can flip them while the OBD thread is talking to the simulator. Every fault is off
@@ -25,11 +38,23 @@ class SimulatorConfig {
     /** Seed for the fault dice and engine noise; same seed + same traffic = same replies. */
     @Volatile var seed: Long = 20_240_607L
 
-    /** ELM protocol number the simulated car really speaks ("3" = ISO 9141-2). */
+    /**
+     * ELM protocol number the simulated car really speaks ("3" = ISO 9141-2). "6" to "9" make it a
+     * CAN car (ISO 15765-4): fast replies ([canLatencyMinMs]), up to [maxPidsPerRequest] PIDs per
+     * Mode 01 request, "0:"/"1:" multi-frame lines for replies over seven bytes (VIN, long code
+     * lists), CAN-style Mode 03/07 (count byte) and Mode 09 (one message). Replies carry no
+     * headers on CAN, whatever ATH says.
+     */
     @Volatile var carProtocol: String = "3"
+
+    /** True when [carProtocol] is one of the ISO 15765-4 CAN variants (6-9). */
+    val isCanCar: Boolean get() = carProtocol in CAN_PROTOCOLS
 
     /** What ATI answers. Real clones claim "ELM327 v1.5" or "v2.1" regardless of hardware. */
     @Volatile var elmVersion: String = "ELM327 v1.5"
+
+    /** What STI answers, like an STN chip ("STN1110 v4.2.0"); null = "?", like every other adapter. */
+    @Volatile var stnDeviceId: String? = null
 
     // --- Timing (all in simulated milliseconds, realised with coroutine delay()) ---
 
@@ -52,11 +77,18 @@ class SimulatorConfig {
     @Volatile var responseCountLatencyMinMs: Long = RESPONSE_COUNT_LATENCY_MIN_MS
     @Volatile var responseCountLatencyMaxMs: Long = RESPONSE_COUNT_LATENCY_MAX_MS
 
+    /** CAN request/response latency range per OBD request (a single ECU on a 500 kbit bus is fast). */
+    @Volatile var canLatencyMinMs: Long = CAN_LATENCY_MIN_MS
+    @Volatile var canLatencyMaxMs: Long = CAN_LATENCY_MAX_MS
+
     /** Extra wait before the adapter gives up on an unanswered request ("NO DATA"). */
     @Volatile var noDataLatencyMs: Long = 250
 
     /** Duration of the 5-baud / fast bus init triggered by the first OBD request. */
     @Volatile var busInitMs: Long = 2_500
+
+    /** Same on CAN, where there is no wake-up sequence, just the protocol search. */
+    @Volatile var canBusInitMs: Long = 600
 
     // --- Car ---
 
@@ -91,6 +123,12 @@ class SimulatorConfig {
 
     /** Mode 01 PIDs the ECU supports; the default is the list read from the real car. */
     @Volatile var supportedPids: Set<Int> = DEFAULT_SUPPORTED_PIDS
+
+    /** PIDs the ECU accepts in one Mode 01 request; CAN only, a K-line ECU takes exactly one. SAE J1979 allows six. */
+    @Volatile var maxPidsPerRequest: Int = MAX_CAN_PIDS_PER_REQUEST
+
+    /** How the simulated adapter treats a multi-PID request before the ECU sees it. */
+    @Volatile var longRequestQuirk: LongRequestQuirk = LongRequestQuirk.NONE
 
     /** 17-character VIN; Mode 09 answers "NO DATA" while both this and [ecuName] are null. */
     @Volatile var vin: String? = null
@@ -161,6 +199,16 @@ class SimulatorConfig {
         /** Measured on the real K-line car: 0.45-0.5 s per request (5 PIDs took 2.2-2.5 s). */
         const val KLINE_LATENCY_MIN_MS = 450L
         const val KLINE_LATENCY_MAX_MS = 500L
+
+        /** A CAN car answers a request in tens of milliseconds. */
+        const val CAN_LATENCY_MIN_MS = 40L
+        const val CAN_LATENCY_MAX_MS = 60L
+
+        /** ELM protocol numbers of ISO 15765-4 CAN. */
+        val CAN_PROTOCOLS = setOf("6", "7", "8", "9")
+
+        /** SAE J1979: at most six PIDs in one Mode 01 request. */
+        const val MAX_CAN_PIDS_PER_REQUEST = 6
 
         /** Assumed (to verify in the car) latency of a request with the response-count suffix. */
         const val RESPONSE_COUNT_LATENCY_MIN_MS = 120L

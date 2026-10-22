@@ -38,14 +38,23 @@ data class PollerConfig(
     val requestTimeoutMs: Long = 2_000,
 )
 
-/** One command to send, with every demanded signal that is decoded from its reply. */
+/**
+ * One command to send, with every demanded signal that is decoded from its reply. A batch is a
+ * single multi-PID request ("010C0D") standing for several ordinary commands, its [members].
+ */
 internal class PollCommand(
     val command: String,
     /** [EVERY_ROUND] or the minimum time between two attempts. */
     val intervalMs: Long,
     val signals: List<Signal>,
+    val members: List<PollCommand> = emptyList(),
 ) {
     val isEveryRound: Boolean get() = intervalMs == EVERY_ROUND
+
+    val isBatch: Boolean get() = members.isNotEmpty()
+
+    /** The Mode 01 PID this ordinary command reads; null for adapter commands and for batches. */
+    val pid: Int? get() = if (isBatch) null else signals.firstOrNull()?.pid
 
     companion object {
         const val EVERY_ROUND = 0L
@@ -86,6 +95,53 @@ internal fun buildPollCommands(pollable: List<Signal>, detector: Signal?, config
         PollCommand(command, signals.minOf { intervalFor(it, detectorOnly, config) }, signals)
     }
 }
+
+private const val MODE_CURRENT_DATA_PREFIX = "01"
+
+/** A single CAN frame holds 7 data bytes; the response service byte "41" takes one. */
+private const val SINGLE_FRAME_BLOCK_BYTES = 6
+
+/** Bytes this command adds to a multi-PID reply ("pid" plus its data), null if it cannot be batched. */
+private fun PollCommand.blockBytes(dataLengths: Map<Int, Int>): Int? {
+    val pid = pid ?: return null
+    if (!isEveryRound || signals.any { it.pid != pid || it.decodePayload == null }) return null
+    return dataLengths[pid]?.plus(1)
+}
+
+private class Bin {
+    val commands = ArrayList<PollCommand>()
+    var bytes = 0
+}
+
+/**
+ * Merges the per-round Mode 01 commands of [commands] into multi-PID requests of at most [maxPids]
+ * PIDs, first-fit decreasing, each filled only up to what one CAN frame can carry ("41" plus
+ * [SINGLE_FRAME_BLOCK_BYTES] bytes): a single-frame answer needs no flow control and no
+ * multi-frame reassembly on the adapter, which is what the cheap clones are worst at
+ * (docs/research/popular-obd-adapters.md, section 4). Commands that cannot be batched (slow tiers,
+ * adapter commands, PIDs of unknown length) and bins that end up with one PID stay as they are.
+ */
+internal fun packBatches(commands: List<PollCommand>, dataLengths: Map<Int, Int>, maxPids: Int): List<PollCommand> {
+    val batchable = commands.filter { it.blockBytes(dataLengths) != null }
+    if (batchable.size < 2) return commands
+    val bins = ArrayList<Bin>()
+    for (command in batchable.sortedByDescending { it.blockBytes(dataLengths) }) {
+        val size = command.blockBytes(dataLengths) ?: continue
+        val bin = bins.firstOrNull { it.commands.size < maxPids && it.bytes + size <= SINGLE_FRAME_BLOCK_BYTES }
+            ?: Bin().also { bins.add(it) }
+        bin.commands.add(command)
+        bin.bytes += size
+    }
+    val packed = bins.map { if (it.commands.size == 1) it.commands.first() else batchOf(it.commands) }
+    return packed + commands.filter { it.blockBytes(dataLengths) == null }
+}
+
+private fun batchOf(members: List<PollCommand>): PollCommand = PollCommand(
+    command = MODE_CURRENT_DATA_PREFIX + members.joinToString("") { "%02X".format(it.pid) },
+    intervalMs = PollCommand.EVERY_ROUND,
+    signals = members.flatMap { it.signals },
+    members = members,
+)
 
 private fun PollCommand.overdueMs(lastAttemptMs: Map<String, Long>, nowMs: Long): Long {
     val last = lastAttemptMs[command] ?: return Long.MAX_VALUE
@@ -137,6 +193,8 @@ class ObdPollScheduler(
     private val demands = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val knownIds = catalog.mapTo(HashSet()) { it.id }
     private val rpmSignal = catalog.firstOrNull { it.id == RPM_ID }
+    private val pidDataLengths: Map<Int, Int> =
+        catalog.mapNotNull { signal -> signal.pid?.let { pid -> signal.pidDataLength?.let { pid to it } } }.toMap()
 
     /** Held for every request and for the whole of [withPollingPaused]: one user of the link at a time. */
     private val linkMutex = Mutex()
@@ -148,10 +206,17 @@ class ObdPollScheduler(
     /** How the response-count suffix ("010C1") has fared on this connection. */
     private enum class SuffixState { UNTESTED, CONFIRMED, DISABLED }
 
+    /** How multi-PID requests have fared on this connection; they are never tried off CAN. */
+    private enum class BatchState { UNTESTED, ON, OFF }
+
     /** Everything that is only valid for one connection; a new connection starts fresh. */
-    private class Connection(val supported: Set<Int>, startMs: Long, statsWindowMs: Long) {
+    private class Connection(val supported: Set<Int>, isCan: Boolean, startMs: Long, statsWindowMs: Long) {
         var mode = PollMode.ACTIVE
         var suffix = SuffixState.UNTESTED
+        var batch = if (isCan) BatchState.UNTESTED else BatchState.OFF
+
+        /** Batch requests that failed in a row while single requests still worked. */
+        var batchFailures = 0
         var rpmAliveAtMs = startMs
 
         /** A command that reached the NO DATA limit and still has to be checked against a live ECU. */
@@ -224,7 +289,8 @@ class ObdPollScheduler(
     private suspend fun pollConnection(): Nothing {
         val supported = detectSupportedPids()
         _supportedPids.value = supported
-        val connection = Connection(supported, clock(), config.statsWindowMs)
+        val isCan = (link.state.value as? ConnectionState.Connected)?.info?.isCan == true
+        val connection = Connection(supported, isCan, clock(), config.statsWindowMs)
         publishStats(connection)
         while (true) pollOnce(connection)
     }
@@ -263,16 +329,28 @@ class ObdPollScheduler(
             if (connection.mode == PollMode.ENGINE_OFF) delay(config.engineOffCheckIntervalMs)
             return
         }
-        val plan = planRound(commands, connection.lastAttemptMs, clock())
+        val plan = batchPlan(connection, planRound(commands, connection.lastAttemptMs, clock()))
         if (plan.isEmpty()) {
             publishStats(connection)
             waitForDemandChange(snapshot, nextDueInMs(commands, connection.lastAttemptMs, clock()))
             return
         }
         for (command in plan) {
-            poll(connection, command)
+            pollPlanned(connection, command)
             if (connection.mode != PollMode.ACTIVE) return
         }
+    }
+
+    /**
+     * On CAN the per-round commands are merged into multi-PID requests. The first batch of a
+     * connection doubles as the probe and is limited to [PROBE_BATCH_PIDS] PIDs. Batching waits
+     * until the response-count digit has been settled by an ordinary request, so a "?" cannot be
+     * blamed on the wrong one of the two.
+     */
+    private fun batchPlan(connection: Connection, plan: List<PollCommand>): List<PollCommand> {
+        if (connection.batch == BatchState.OFF || connection.suffix == SuffixState.UNTESTED) return plan
+        val maxPids = if (connection.batch == BatchState.UNTESTED) PROBE_BATCH_PIDS else MAX_BATCH_PIDS
+        return packBatches(plan, pidDataLengths, maxPids)
     }
 
     private fun buildCommands(connection: Connection, demandSnapshot: Map<String, Set<String>>): List<PollCommand> {
@@ -291,7 +369,7 @@ class ObdPollScheduler(
         }
     }
 
-    private suspend fun poll(connection: Connection, command: PollCommand) {
+    private suspend fun poll(connection: Connection, command: PollCommand): ElmResult {
         val result = exchange(connection, command)
         connection.deadCandidate?.let {
             connection.deadCandidate = null
@@ -300,6 +378,83 @@ class ObdPollScheduler(
         publishStats(connection)
         // An instant failure (e.g. "?") must not turn the loop into a busy spin.
         if (result !is ElmResult.Data) delay(FAILED_REQUEST_PAUSE_MS)
+        return result
+    }
+
+    private suspend fun pollPlanned(connection: Connection, command: PollCommand) {
+        when {
+            !command.isBatch -> poll(connection, command)
+            connection.batch == BatchState.OFF -> pollMembers(connection, command)
+            else -> {
+                val failure = pollBatch(connection, command) ?: return
+                val singlesAnswered = pollMembers(connection, command)
+                noteBatchFailure(connection, failure, singlesAnswered)
+            }
+        }
+    }
+
+    /** The member commands one by one; true when at least one was answered with data. */
+    private suspend fun pollMembers(connection: Connection, batch: PollCommand): Boolean {
+        var answered = false
+        for (member in batch.members) {
+            if (poll(connection, member) is ElmResult.Data) answered = true
+            if (connection.mode != PollMode.ACTIVE) break
+        }
+        return answered
+    }
+
+    /**
+     * Sends [batch] and decodes every PID block of the reply. Returns null when all requested blocks
+     * came back, otherwise the reply that fell short (including "?", NO DATA and a reply with a
+     * block missing), for the caller to fall back to single requests.
+     */
+    private suspend fun pollBatch(connection: Connection, batch: PollCommand): ElmResult? {
+        val result = request(connection, batch.command)
+        val now = clock()
+        connection.window.recordRequest(now)
+        val blocks = (result as? ElmResult.Data)?.let { MultiPidResponse.split(it, pidDataLengths) }.orEmpty()
+        if (batch.members.any { member -> member.pid !in blocks }) {
+            link.log.record(LogKind.INFO, "Poller: multi-PID request ${batch.command} not answered in full")
+            publishStats(connection)
+            return result
+        }
+        if (connection.batch == BatchState.UNTESTED) {
+            link.log.record(LogKind.INFO, "Poller: adapter and ECU accept multi-PID requests")
+        }
+        connection.batch = BatchState.ON
+        connection.batchFailures = 0
+        applyBatch(connection, batch, blocks, now)
+        publishStats(connection)
+        return null
+    }
+
+    /**
+     * A failed batch only counts against batching when the single requests that followed were
+     * answered (otherwise the ECU is just silent, e.g. ignition off), or when the adapter said "?".
+     * The probe and a "?" turn batching off at once; later, two failed rounds in a row do.
+     */
+    private fun noteBatchFailure(connection: Connection, failure: ElmResult, singlesAnswered: Boolean) {
+        if (!singlesAnswered && failure !is ElmResult.Unknown) return
+        connection.batchFailures++
+        val giveUp = connection.batch == BatchState.UNTESTED ||
+            failure is ElmResult.Unknown ||
+            connection.batchFailures >= BATCH_FAILURE_LIMIT
+        if (giveUp) {
+            connection.batch = BatchState.OFF
+            link.log.record(LogKind.INFO, "Poller: multi-PID requests switched off for this connection")
+        }
+    }
+
+    private fun applyBatch(connection: Connection, batch: PollCommand, blocks: Map<Int, IntArray>, nowMs: Long) {
+        val decoded = batch.members.flatMap { member ->
+            connection.lastAttemptMs[member.command] = nowMs
+            connection.noDataStreak.remove(member.command)
+            val bytes = member.pid?.let { blocks[it] } ?: return@flatMap emptyList()
+            member.signals.mapNotNull { signal ->
+                signal.decodePayload?.invoke(bytes)?.let { Reading(signal.id, it, nowMs) }
+            }
+        }
+        publishReadings(connection, decoded, nowMs)
     }
 
     private suspend fun exchange(connection: Connection, command: PollCommand): ElmResult {
@@ -378,6 +533,10 @@ class ObdPollScheduler(
         val decoded = command.signals.mapNotNull { signal ->
             signal.decode(data)?.let { Reading(signal.id, it, nowMs) }
         }
+        publishReadings(connection, decoded, nowMs)
+    }
+
+    private fun publishReadings(connection: Connection, decoded: List<Reading>, nowMs: Long) {
         if (decoded.isEmpty()) return
         _readings.update { it + decoded.associateBy { reading -> reading.signalId } }
         decoded.forEach { connection.window.recordSignal(it.signalId, nowMs) }
@@ -426,6 +585,11 @@ class ObdPollScheduler(
         const val LINK_LOST_PAUSE_MS = 500L
         const val DETECT_RETRY_DELAY_MS = 5_000L
         const val FAILED_REQUEST_PAUSE_MS = 50L
+
+        /** SAE J1979: a Mode 01 request carries at most six PIDs, and only on CAN. */
+        const val MAX_BATCH_PIDS = 6
+        const val PROBE_BATCH_PIDS = 2
+        const val BATCH_FAILURE_LIMIT = 2
     }
 }
 

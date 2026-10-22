@@ -24,16 +24,21 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
 import nl.stijnvdpol.klinedash.core.transport.PromptBuffer
 import nl.stijnvdpol.klinedash.core.transport.Transport
 import nl.stijnvdpol.klinedash.core.transport.TransportException
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
+import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
 import java.util.UUID
 
 /**
  * ELM327 over Bluetooth Low Energy. Cheap BLE clones expose a "serial over GATT" service whose
- * layout differs per vendor; [findBleUart] picks the characteristics after service discovery.
+ * layout differs per vendor; [findBleUartCandidates] lists the likely characteristic pairs after
+ * service discovery and [selectUart] keeps the first one that answers an ELM327 probe ("ATI").
+ * Once connected the transport asks for the high connection priority: the default connection
+ * interval (30-50 ms) would otherwise cap the request rate on a fast CAN car.
  *
  * Flow control: Android allows exactly one GATT operation at a time, so every operation sets a
  * [CompletableDeferred] that the callback completes, and writes are serialised by [opMutex].
@@ -121,21 +126,17 @@ class BleTransport(
 
                 discoverServices(g, handler)
                 Log.i(TAG, "BLE services: " + g.services.joinToString { it.uuid.toString() })
-                val uart = findBleUart(g)
-                    ?: throw TransportException(
-                        "This device has no serial BLE service (FFE0/FFF0/18F0/Nordic UART). " +
+                val candidates = findBleUartCandidates(g)
+                if (candidates.isEmpty()) {
+                    throw UnsupportedAdapterException(
+                        "This device has no serial BLE service. " +
                             "It is probably a Bluetooth Classic adapter: choose Bluetooth Classic instead.",
                     )
-                writeChar = uart.write
-                // Chosen from the characteristic's own properties: the Konnwei KW905's FFF2 only
-                // supports write-without-response (props 0x04), a WRITE_TYPE_DEFAULT write fails there.
-                writeType = if (uart.write.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
-                    BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-                } else {
-                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                 }
-                handler.notifyUuid = uart.notify.uuid
-                enableNotifications(g, handler, uart.notify)
+                val uart = selectUart(g, handler, candidates)
+                if (!g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)) {
+                    Log.w(TAG, "BLE high connection priority was not accepted")
+                }
                 // Last, because it is optional (it only enlarges chunks): the stack queues GATT
                 // operations, so a clone that is slow to answer the MTU exchange used to push the
                 // mandatory discovery/CCCD steps into their timeouts.
@@ -166,11 +167,15 @@ class BleTransport(
         if (!connected || g == null || c == null || h == null) {
             throw TransportException("Not connected to the adapter")
         }
-        val bytes = data.toByteArray(Charsets.US_ASCII)
+        sendBytes(g, h, c, data.toByteArray(Charsets.US_ASCII))
+    }
+
+    private suspend fun sendBytes(g: BluetoothGatt, h: GattHandler, c: BluetoothGattCharacteristic, bytes: ByteArray) {
         opMutex.withLock {
             var offset = 0
             while (offset < bytes.size) {
-                if (!connected) throw TransportException("The BLE connection dropped")
+                // gatt is cleared by teardown(), so this also notices a close() between two chunks.
+                if (gatt !== g) throw TransportException("The BLE connection dropped")
                 val end = minOf(offset + maxChunk, bytes.size)
                 writeChunk(g, h, c, bytes.copyOfRange(offset, end))
                 offset = end
@@ -239,7 +244,7 @@ class BleTransport(
             if (status == BluetoothGatt.GATT_SUCCESS) return
             val outcome = if (status == null) "timed out" else "failed (GATT status $status)"
             val found = g.services.joinToString { it.uuid.toString() }
-            if (findKnownBleUart(g) != null) {
+            if (findBleUartCandidates(g, knownOnly = true).isNotEmpty()) {
                 Log.w(TAG, "BLE service discovery $outcome, but a known UART service is present ($found); using it")
                 return
             }
@@ -261,6 +266,55 @@ class BleTransport(
         } finally {
             h.servicesResult = null
         }
+    }
+
+    /**
+     * The first of [candidates] that answers an ELM327 probe, left activated. Known layouts come
+     * first, so a normal adapter costs one probe. If none answers but a known layout is among
+     * them, that one is used anyway and the session's own ATZ attempts decide (an adapter that is
+     * merely slow to wake is not "locked"); with only guessed pairs the adapter is declared
+     * unusable.
+     */
+    private suspend fun selectUart(g: BluetoothGatt, h: GattHandler, candidates: List<BleUart>): BleUart {
+        for (candidate in candidates) {
+            if (answersProbe(g, h, candidate)) return candidate
+            Log.w(TAG, "No ELM327 answer on notify=${candidate.notify.uuid} write=${candidate.write.uuid}")
+        }
+        val fallback = candidates.firstOrNull { it.isKnownProfile }
+            ?: throw UnsupportedAdapterException(LOCKED_ADAPTER_MESSAGE)
+        activate(g, h, fallback)
+        return fallback
+    }
+
+    /** Activates [uart], sends "ATI" and reports whether any prompt came back within [PROBE_TIMEOUT_MS]. */
+    private suspend fun answersProbe(g: BluetoothGatt, h: GattHandler, uart: BleUart): Boolean {
+        val ch = channel ?: throw TransportException("The connection to the adapter was closed")
+        try {
+            activate(g, h, uart)
+            discardPending()
+            sendBytes(g, h, uart.write, PROBE_COMMAND.toByteArray(Charsets.US_ASCII))
+            val answered = withTimeoutOrNull(PROBE_TIMEOUT_MS) { ch.receive() } != null
+            discardPending()
+            return answered
+        } catch (e: TransportException) {
+            // A failing CCCD write or write only disqualifies this pair; a dropped link ends it all.
+            if (gatt !== g || h.disconnected.isCompleted) throw e
+            Log.w(TAG, "BLE probe on ${uart.notify.uuid} failed: ${e.message}")
+            return false
+        }
+    }
+
+    private suspend fun activate(g: BluetoothGatt, h: GattHandler, uart: BleUart) {
+        writeChar = uart.write
+        // Chosen from the characteristic's own properties: the Konnwei KW905's FFF2 only
+        // supports write-without-response (props 0x04), a WRITE_TYPE_DEFAULT write fails there.
+        writeType = if (uart.write.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        } else {
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        }
+        h.notifyUuid = uart.notify.uuid
+        enableNotifications(g, h, uart.notify)
     }
 
     private suspend fun enableNotifications(g: BluetoothGatt, h: GattHandler, notify: BluetoothGattCharacteristic) {
@@ -485,6 +539,10 @@ class BleTransport(
         const val DEFAULT_CHUNK = 20
         const val CONNECT_TIMEOUT_MS = 15_000L
         const val POST_CONNECT_DELAY_MS = 250L
+
+        /** The cheapest command every ELM327 and clone answers with at least a prompt. Not a bare CR: that repeats the last command. */
+        const val PROBE_COMMAND = "ATI\r"
+        const val PROBE_TIMEOUT_MS = 2_500L
         const val MTU_TIMEOUT_MS = 3_000L
         const val SERVICES_TIMEOUT_MS = 10_000L
         const val DISCOVERY_ATTEMPTS = 2

@@ -3,9 +3,11 @@ package nl.stijnvdpol.klinedash.core.elm
 import kotlinx.coroutines.delay
 import nl.stijnvdpol.klinedash.core.log.CommLog
 import nl.stijnvdpol.klinedash.core.log.LogKind
+import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
 import nl.stijnvdpol.klinedash.core.transport.Transport
 import nl.stijnvdpol.klinedash.core.transport.TransportException
 import nl.stijnvdpol.klinedash.core.transport.TransportTimeoutException
+import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
 
 /**
  * The adapter initialised fine but the ECU never answered the 0100 probe, with the saved
@@ -80,6 +82,7 @@ class Elm327Session(
      * If the adapter resets itself mid-init (clone brown-out) the whole sequence is restarted once.
      *
      * @throws EcuNotRespondingException when the adapter works but no protocol gets an answer.
+     * @throws UnsupportedAdapterException when the adapter never answers ATZ (app-locked dongle).
      * @throws TransportException when the adapter stops answering or keeps resetting.
      */
     suspend fun initialize(savedProtocol: String?, onStep: (String) -> Unit): AdapterInfo {
@@ -108,7 +111,8 @@ class Elm327Session(
         step(onStep, "Resetting adapter")
         resetAdapter()
         configureAdapter(onStep, unsupported)
-        val elmVersion = readAdapterIdentity(onStep, unsupported)
+        val identity = readAdapterIdentity(onStep, unsupported)
+        val family = AdapterProfile.classify(identity.firmware, identity.stnId, unsupported)
         val protocol = connectToEcu(savedProtocol, onStep, unsupported)
 
         val dp = send("ATDP")
@@ -119,15 +123,40 @@ class Elm327Session(
         val rv = send("ATRV")
         if (rv is ElmResult.Unknown) unsupported.add("ATRV")
         val voltage = (rv as? ElmResult.Data)?.lines?.firstOrNull()?.let { ElmParser.parseVoltage(it) }
+        val fastTiming = selectFasterTiming(family, protocol.number, unsupported)
 
         return AdapterInfo(
-            elmVersion = elmVersion,
+            elmVersion = identity.firmware ?: UNKNOWN_VERSION,
             protocolNumber = protocol.number,
             protocolName = protocolName,
             voltage = voltage,
             usedSavedProtocol = protocol.isSaved,
             unsupportedCommands = unsupported,
+            profile = AdapterProfile(
+                family = family,
+                firmware = identity.firmware,
+                description = identity.description,
+                stnId = identity.stnId,
+                usesAdaptiveTiming2 = fastTiming,
+            ),
         )
+    }
+
+    /**
+     * ATAT2 (aggressive adaptive timing) on CAN, for chips that are known to keep up: STN and
+     * genuine ELM327s. K-line and every clone stay on ATAT1: a clone gains little and gets
+     * unstable first (docs/research/popular-obd-adapters.md, recommendation 9). Returns whether
+     * ATAT2 is now active; a "?" is recorded like any other unsupported optional command.
+     */
+    private suspend fun selectFasterTiming(
+        family: ChipFamily,
+        protocolNumber: String,
+        unsupported: MutableSet<String>,
+    ): Boolean {
+        if (family !in FAST_TIMING_FAMILIES || !isCanProtocol(protocolNumber)) return false
+        val result = send(ADAPTIVE_TIMING_2)
+        if (result is ElmResult.Unknown) unsupported.add(ADAPTIVE_TIMING_2)
+        return result is ElmResult.Data
     }
 
     /** Echo, linefeeds, spaces and headers off, adaptive timing on. Rejected optional commands are recorded. */
@@ -147,21 +176,29 @@ class Elm327Session(
         }
     }
 
-    /** Returns the ATI version text ("unknown" if absent; informational only, clones lie anyway). */
-    private suspend fun readAdapterIdentity(onStep: (String) -> Unit, unsupported: MutableSet<String>): String {
+    /** What ATI, AT@1 and STI said; each null when the adapter rejected or did not answer it. */
+    private class AdapterIdentity(val firmware: String?, val description: String?, val stnId: String?)
+
+    /**
+     * ATI (informational only, clones lie), AT@1 and STI. "?" is a valid answer to all three: it is
+     * how a non-STN adapter rejects STI, so that one is not recorded as unsupported.
+     */
+    private suspend fun readAdapterIdentity(onStep: (String) -> Unit, unsupported: MutableSet<String>): AdapterIdentity {
         step(onStep, "Reading adapter info")
         val ati = send("ATI")
         if (ati is ElmResult.Unknown) unsupported.add("ATI")
-        val elmVersion = (ati as? ElmResult.Data)?.lines
+        val firmware = (ati as? ElmResult.Data)?.lines
             ?.let { lines -> lines.firstOrNull { it.contains("ELM", ignoreCase = true) } ?: lines.firstOrNull() }
-            ?: "unknown"
 
-        when (val description = send("AT@1")) {
-            is ElmResult.Unknown -> unsupported.add("AT@1")
-            is ElmResult.Data -> log.record(LogKind.INFO, "Adapter description: ${description.lines.joinToString(" ")}")
-            else -> Unit
+        val description = when (val r = send("AT@1")) {
+            is ElmResult.Unknown -> null.also { unsupported.add("AT@1") }
+            is ElmResult.Data -> r.lines.firstOrNull().also {
+                log.record(LogKind.INFO, "Adapter description: ${r.lines.joinToString(" ")}")
+            }
+            else -> null
         }
-        return elmVersion
+        val stnId = (send("STI") as? ElmResult.Data)?.lines?.firstOrNull()
+        return AdapterIdentity(firmware, description, stnId)
     }
 
     /** The protocol the ECU answered on, and whether it was the saved one. */
@@ -232,7 +269,8 @@ class Elm327Session(
             delay(RETRY_PAUSE_MS)
         }
         if (last is ElmResult.Timeout) {
-            throw TransportException("Adapter did not answer ATZ; wrong device or adapter asleep?")
+            // No prompt at all, twice: the link is up but nothing ELM327-like is on the other end.
+            throw UnsupportedAdapterException(LOCKED_ADAPTER_MESSAGE)
         }
         // Garbage/"?" on both tries: carry on, the next command tells whether the adapter is alive.
     }
@@ -322,6 +360,9 @@ class Elm327Session(
         private val FALLBACK_PROTOCOLS = listOf("3", "5", "4", TOYOTA_PROFILE)
 
         private val SETUP_COMMANDS = listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATAT1")
+        private const val ADAPTIVE_TIMING_2 = "ATAT2"
+        private const val UNKNOWN_VERSION = "unknown"
+        private val FAST_TIMING_FAMILIES = setOf(ChipFamily.STN, ChipFamily.GENUINE_ELM)
         private val BANNER_EXPECTED = setOf("ATZ", "ATWS", "ATI")
 
         private const val AT_TIMEOUT_MS = 2_000L

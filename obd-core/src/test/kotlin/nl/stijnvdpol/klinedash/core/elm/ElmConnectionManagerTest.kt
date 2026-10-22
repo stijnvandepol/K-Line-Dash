@@ -14,6 +14,7 @@ import nl.stijnvdpol.klinedash.core.assertFails
 import nl.stijnvdpol.klinedash.core.assertIs
 import nl.stijnvdpol.klinedash.core.sim.SimulatorConfig
 import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
+import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
 import nl.stijnvdpol.klinedash.core.transport.Transport
 import nl.stijnvdpol.klinedash.core.transport.TransportException
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
@@ -143,6 +144,56 @@ class ElmConnectionManagerTest {
         manager.start()
         val state = withTimeout(5_000) { manager.state.first { it is ConnectionState.Failed } }
         assertEquals("Geen adapter gekozen", assertIs<ConnectionState.Failed>(state).reason)
+    }
+
+    @Test
+    fun `adapter that never answers atz ends in failed and is not retried`() = runTest {
+        var created = 0
+        val config = SimulatorConfig().apply { timeoutRate = 1.0 }
+        val manager = ElmConnectionManager(
+            { created++; SimulatorTransport(config) }, "sim", FakeProtocolStore(), backgroundScope,
+        )
+        manager.start()
+        val failed = assertIs<ConnectionState.Failed>(
+            withTimeout(60_000) { manager.state.first { it is ConnectionState.Failed } },
+        )
+
+        assertEquals(LOCKED_ADAPTER_MESSAGE, failed.reason)
+        assertEquals(FailureKind.UNSUPPORTED_ADAPTER, failed.kind)
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, created)
+        assertTrue(manager.state.value is ConnectionState.Failed)
+    }
+
+    @Test
+    fun `silence after an adapter has worked is retried like any drop`() = runTest {
+        var created = 0
+        val config = SimulatorConfig()
+        val manager = ElmConnectionManager(
+            { created++; SimulatorTransport(config) }, "sim", FakeProtocolStore(), backgroundScope,
+            random = Random(1),
+        )
+        manager.start()
+        withTimeout(60_000) { manager.state.first { it is ConnectionState.Connected } }
+
+        config.timeoutRate = 1.0
+        config.dropConnectionAfterCommands = 0
+        assertFails<TransportException> { manager.execute("ATI") }
+        val reconnecting = assertIs<ConnectionState.Reconnecting>(
+            withTimeout(60_000) { manager.state.first { it is ConnectionState.Reconnecting } },
+        )
+        assertTrue(reconnecting.reason.isNotBlank())
+
+        advanceTimeBy(120_000L)
+        runCurrent()
+        assertTrue("created $created", created >= 3)
+        assertFalse(manager.state.value is ConnectionState.Failed)
+    }
+
+    @Test
+    fun `failure kind defaults to other`() {
+        assertEquals(FailureKind.OTHER, ConnectionState.Failed("x").kind)
     }
 
     @Test

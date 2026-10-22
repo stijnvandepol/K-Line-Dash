@@ -22,6 +22,7 @@ import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.core.log.RingCommLog
 import nl.stijnvdpol.klinedash.core.transport.Transport
 import nl.stijnvdpol.klinedash.core.transport.TransportException
+import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
 
 /**
  * Exponential reconnect delay: [initialMs] * [factor]^(attempt-1), capped at [maxMs], with
@@ -54,7 +55,10 @@ data class BackoffPolicy(
  * Failure model: a [TransportException] (link dropped, init failed, ECU silent) is retried
  * forever with [backoff], because the usual cause is the driver simply not having the ignition
  * on yet. A [SecurityException] (missing Bluetooth permission) is not retryable and ends in
- * [ConnectionState.Failed]. A fresh transport comes from [transportFactory] for every attempt.
+ * [ConnectionState.Failed]. So does an [UnsupportedAdapterException] (an app-locked dongle that
+ * never answers), but only until this manager has completed an init once: after that, silence is a
+ * drop-out like any other and is retried. A fresh transport comes from [transportFactory] for
+ * every attempt.
  *
  * [execute] rethrows the [TransportException] that killed the link, so a poller can stop its
  * cycle and wait for [ConnectionState.Connected] again; until then it throws [IllegalStateException].
@@ -137,6 +141,7 @@ class ElmConnectionManager(
 
     private suspend fun runLoop() {
         var attempt = 0
+        var hasConnectedBefore = false
         while (true) {
             val transport = try {
                 transportFactory()
@@ -169,6 +174,7 @@ class ElmConnectionManager(
                 val lost = CompletableDeferred<String>()
                 link = Link(session, lost)
                 attempt = 0
+                hasConnectedBefore = true
                 _state.value = ConnectionState.Connected(info)
                 log.record(LogKind.INFO, "Connected: ${info.protocolName} (${info.elmVersion})")
 
@@ -180,6 +186,13 @@ class ElmConnectionManager(
                 log.record(LogKind.ERROR, "Connect refused: $msg")
                 _state.value = ConnectionState.Failed(msg)
                 return
+            } catch (e: UnsupportedAdapterException) {
+                reason = e.message ?: "Adapter not supported"
+                log.record(LogKind.ERROR, "Unsupported adapter: $reason")
+                if (!hasConnectedBefore) {
+                    _state.value = ConnectionState.Failed(reason, FailureKind.UNSUPPORTED_ADAPTER)
+                    return
+                }
             } catch (e: TransportException) {
                 reason = e.message ?: "Connection error"
                 log.record(LogKind.ERROR, "Link error: $reason")

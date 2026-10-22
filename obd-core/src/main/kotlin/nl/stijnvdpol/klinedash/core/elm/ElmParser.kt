@@ -34,14 +34,15 @@ object ElmParser {
 
     /**
      * Parses the reply to [command] (as sent, without CR) from [raw].
-     * OBD commands are hex strings such as "010C"; anything starting with "AT" is an AT command.
+     * OBD commands are hex strings such as "010C"; anything starting with "AT" is an AT command, and
+     * "ST..." (STI, STDI) an STN command. Both are answered with free text, not hex.
      */
     fun parse(command: String, raw: String): ElmResult {
         val lines = splitLines(raw)
         if (lines.isEmpty()) return ElmResult.Garbage(raw)
 
         val cmd = compact(command)
-        val isAt = cmd.startsWith("AT")
+        val isAt = cmd.startsWith("AT") || cmd.startsWith("ST")
         // A banner is the legitimate answer to ATZ/ATWS/ATI, but never to an OBD request.
         val hasBanner = looksLikeReset(raw)
         if (!isAt && hasBanner) return ElmResult.Garbage(raw)

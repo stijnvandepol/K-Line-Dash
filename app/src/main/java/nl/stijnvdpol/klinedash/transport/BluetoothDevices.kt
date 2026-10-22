@@ -26,24 +26,42 @@ private const val TAG = "KLineDash"
  *
  * @property name display name; [UNNAMED_DEVICE] when the device does not advertise one
  * @property looksLikeObd name matches a known ELM327/OBD adapter brand (heuristic only)
+ * @property knownAppLocked name matches a dongle that only works with its own app (BlueDriver,
+ *   ThinkDiag, ...). A warning for the list, never a reason to refuse: a device that answers is used.
  */
 data class BtDeviceInfo(
     val name: String,
     val address: String,
     val looksLikeObd: Boolean,
+    val knownAppLocked: Boolean = false,
 )
 
 private const val UNNAMED_DEVICE = "(unnamed)"
 
 private val OBD_NAME_HINTS = listOf(
     "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "KW905", "VIECAR",
-    "VEEPEAK", "OBDLINK", "CAN BUS", "BLUEDRIVER",
+    "VEEPEAK", "OBDLINK", "CAN BUS", "BLUEDRIVER", "LELINK", "KIWI", "V-CHECKER", "TONWON", "HGC", "MAXIOBD",
+)
+
+/**
+ * Advertised names of dongles that only talk to their vendor's app (docs/research/popular-obd-adapters.md,
+ * section 1b). FIXD and Carista are left out on purpose: unverified, not known to be locked.
+ */
+private val APP_LOCKED_NAME_HINTS = listOf(
+    "BLUEDRIVER", "TOPDON", "TOPSCAN", "THINKDIAG", "THINKCAR", "THINKTOOL", "X431", "EASYDIAG",
+    "GOLO", "M-DIAG", "ANCEL", "AUTEL", "MAXIAP", "FASTLINK", "CARLY", "OBDELEVEN",
 )
 
 internal fun nameLooksLikeObd(name: String?): Boolean {
     if (name.isNullOrBlank()) return false
     val upper = name.uppercase()
     return OBD_NAME_HINTS.any { upper.contains(it) }
+}
+
+internal fun isKnownAppLocked(name: String?): Boolean {
+    if (name.isNullOrBlank()) return false
+    val upper = name.uppercase()
+    return APP_LOCKED_NAME_HINTS.any { upper.contains(it) }
 }
 
 /** Whether connecting over this transport needs the Bluetooth runtime permissions below. */
@@ -96,6 +114,17 @@ internal const val DEFAULT_ADAPTER_NAME = "OBD-adapter"
 internal fun invalidAddressMessage(address: String) = "Invalid Bluetooth address: $address"
 
 /**
+ * Shown when every Bluetooth Classic connect strategy failed. The pairing hint only appears for an
+ * adapter that is not paired yet; buttons are common on dual-mode adapters that sleep or hide
+ * until pressed (Konnwei KW905, vLinker MC+, OBDLink).
+ */
+internal fun classicConnectFailedMessage(isBonded: Boolean): String = buildString {
+    append("Cannot connect to the adapter over Bluetooth. Check that it is plugged into the OBD port and the ignition is on. ")
+    if (!isBonded) append("Pair the adapter first (PIN 1234, 0000 or 6789). ")
+    append("Press the adapter's button if it has one.")
+}
+
+/**
  * The device's advertised name, or null. The permission can be revoked at any moment; the name is
  * cosmetic, so then the device is just shown unnamed (a connect attempt fails loudly instead).
  */
@@ -123,6 +152,7 @@ fun bondedDevices(context: Context): List<BtDeviceInfo> {
                     name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
                     address = d.address,
                     looksLikeObd = nameLooksLikeObd(rawName),
+                    knownAppLocked = isKnownAppLocked(rawName),
                 )
             }
             .sortedWith(compareByDescending<BtDeviceInfo> { it.looksLikeObd }.thenBy { it.name.lowercase() })
@@ -172,6 +202,7 @@ fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = cal
                 name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
                 address = device.address,
                 looksLikeObd = nameLooksLikeObd(rawName),
+                knownAppLocked = isKnownAppLocked(rawName),
             ),
         )
     }
