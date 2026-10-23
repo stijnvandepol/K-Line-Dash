@@ -321,6 +321,10 @@ class HttpTripExportServerTest {
         assertTrue(created.isRunning)
 
         assertEquals(200, client.get("/").status)
+        // The client sees the response end when the socket closes; the worker only then finishes
+        // its bookkeeping (last request time, active count). Advancing the clock before that would
+        // race it.
+        awaitTrue("request finished on the server") { created.activeConnectionCount == 0 }
         now += 900
         created.checkIdle()
         assertTrue("a request must reset the idle timer", created.isRunning)
