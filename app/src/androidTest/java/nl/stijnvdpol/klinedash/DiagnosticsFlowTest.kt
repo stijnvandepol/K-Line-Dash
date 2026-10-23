@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash
 
+import nl.stijnvdpol.klinedash.core.diag.MANUFACTURER_SPECIFIC_DESCRIPTION
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
@@ -14,7 +15,7 @@ internal class DiagnosticsFlowTest : AppUiTest() {
         openDiagnostics()
 
         compose.waitFor(text("System Too Lean (Bank 1)"))
-        compose.waitFor(text("Manufacturer-specific code"))
+        compose.waitFor(text(MANUFACTURER_SPECIFIC_DESCRIPTION))
         assertFalse("Another make would get Toyota's meaning", compose.exists(text("VVT System Malfunction (Bank 1)")))
     }
 
@@ -27,7 +28,7 @@ internal class DiagnosticsFlowTest : AppUiTest() {
         compose.openPage(Page.Diag)
 
         compose.waitFor(text("VVT System Malfunction (Bank 1)"))
-        assertFalse(compose.exists(text("Manufacturer-specific code")))
+        assertFalse(compose.exists(text(MANUFACTURER_SPECIFIC_DESCRIPTION)))
     }
 
     @Test

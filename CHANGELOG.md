@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-23
+
+K-Line Dash no longer assumes a Toyota Corolla T-Sport: the tachometers and trouble codes now fit
+any car. Fixes from testing 1.0.0 with the simulator and lap timing.
+
 ### Added
 
 - **SETUP > Car:** the red line of the car's rev counter (sets the scale of every tachometer) and the
@@ -76,5 +81,6 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/stijnvandepol/CarPlayinfo/releases/tag/v1.0.0

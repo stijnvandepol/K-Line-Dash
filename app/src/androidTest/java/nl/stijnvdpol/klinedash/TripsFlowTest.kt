@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash
 
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isOn
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -15,9 +16,10 @@ internal class TripsFlowTest : AppUiTest() {
         compose.waitFor(text("No trips yet. Start a trip to record one."))
         compose.openPage(Page.Dash)
         compose.connectSimulatorFromDash()
-        // The trip has a route only when the simulated circuit stands in for the GPS.
+        // The trip has a route only when the simulated circuit stands in for the GPS; choosing the
+        // simulator switches it on.
         compose.openSetupSection("GPS & Tracks")
-        compose.tap(switchRow("Use the simulated circuit"))
+        compose.waitFor(switchRow("Use the simulated circuit") and isOn())
 
         compose.openPage(Page.Trips)
         compose.tap(button("Start trip") and isEnabled(), CAR_TIMEOUT_MS)
