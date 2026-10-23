@@ -39,7 +39,7 @@ class TripExportTest {
     }
 
     /** A finished 3-lap drive on the circuit, stored like the recorder does; [withGps] false = an OBD-only trip. */
-    private suspend fun storeTrip(withGps: Boolean = true, trackId: Long? = null): Trip {
+    private suspend fun storeTrip(withGps: Boolean = true, trackId: Long? = null, lapTimingAfterMs: Long? = null): Trip {
         val fileName = "trip-20261022-140307.csv"
         val fixes = circuitFixes(speedKmh = 144.0, durationMs = 160_000) // 40 m/s: 50 s per lap
         File(tripsDir, fileName).writeText("\uFEFF" + tripCsvOf(fixes, withGps), Charsets.UTF_8)
@@ -47,6 +47,7 @@ class TripExportTest {
             Trip(
                 startMs = TEST_BASE_MS, endMs = TEST_BASE_MS + 160_000, fileName = fileName, sampleCount = fixes.size,
                 distanceKm = 6.4, maxRpm = 3000.0, maxSpeedKmh = 144.0, maxCoolantC = 90.0, trackId = trackId,
+                lapTimingAfterMs = lapTimingAfterMs,
             ),
         )
         return checkNotNull(tripDao.get(id))
@@ -124,6 +125,47 @@ class TripExportTest {
         assertEquals(50_000.0, checkNotNull(row.bestLapMs).toDouble(), 300.0)
         assertTrue(row.hasGps)
         assertNotNull(row.movingTimeMs)
+    }
+
+    @Test
+    fun lapsAreTimedOverTheLapSessionOnly() = runBlocking {
+        trackDao.insert(circuitTrack(id = 0))
+        // The line is passed at 1 s, 51 s, 101 s and 151 s; the session began 60 s in.
+        val trip = storeTrip(trackId = 1, lapTimingAfterMs = TEST_BASE_MS + 60_000)
+
+        val detail = (analysis.analyze(trip.id) as AnalysisResult.Done).detail
+        analysis.refreshSummary(trip.id)
+
+        assertEquals(1, detail.laps.size)
+        assertEquals(TEST_BASE_MS + 101_000.0, detail.laps.single().lap.startMs.toDouble(), 300.0)
+        assertEquals(1, tripDao.get(trip.id)?.lapCount)
+        assertEquals(detail.laps.single().lap.lapTimeMs, tripDao.get(trip.id)?.bestLapMs)
+    }
+
+    @Test
+    fun theReferenceLapAndTheExportsFollowTheLapSession() = runBlocking {
+        trackDao.insert(circuitTrack(id = 0))
+        // Began 130 s in: only the pass at 151 s is left, which starts a lap that never ends.
+        val trip = storeTrip(trackId = 1, lapTimingAfterMs = TEST_BASE_MS + 130_000)
+
+        assertTrue("no complete lap in the session", analysis.referenceLap(1).isEmpty())
+        val result = exporter.exportTrip(trip.id) as ExportResult.Done
+
+        assertEquals(ExportFormat.LAPS_CSV, result.skipped.single().format)
+        val pcRows = File(tripsDir, "trip-20261022-140307.pc.csv").readText().removePrefix("﻿").lines().drop(1).filter { it.isNotEmpty() }
+        val lapCell = { row: String -> row.split(",")[2] }
+        val beforeTheSession = pcRows.filter { it.split(",")[1].toDouble() < 130.0 }
+        assertTrue(beforeTheSession.size > 100)
+        assertTrue("no sample before the session is in a lap", beforeTheSession.all { lapCell(it).isEmpty() })
+    }
+
+    @Test
+    fun aTripWithoutALapSessionStartKeepsTimingTheWholeTrip() = runBlocking {
+        trackDao.insert(circuitTrack(id = 0))
+        val trip = storeTrip(trackId = 1, lapTimingAfterMs = null)
+
+        assertEquals(3, (analysis.analyze(trip.id) as AnalysisResult.Done).detail.laps.size)
+        assertTrue("a complete lap is there for the sector lines", analysis.referenceLap(1).isNotEmpty())
     }
 
     @Test

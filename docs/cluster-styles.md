@@ -21,7 +21,7 @@ smaller of width and height, never stretch.
 
 | Id | Name in the app | Look |
 |---|---|---|
-| `bar` | Race bar | The existing 45-segment bar with RPM / KM/H / WATER numerals. |
+| `bar` | Race bar | The existing segmented bar (200 rpm per segment, over the car's rpm scale) with RPM / KM/H / WATER numerals. |
 | `twin` | Twin dials | Tachometer left, speedometer right, round, about 500 dp across, 250 degree sweep from bottom-left; between them a slim coolant dial (90 degree arc) with the value under it. Digital RPM small inside the tach, digital speed inside the speedo. |
 | `center` | Center tach | One large tachometer in the middle (about 520 dp), digital speed large on its left, coolant and battery stacked on its right. |
 | `arc` | Digital arc | A row of 10 shift lights across the top (green, then amber, then red, lighting up over the last 1 500 rpm before the shift point); below it a 200 degree segmented arc tachometer with the speed as the hero numeral in its centre and the RPM smaller under it. |
@@ -29,9 +29,12 @@ smaller of width and height, never stretch.
 
 Shared dial rules:
 
-- Scale: tach 0 to 9 000 (major ticks every 1 000 with numerals, minor every 500), speedometer 0 to
-  260 km/h (major every 20, numerals every 40). Redline zone from 7 800 rpm, caution zone from
-  6 200 rpm, drawn as an arc band inside the ticks in the theme's caution/danger colours.
+- Scale: the tach runs from 0 to the end of the car's rpm scale (the next whole 1 000 rpm at least
+  1 000 above the redline set in the car settings: 6 000 for a 4 500 redline, 8 000 for 6 500, 9 000 for
+  8 000, 11 000 for 10 000; major ticks every 1 000 with numerals, minor every 500), speedometer 0 to
+  260 km/h (major every 20, numerals every 40). Redline zone from the redline, caution zone from
+  1 000 rpm below it, drawn as an arc band inside the ticks in the theme's caution/danger colours.
+  The numerals of those zones take the same colours.
 - Needles move with the same interpolation as the RPM bar (tween as long as the measured update
   interval, linear) so they glide instead of jumping; the needle is drawn in the draw phase only.
 - A stale value parks nothing: the needle stays where it was and the digital value dims.
@@ -112,8 +115,9 @@ are plain functions in `ClusterGeometry.kt` with unit tests.
   sweep up from 0. A stale reading changes nothing: the needle stays, the digital value dims.
   The coolant pointer reads the latest value directly (it changes slowly), and the engine off
   reading 0 puts every needle at 0.
-- **Twin dials**: tachometer left (0 to 9 with "x1000", 250 degrees from the bottom left, minor
-  ticks every 500, caution and redline bands from 6 200 and 7 800), speedometer right (0 to 260,
+- **Twin dials**: tachometer left (0 to the end of the rpm scale in thousands with "x1000", 250
+  degrees from the bottom left, minor ticks every 500, caution and redline bands from the caution
+  rpm and the redline), speedometer right (0 to 260,
   ticks every 10, major every 20, numerals every 40, no bands), the digital values under the hub.
   Between them the slim coolant dial: a 90 degree arc across the top, "C" left and "H" right, its
   bands at the caution and danger limits of SETUP > Warnings, the value and "WATER °C" under it. The
@@ -122,9 +126,9 @@ are plain functions in `ClusterGeometry.kt` with unit tests.
   fields (label, unit, value at the bottom) left and right of it, separated by rules.
 - **Digital arc**: ten shift lights across the top, burning one by one over the last 1 500 rpm
   before the shift point (4 green, 3 amber, 3 red; all ten at the shift point). The shift point is
-  that of the first Track page of the layout, 7 800 when there is none. Below them 45 segments of
-  200 rpm over 200 degrees (lit like the RPM bar: the theme's needle colour, amber from 6 200, red
-  from 7 800), the speed as the hero numeral in the middle and the rpm under it. The coolant and the
+  that of the first Track page of the layout (6 200 when there is none), never past the end of the
+  rpm scale. Below them one segment per 200 rpm of the scale (30 to 55) over 200 degrees (lit like
+  the RPM bar: the theme's needle colour, amber from the caution rpm, red from the redline), the speed as the hero numeral in the middle and the rpm under it. The coolant and the
   battery stand in the two bottom corners, where the arc leaves room (the spec does not show the
   coolant in this style, and a driver needs it).
 - **Virtual cockpit**: two rings (tach left filling counter-clockwise from the bottom, speed right

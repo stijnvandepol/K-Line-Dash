@@ -52,9 +52,12 @@ private val AdapterChoices = listOf(
     AdapterChoice(TransportKind.SIMULATOR, R.string.wiz_adapter_sim, R.string.wiz_adapter_sim_hint),
 )
 
-/** Which kind of adapter the user has; the choice is stored at once, as on SETUP > Connection. */
+/**
+ * Which kind of adapter the user has; the choice is stored at once, as on SETUP > Connection. The
+ * simulator also switches on the simulated GPS circuit, any real adapter switches it off.
+ */
 @Composable
-internal fun AdapterStep(connection: ConnectionViewModel) {
+internal fun AdapterStep(connection: ConnectionViewModel, wizard: WizardViewModel) {
     val settings by connection.settings.collectAsStateWithLifecycle()
     val chosen = settings?.kind
     val colors = KLineTheme.colors
@@ -62,7 +65,10 @@ internal fun AdapterStep(connection: ConnectionViewModel) {
         StepTitle(stringResource(R.string.wiz_adapter_title))
         HorizontalRule()
         AdapterChoices.forEach { choice ->
-            SelectableRow(selected = choice.kind == chosen, onClick = { connection.selectKind(choice.kind) }) {
+            SelectableRow(selected = choice.kind == chosen, onClick = {
+                connection.selectKind(choice.kind)
+                wizard.onAdapterChosen(choice.kind)
+            }) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         stringResource(choice.labelRes),

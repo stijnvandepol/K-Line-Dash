@@ -77,21 +77,26 @@ sealed interface StartResult {
  * empty. With [TripSettings.autoStartWhenMoving] such a trip also starts by itself (see [MotionDetector]).
  *
  * Lap timing: the track in [activeTrack] when the trip starts, and any track set while it runs, is
- * stored with the trip and timed live (see [live]). Ending the lap session (null track) does not
- * take the laps away from the trip that is running. A lap session ends with its trip, however the
+ * stored with the trip and timed live (see [live]). Lap timing covers the lap session only: a track
+ * set mid-trip stores, next to the track, the time it started ([Trip.lapTimingAfterMs]), so the
+ * analysis of the finished file times the same part of the trip and finds the same laps as the live
+ * timer (a pass of the line before the session is no lap; the pass at which the line was set starts
+ * lap 1). Ending the lap session (null track) does not take the laps away from the trip that is
+ * running. A lap session ends with its trip, however the
  * trip ends (stop, ignition off, the engine stopping, a write error, the service stopping): the
  * recorder then hands the trip's track to [releaseTrack], so the next trip is a plain one whether or
  * not any screen is there to see it.
  *
  * A trip with a track gets its cached lap count and best lap recomputed from the finished CSV by
- * [refreshSummary], because a start/finish line set mid-trip restarts the live lap timer (an added
- * sector line does not) and the file knows all fixes.
+ * [refreshSummary]: a start/finish line set mid-trip restarts the live lap timer (an added sector
+ * line does not), and the file is what a later track change recomputes.
  * When the location source changes during a trip (simulated circuit on or off), the GPS distance
  * starts a new segment, so the jump between the two sources is not driven distance.
  *
- * Demand on the poller, owner "trip": while recording rpm, speed and coolant (so the summary
- * means something); otherwise only rpm when auto-record is on (to notice the engine starting).
- * Everything else in the CSV is whatever the screens and warnings poll anyway.
+ * Demand on the poller, owner "trip": while recording [SUMMARY_SIGNAL_IDS] (rpm, speed, coolant, air
+ * flow and throttle, so the summary, the fuel estimate and the full-throttle time mean something);
+ * otherwise only rpm when auto-record is on (to notice the engine starting). Everything else in the
+ * CSV is whatever the screens and warnings poll anyway.
  *
  * All state changes happen under one lock, so UI calls and the sampling loop cannot interleave.
  */
@@ -299,7 +304,7 @@ class TripRecorder internal constructor(
         current.session.setTrack(track.id, gates)
         _live.value = current.session.liveState()
         try {
-            tripDao.setTrack(current.tripId, track.id)
+            tripDao.setTrack(current.tripId, track.id, current.session.lapTimingAfterMs)
         } catch (e: SQLException) {
             Log.e(TAG, "Could not store the track of trip ${current.tripId}", e)
         }

@@ -15,9 +15,10 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Density
-import nl.stijnvdpol.klinedash.ui.CAUTION_RPM
+import nl.stijnvdpol.klinedash.data.RpmScale
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
-import nl.stijnvdpol.klinedash.ui.DANGER_RPM
+import nl.stijnvdpol.klinedash.ui.RpmZone
+import nl.stijnvdpol.klinedash.ui.rpmZone
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.NumeralFace
 import nl.stijnvdpol.klinedash.ui.theme.contrastRatio
@@ -70,7 +71,7 @@ private const val CAPTION_ALPHA = 0.7f
 /**
  * What differs between the tachometer and the speedometer: the scale, its ticks (every
  * [minorStep]; major every [majorStep]; a numeral every [labelStep], showing the value divided by
- * [labelDivisor]), whether the caution and redline zones show, and the captions.
+ * [labelDivisor]), the rpm [zones] to colour it by (null for the speedometer), and the captions.
  */
 @Immutable
 internal class DialSpec(
@@ -79,7 +80,7 @@ internal class DialSpec(
     val majorStep: Int,
     val labelStep: Int,
     val labelDivisor: Int,
-    val hasZones: Boolean,
+    val zones: RpmScale?,
     val topCaption: String?,
     val caption: String,
 )
@@ -93,10 +94,14 @@ private fun placeCentred(measurer: TextMeasurer, text: String, style: TextStyle,
     return PlacedText(layout, Offset(middle.x - layout.size.width / 2f, middle.y + capHeight / 2f - layout.firstBaseline), color)
 }
 
-private fun KLineColors.zoneColour(value: Double, normal: Color): Color = when {
-    value >= DANGER_RPM -> danger
-    value >= CAUTION_RPM -> caution
-    else -> normal
+/** [normal] below the caution rpm of [zones], the caution and danger colour from there; always [normal] without zones. */
+private fun KLineColors.zoneColour(value: Double, zones: RpmScale?, normal: Color): Color {
+    if (zones == null) return normal
+    return when (rpmZone(value.toInt(), zones)) {
+        RpmZone.NORMAL -> normal
+        RpmZone.CAUTION -> caution
+        RpmZone.DANGER -> danger
+    }
 }
 
 /** The face, rim, zone bands, ticks, numerals and captions of one dial of [diameter] pixels. */
@@ -115,7 +120,7 @@ internal class DialPainter(
     private val numeralStyle = with(density) { numeralStyle(numerals, (NUMERAL_SIZE * unit).toSp()) }
     private val captionStyle = with(density) { numeralStyle(numerals, (CAPTION_SIZE * unit).toSp()) }
     private val numeralTexts = ticks.filter { it.hasLabel }.map { tick ->
-        val color = if (spec.hasZones) colors.zoneColour(tick.value, colors.faceInk) else colors.faceInk
+        val color = colors.zoneColour(tick.value, spec.zones, colors.faceInk)
         val middle = polar(center.x, center.y, NUMERAL_RADIUS * unit, tick.angleDeg)
         placeCentred(measurer, (tick.value / spec.labelDivisor).toInt().toString(), numeralStyle, NUMERAL_SIZE * unit, middle, color)
     }
@@ -135,7 +140,7 @@ internal class DialPainter(
         val rim = if (isChrome) CHROME_STROKE * CHROME_STROKES * unit else PLAIN_RIM * unit
         drawCircle(colors.face, diameter / 2f - rim / 2f, center)
         drawRim()
-        if (spec.hasZones) drawZoneBands()
+        spec.zones?.let { drawZoneBands(it) }
         drawTicks()
         (numeralTexts + captions).forEach { drawText(it.layout, it.color, it.topLeft) }
     }
@@ -152,7 +157,7 @@ internal class DialPainter(
         }
     }
 
-    private fun DrawScope.drawZoneBands() {
+    private fun DrawScope.drawZoneBands(zones: RpmScale) {
         val middle = (BAND_OUTER - BAND_WIDTH / 2f) * unit
         val topLeft = Offset(center.x - middle, center.y - middle)
         val bandSize = Size(middle * 2, middle * 2)
@@ -160,8 +165,8 @@ internal class DialPainter(
             val start = spec.scale.angleDeg(from)
             drawArc(color, start, spec.scale.angleDeg(to) - start, false, topLeft, bandSize, style = Stroke(BAND_WIDTH * unit))
         }
-        band(CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution)
-        band(DANGER_RPM.toDouble(), spec.scale.max, colors.danger)
+        band(zones.cautionRpm.toDouble(), zones.redlineRpm.toDouble(), colors.caution)
+        band(zones.redlineRpm.toDouble(), spec.scale.max, colors.danger)
     }
 
     private fun DrawScope.drawTicks() {
@@ -169,7 +174,7 @@ internal class DialPainter(
             val isMajor = tick.kind == TickKind.MAJOR
             val length = (if (isMajor) MAJOR_TICK_LENGTH else MINOR_TICK_LENGTH) * unit
             val base = if (isMajor) colors.faceInk else colors.faceInk.copy(alpha = MINOR_TICK_ALPHA)
-            val color = if (spec.hasZones) colors.zoneColour(tick.value, base) else base
+            val color = colors.zoneColour(tick.value, spec.zones, base)
             drawLine(
                 color,
                 polar(center.x, center.y, TICK_OUTER * unit, tick.angleDeg),

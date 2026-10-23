@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **SETUP > Car:** the red line of the car's rev counter (sets the scale of every tachometer) and the
+  trouble code profile, "Any car" or "Toyota 2ZZ-GE". The setup also asks for the red line, and
+  choosing the simulator there switches on the simulated GPS circuit.
+
+### Fixed
+
+- Toyota-specific trouble code meanings and notes were shown for every car. They now apply only to
+  the Toyota 2ZZ-GE profile; any other car gets the standard meanings, and manufacturer-specific
+  codes say that their meaning depends on the make.
+- Every tachometer was scaled for a 9 000 rpm engine with fixed caution and red zones. The scale and
+  the zones now follow the red line set for the car.
+- Lap timing: the lap screen, the trip list, the trip detail and the exports now show the same laps.
+  Setting the start/finish line while driving starts lap 1 at that spot, and passes of that spot
+  before the lap session no longer count as laps.
+- Trips now always record air flow and throttle, so the fuel estimate and the full-throttle share no
+  longer disappear from the trip detail and the exports. Trips recorded earlier still show "--" and
+  0 %.
+- The simulator button on an empty dashboard now also switches on the simulated GPS circuit.
+- The release page now shows what changed and how to install, and the README's checksum command no
+  longer fails on the crash-report mapping it does not need.
+
 ## [1.0.0] - 2026-10-22
 
 The first public release.

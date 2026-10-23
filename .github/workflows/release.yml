@@ -84,11 +84,33 @@ jobs:
           gzip -9 -c app/build/outputs/mapping/release/mapping.txt > "dist/kline-dash-$VERSION-mapping.txt.gz"
           (cd dist && sha256sum "kline-dash-$VERSION.apk" "kline-dash-$VERSION-mapping.txt.gz" > SHA256SUMS.txt && cat SHA256SUMS.txt)
 
+      # The release page shows this version's CHANGELOG section, so it says what changed (generated
+      # notes only list pull requests, of which there are none).
+      - name: Write the release notes
+        run: |
+          awk -v heading="## [$VERSION]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^\[[^]]*\]: / { next }
+            found { print }
+          ' CHANGELOG.md > changes.md
+          if ! grep -q '[^[:space:]]' changes.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION. Nothing was published."
+            exit 1
+          fi
+          {
+            echo "**Install:** download \`kline-dash-$VERSION.apk\`, open it on the device and allow installing"
+            echo "from that source for this one install. Updates install over the previous version and keep"
+            echo "your settings and trips. Check the download with \`sha256sum -c --ignore-missing SHA256SUMS.txt\`."
+            echo
+            cat changes.md
+          } > release-notes.md
+
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "K-Line Dash $VERSION" \
-            --generate-notes \
+            --notes-file release-notes.md \
             --verify-tag

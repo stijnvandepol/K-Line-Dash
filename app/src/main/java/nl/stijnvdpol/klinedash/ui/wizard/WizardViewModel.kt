@@ -1,9 +1,9 @@
 package nl.stijnvdpol.klinedash.ui.wizard
 
-import android.annotation.SuppressLint
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.AppGraph
+import nl.stijnvdpol.klinedash.core.transport.TransportKind
+import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
+import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.TripSettingsRepository
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.transport.hasRequiredPermissions
@@ -21,21 +24,21 @@ import nl.stijnvdpol.klinedash.ui.pollerFlow
 import nl.stijnvdpol.klinedash.ui.supportedSignals
 
 /**
- * The first-run setup: which step it is on, the result of the connection test, and the two choices
- * that have no screen of their own elsewhere (finishing, recording trips). Connecting and choosing
- * the adapter reuse ConnectionViewModel and the theme and units reuse DisplayViewModel, so the setup
- * and SETUP > Connection can never disagree.
+ * The first-run setup: which step it is on, the result of the connection test, and the choices
+ * that have no screen of their own elsewhere (finishing, recording trips, the simulated GPS that
+ * goes with the simulator). Connecting and choosing the adapter reuse ConnectionViewModel, the
+ * theme and units reuse DisplayViewModel and the red line reuses CarViewModel, so the setup and
+ * SETUP can never disagree.
+ *
+ * @param hasPermissions whether the permissions the chosen adapter needs are granted.
  */
 internal class WizardViewModel(
-    graph: AppGraph,
+    private val hasPermissions: () -> Boolean,
+    private val connectionSettings: Flow<ConnectionSettings>,
     private val general: GeneralSettingsRepository,
     private val tripSettings: TripSettingsRepository,
+    private val gpsSettings: GpsSettingsRepository,
 ) : ViewModel() {
-    // The application context: it lives as long as the process, so holding it leaks nothing.
-    @SuppressLint("StaticFieldLeak")
-    private val context = graph.appContext
-    private val connectionSettings = graph.settingsRepository.connectionSettings
-
     private val _step = MutableStateFlow(WizardStep.WELCOME)
     val step: StateFlow<WizardStep> = _step.asStateFlow()
 
@@ -76,7 +79,7 @@ internal class WizardViewModel(
         checkJob = viewModelScope.launch {
             val sensorCount = pollerFlow<Int?>(null) { poller -> poller.supportedPids.map { it?.let(::supportedSignals)?.size } }
             combine(ObdServiceState.connectionState, sensorCount, connectionSettings) { state, sensors, settings ->
-                tracker.onState(state, sensors, LinkFacts(settings.kind, hasRequiredPermissions(context), settings.hasAdapter))
+                tracker.onState(state, sensors, LinkFacts(settings.kind, hasPermissions(), settings.hasAdapter))
             }.collect { result ->
                 val isNewFailure = result is LinkCheck.Failed && _check.value !is LinkCheck.Failed
                 _check.value = result
@@ -94,6 +97,14 @@ internal class WizardViewModel(
         _check.value = LinkCheck.NotStarted
     }
 
+    /**
+     * The simulator drives the simulated GPS circuit too, so laps work for someone trying the app at
+     * home; with a real adapter the car's own position is wanted, so the circuit goes off again.
+     */
+    fun onAdapterChosen(kind: TransportKind) {
+        viewModelScope.launch { gpsSettings.update { it.copy(useSimulatedGps = kind == TransportKind.SIMULATOR) } }
+    }
+
     fun setRecordTrips(isOn: Boolean) {
         viewModelScope.launch { tripSettings.update { it.copy(autoRecord = isOn) } }
     }
@@ -109,6 +120,12 @@ internal class WizardViewModel(
     companion object {
         private const val STOP_TIMEOUT_MS = 5_000L
 
-        fun forGraph(graph: AppGraph) = WizardViewModel(graph, graph.generalSettingsRepository, graph.tripSettingsRepository)
+        fun forGraph(graph: AppGraph) = WizardViewModel(
+            hasPermissions = { hasRequiredPermissions(graph.appContext) },
+            connectionSettings = graph.settingsRepository.connectionSettings,
+            general = graph.generalSettingsRepository,
+            tripSettings = graph.tripSettingsRepository,
+            gpsSettings = graph.gpsSettingsRepository,
+        )
     }
 }

@@ -17,7 +17,7 @@ class DashboardLayoutDefaultTest {
         val main = default.pages[0] as MainPage
         assertEquals(listOf("rpm", "speed", "coolant"), main.primary)
         assertEquals(listOf("intake_temp", "throttle", "load", "timing", "battery", "maf"), main.fields)
-        assertEquals(7_800, (default.pages[1] as TrackPage).shiftRpm)
+        assertEquals(DEFAULT_SHIFT_RPM, (default.pages[1] as TrackPage).shiftRpm)
     }
 
     @Test

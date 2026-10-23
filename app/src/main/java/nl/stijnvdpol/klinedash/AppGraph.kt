@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,12 +22,15 @@ import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.elm.ProtocolStore
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
+import nl.stijnvdpol.klinedash.data.CarSettingsRepository
+import nl.stijnvdpol.klinedash.data.EngineProfile
 import nl.stijnvdpol.klinedash.data.AppDatabase
 import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
 import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
 import nl.stijnvdpol.klinedash.data.MIGRATION_2_3
+import nl.stijnvdpol.klinedash.data.MIGRATION_3_4
 import nl.stijnvdpol.klinedash.data.RoomProtocolStore
 import nl.stijnvdpol.klinedash.data.SettingsRepository
 import nl.stijnvdpol.klinedash.data.StartupSettingsRepository
@@ -65,7 +69,7 @@ private object NoDtcDescriptions : DtcDescriptions {
 class AppGraph(val appContext: Context) {
     val database: AppDatabase by lazy {
         Room.databaseBuilder(appContext, AppDatabase::class.java, "klinedash.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(database.settingsDao()) }
@@ -90,6 +94,7 @@ class AppGraph(val appContext: Context) {
     val dashboardLayoutRepository: DashboardLayoutRepository by lazy { DashboardLayoutRepository(database.settingsDao()) }
     val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(database.settingsDao()) }
     val generalSettingsRepository: GeneralSettingsRepository by lazy { GeneralSettingsRepository(database.settingsDao()) }
+    val carSettingsRepository: CarSettingsRepository by lazy { CarSettingsRepository(database.settingsDao()) }
 
     /**
      * App-specific external storage: no permission needed, removed with the app. Null only when that
@@ -162,19 +167,22 @@ class AppGraph(val appContext: Context) {
         ExportController(TripFileSource { listTripFiles(tripsDir) }, applicationScope)
     }
 
-    /** Started on first use and parsed off the main thread; every caller awaits the same load. */
-    private val dtcDescriptions: Deferred<DtcDescriptions> by lazy {
-        applicationScope.async(Dispatchers.IO) {
-            try {
-                BundledDtcDescriptions.load()
-            } catch (e: Exception) {
-                Log.e(TAG, "Could not load the bundled trouble code descriptions", e)
-                NoDtcDescriptions
+    /** One load per profile, started on first use and parsed off the main thread; every caller awaits the same load. */
+    private val dtcDescriptions: Map<EngineProfile, Deferred<DtcDescriptions>> by lazy {
+        EngineProfile.entries.associateWith { profile ->
+            applicationScope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                try {
+                    BundledDtcDescriptions.load(includeToyota2zz = profile == EngineProfile.TOYOTA_2ZZ_GE)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Could not load the bundled trouble code descriptions", e)
+                    NoDtcDescriptions
+                }
             }
         }
     }
 
-    suspend fun awaitDtcDescriptions(): DtcDescriptions = dtcDescriptions.await()
+    /** The trouble code meanings that apply to a car with [profile]: standard ones for everybody, plus the profile's own. */
+    suspend fun awaitDtcDescriptions(profile: EngineProfile): DtcDescriptions = dtcDescriptions.getValue(profile).await()
 
     val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(database.settingsDao()) }
 

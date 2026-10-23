@@ -18,8 +18,15 @@ import nl.stijnvdpol.klinedash.core.trip.TripSummary
 import nl.stijnvdpol.klinedash.core.trip.tripSampleOf
 import nl.stijnvdpol.klinedash.data.TripSummaryCache
 
-/** Signals that always get a column, because the trip summary is built from them. */
-internal val SUMMARY_SIGNAL_IDS = listOf(SignalIds.RPM, SignalIds.SPEED, SignalIds.COOLANT)
+/**
+ * Signals that always get a column and that the recorder polls itself, because the trip statistics
+ * are built from them: rpm, speed and coolant for the maxima, the air flow for the fuel estimate and
+ * the throttle for the full-throttle time. Without a column here a signal that only shows up after
+ * the header was written (a screen that polls it) would count in the live statistics but be missing
+ * from the file, and the trip would read back with different figures.
+ */
+internal val SUMMARY_SIGNAL_IDS =
+    listOf(SignalIds.RPM, SignalIds.SPEED, SignalIds.COOLANT, SignalIds.MAF, SignalIds.THROTTLE)
 
 private const val COLUMNS_SETTLE_MS = 20_000L
 private const val FLUSH_EVERY_SAMPLES = 10
@@ -74,6 +81,9 @@ internal class TripSession(
 
     /** The track the laps are timed for from now on, see [LiveTripAnalysis.setTrack]. */
     fun setTrack(trackId: Long?, gates: LapGates?) = live.setTrack(trackId, gates)
+
+    /** Where the lap session started, see [LiveTripAnalysis.lapTimingAfterMs]. */
+    val lapTimingAfterMs: Long? get() = live.lapTimingAfterMs
 
     /** See [LiveTripAnalysis.currentLapFixes]. */
     fun currentLapFixes(): List<GeoFix> = live.currentLapFixes()

@@ -81,7 +81,8 @@ class FakeTripDao : TripDao {
         rows.value = rows.value.filterNot { it.id == id }
     }
 
-    override suspend fun setTrack(id: Long, trackId: Long?) = update(id) { it.copy(trackId = trackId) }
+    override suspend fun setTrack(id: Long, trackId: Long?, lapTimingAfterMs: Long?) =
+        update(id) { it.copy(trackId = trackId, lapTimingAfterMs = lapTimingAfterMs) }
 
     override suspend fun updateSummary(
         id: Long,
@@ -101,7 +102,7 @@ class FakeTripDao : TripDao {
         rows.value.filter { it.trackId == trackId }.sortedByDescending { it.startMs }.take(limit)
 
     override suspend fun clearTrack(trackId: Long) {
-        rows.value = rows.value.map { if (it.trackId == trackId) it.copy(trackId = null, lapCount = null, bestLapMs = null) else it }
+        rows.value = rows.value.map { if (it.trackId == trackId) it.copy(trackId = null, lapTimingAfterMs = null, lapCount = null, bestLapMs = null) else it }
     }
 
     private fun update(id: Long, change: (Trip) -> Trip) {

@@ -60,3 +60,26 @@ val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         MIGRATION_2_3_STATEMENTS.forEach { db.execSQL(it) }
     }
 }
+
+/**
+ * The column `trips` gained in v4: the start of the lap session (see [Trip.lapTimingAfterMs]). Nullable,
+ * so SQLite adds it in place and the existing rows keep their meaning (null: lap timing covers the
+ * whole trip, as before). Checked against app/schemas/.../4.json by a test.
+ */
+internal val MIGRATION_3_4_STATEMENTS = listOf(
+    "ALTER TABLE `trips` ADD COLUMN `lapTimingAfterMs` INTEGER",
+)
+
+/**
+ * v3 -> v4: adds `trips.lapTimingAfterMs`. Nothing is rewritten and the CSV files are untouched; the
+ * laps of old trips are computed exactly as before.
+ *
+ * Rollback (SQLite before 3.35 cannot drop columns, and v3 ignores columns it does not know): set the
+ * database version back to 3; the extra column stays unused and is harmless. Laps are derived from
+ * the CSV files, so nothing is lost.
+ */
+val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        MIGRATION_3_4_STATEMENTS.forEach { db.execSQL(it) }
+    }
+}

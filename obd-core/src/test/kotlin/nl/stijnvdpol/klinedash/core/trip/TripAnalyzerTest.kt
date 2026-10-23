@@ -1,10 +1,12 @@
 package nl.stijnvdpol.klinedash.core.trip
 
 import nl.stijnvdpol.klinedash.core.geo.Gate
+import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.core.geo.LapGates
 import nl.stijnvdpol.klinedash.core.geo.TestLoop
 import nl.stijnvdpol.klinedash.core.geo.TestWorld
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -121,5 +123,89 @@ class TripAnalyzerTest {
         assertEquals(2, analyzer.stats()!!.sampleCount)
         assertEquals(false, analyzer.timing()!!.isTiming)
         assertTrue(analyzer.lapStats().isEmpty())
+    }
+
+    /**
+     * The gate across the direction of travel through the fix at [second], shifted [offsetM] along
+     * it. The fix then lies a hair before or behind the line, which decides on which of the two
+     * segments around the fix the crossing is found.
+     */
+    private fun gatesAtFix(samples: List<TripSample>, second: Int, offsetM: Double): LapGates {
+        val position = checkNotNull(samples[second].gps).position
+        val heading = Geodesy.bearingDeg(position, checkNotNull(samples[second + 1].gps).position)
+        return LapGates(Gate.fromPointAndHeading(Geodesy.destination(position, heading, offsetM), heading))
+    }
+
+    @Test
+    fun aLineSetAtTheCurrentPassStartsLapOneWhicheverSideOfItTheFixLies() {
+        val samples = loopSamples()
+        // Seconds 10, 20, 30 and 40 are on the straight east, north, west and south stretches.
+        for (second in listOf(10, 20, 30, 40)) {
+            for (offsetM in listOf(-0.01, 0.0, 0.01)) {
+                for (lateSamples in 0..1) {
+                    val tapped = second + lateSamples
+                    val gates = gatesAtFix(samples, second, offsetM)
+                    val live = TripAnalyzer()
+                    samples.take(tapped + 1).forEach(live::add)
+                    live.startLapSession(gates)
+                    samples.drop(tapped + 1).forEach(live::add)
+
+                    val description = "line set at ${second}s ($offsetM m along), handed over ${lateSamples} sample(s) later"
+                    assertEquals(description, samples[tapped].timeMs, live.lapTimingAfterMs)
+                    assertEquals(description, samples[second].timeMs.toDouble(), live.lapStats().first().lap.startMs.toDouble(), 2.0)
+                    val recorded = analyzeTrip(samples.asSequence(), gates, lapTimingAfterMs = samples[tapped].timeMs)
+                    assertEquals(description, live.lapStats(), recorded.laps)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun aLineFarFromTheCarStartsNoLapUntilTheCarReachesIt() {
+        val samples = loopSamples()
+        val analyzer = TripAnalyzer()
+        samples.take(21).forEach(analyzer::add)
+
+        analyzer.startLapSession(gates)
+
+        assertFalse(analyzer.timing()!!.isTiming)
+        assertTrue(analyzer.lapStats().isEmpty())
+        samples.drop(21).forEach(analyzer::add)
+        assertEquals("passes at 53.7 s (start), 102.4 s and 151.2 s", 2, analyzer.lapStats().size)
+        assertEquals(t0 + 53_660.0, analyzer.lapStats().first().lap.startMs.toDouble(), 20.0)
+    }
+
+    @Test
+    fun aLapSessionStartedBeforeTheFirstSampleTimesTheWholeTrip() {
+        val analyzer = TripAnalyzer()
+        analyzer.startLapSession(gates)
+        loopSamples().forEach(analyzer::add)
+
+        assertNull(analyzer.lapTimingAfterMs)
+        assertEquals(analyzeTrip(loopSamples().asSequence(), gates).laps, analyzer.lapStats())
+    }
+
+    @Test
+    fun passesBeforeTheLapSessionAreNoLaps() {
+        val laps = analyzeTrip(loopSamples().asSequence(), gates, lapTimingAfterMs = t0 + 60_000).laps
+
+        assertEquals("only the passes at 102.4 s and 151.2 s", 1, laps.size)
+        assertEquals(t0 + 102_440.0, laps.single().lap.startMs.toDouble(), 20.0)
+    }
+
+    @Test
+    fun aPassJustBeforeTheLapSessionStillStartsLapOne() {
+        val whole = analyzeTrip(loopSamples().asSequence(), gates).laps
+        val fromJustAfterTheFirstPass = analyzeTrip(loopSamples().asSequence(), gates, lapTimingAfterMs = t0 + 6_000).laps
+
+        assertEquals(whole, fromJustAfterTheFirstPass)
+    }
+
+    @Test
+    fun aPassLongerThanTheLeadInBeforeTheLapSessionIsNotCounted() {
+        val laps = analyzeTrip(loopSamples().asSequence(), gates, lapTimingAfterMs = t0 + 8_000).laps
+
+        assertEquals("the pass at 4.9 s is 3.1 s before the session", 2, laps.size)
+        assertEquals(t0 + 53_660.0, laps.first().lap.startMs.toDouble(), 20.0)
     }
 }

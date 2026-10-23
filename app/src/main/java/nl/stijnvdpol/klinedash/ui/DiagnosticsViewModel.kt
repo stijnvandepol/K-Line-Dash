@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -22,6 +24,7 @@ import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.diag.ObdDiagnostics
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
+import nl.stijnvdpol.klinedash.data.EngineProfile
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 
 private const val TAG = "DiagnosticsViewModel"
@@ -55,10 +58,12 @@ internal data class DiagnosticsUiState(
  * Owns the diagnostics reader of the current link and the clear-codes flow. A read happens once
  * when the page is first opened on a link and whenever the user asks; clearing is only reachable
  * through two confirmations, re-checks that the engine is off at the last moment and is sent once,
- * never retried.
+ * never retried. The trouble code texts follow the car's [engineProfile]: a change shows on the
+ * report that is already on screen.
  */
 internal class DiagnosticsViewModel(
-    private val loadDescriptions: suspend () -> DtcDescriptions,
+    private val loadDescriptions: suspend (EngineProfile) -> DtcDescriptions,
+    private val engineProfile: Flow<EngineProfile>,
     pollerFlow: StateFlow<ObdPoller?>,
     connectedFlow: Flow<Boolean>,
     private val createReader: (ObdPoller) -> DiagnosticsReader,
@@ -81,6 +86,13 @@ internal class DiagnosticsViewModel(
         viewModelScope.launch {
             connectedFlow.collect(::onConnectionChanged)
         }
+        viewModelScope.launch { engineProfile.collectLatest(::onProfileChanged) }
+    }
+
+    /** The codes on screen get the texts of the new profile; nothing is read again. */
+    private suspend fun onProfileChanged(profile: EngineProfile) {
+        val descriptions = loadDescriptions(profile)
+        _state.update { current -> current.report?.let { current.copy(codeLists = codeLists(it, descriptions)) } ?: current }
     }
 
     /**
@@ -133,7 +145,7 @@ internal class DiagnosticsViewModel(
     }
 
     private suspend fun showReport(report: DiagnosticReport, notice: ClearNotice? = null) {
-        val lists = codeLists(report, loadDescriptions())
+        val lists = codeLists(report, loadDescriptions(engineProfile.first()))
         _state.update {
             it.copy(
                 busy = null,
@@ -191,6 +203,7 @@ internal class DiagnosticsViewModel(
     companion object {
         fun forGraph(graph: AppGraph) = DiagnosticsViewModel(
             loadDescriptions = graph::awaitDtcDescriptions,
+            engineProfile = graph.carSettingsRepository.settings.map { it.engineProfile }.distinctUntilChanged(),
             pollerFlow = ObdServiceState.poller,
             connectedFlow = ObdServiceState.connectionState.map { it is ConnectionState.Connected },
             createReader = { ObdDiagnostics(it) },

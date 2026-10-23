@@ -21,7 +21,8 @@ day. It works fully offline: no account, no cloud, no ads, no Google Play Servic
   60-second graphs, and a track page with peak hold and a shift light. Pages and fields are yours
   to edit.
 - **Sensors:** everything your car reports, with how often each value updates.
-- **Diagnostics:** stored, pending and permanent fault codes with offline descriptions, the
+- **Diagnostics:** stored, pending and permanent fault codes with offline descriptions (the
+  standard meanings for any car, plus Toyota 2ZZ-GE notes when chosen under SETUP > Car), the
   check-engine light, readiness monitors, freeze frame and VIN. Clearing codes asks twice and
   only works with the engine off.
 - **Warnings:** coolant temperature, battery voltage, a new fault code, the check-engine light and
@@ -66,7 +67,9 @@ Scanner or OBD Fusion should work here too (sources: `docs/research/popular-obd-
 1. Open the [latest release](https://github.com/stijnvandepol/CarPlayinfo/releases/latest) and
    download `kline-dash-<version>.apk` and `SHA256SUMS.txt`.
 2. **Check the download** (optional, recommended). On a PC, in the download folder:
-   - Linux or macOS: `sha256sum -c SHA256SUMS.txt` (macOS: `shasum -a 256 -c SHA256SUMS.txt`)
+   - Linux: `sha256sum -c --ignore-missing SHA256SUMS.txt`; macOS:
+     `shasum -a 256 -c --ignore-missing SHA256SUMS.txt` (the file also lists the crash-report
+     mapping, which you do not need)
    - Windows PowerShell: `Get-FileHash kline-dash-<version>.apk -Algorithm SHA256` and compare the
      hash with the line in `SHA256SUMS.txt`.
 3. **Copy the APK to the device** (USB stick, or download it there directly) and open it with a file

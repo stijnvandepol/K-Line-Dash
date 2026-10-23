@@ -1,7 +1,9 @@
 package nl.stijnvdpol.klinedash.core.diag
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -10,9 +12,12 @@ import org.junit.Test
 
 class BundledDtcDescriptionsTest {
 
-    private val bundled = BundledDtcDescriptions.load()
+    private val toyota = BundledDtcDescriptions.load(includeToyota2zz = true)
+    private val genericOnly = BundledDtcDescriptions.load(includeToyota2zz = false)
 
-    private fun describe(code: String): DtcDescription? = bundled.describe(Dtc(code))
+    private fun describe(code: String): DtcDescription? = toyota.describe(Dtc(code))
+
+    private fun describeGeneric(code: String): DtcDescription? = genericOnly.describe(Dtc(code))
 
     private fun resourceLines(path: String): List<String> =
         BundledDtcDescriptions::class.java.getResourceAsStream(path)!!
@@ -31,7 +36,19 @@ class BundledDtcDescriptionsTest {
 
     @Test
     fun `load returns the same instance every time`() {
-        assertSame(BundledDtcDescriptions.load(), BundledDtcDescriptions.load())
+        assertSame(BundledDtcDescriptions.load(true), BundledDtcDescriptions.load(true))
+        assertSame(BundledDtcDescriptions.load(false), BundledDtcDescriptions.load(false))
+    }
+
+    @Test
+    fun `the two variants are different instances`() {
+        assertNotSame(toyota, genericOnly)
+    }
+
+    @Test
+    fun `the generic file has no manufacturer-specific codes`() {
+        val parsed = BundledDtcDescriptions.parseGeneric(resourceLines("/dtc/generic.tsv"))
+        for (code in parsed.keys) assertFalse("$code", Dtc(code).isManufacturerSpecific)
     }
 
     @Test
@@ -98,9 +115,42 @@ class BundledDtcDescriptionsTest {
     }
 
     @Test
-    fun `unknown code is null`() {
+    fun `unknown standard code is null`() {
         assertNull(describe("P0999"))
-        assertNull(describe("P1999"))
+        assertNull(describeGeneric("P0999"))
+        assertNull(describeGeneric("U0999"))
+    }
+
+    // ---- vehicle profile ----
+
+    @Test
+    fun `without the Toyota table a Toyota code is only manufacturer-specific`() {
+        assertEquals(DtcDescription(MANUFACTURER_SPECIFIC_DESCRIPTION, null), describeGeneric("P1349"))
+    }
+
+    @Test
+    fun `without the Toyota table a generic code has the standard meaning and no note`() {
+        assertEquals(DtcDescription("System Too Lean (Bank 1)", null), describeGeneric("P0171"))
+        assertEquals(describe("P0171")!!.description, describeGeneric("P0171")!!.description)
+    }
+
+    @Test
+    fun `a manufacturer code the Toyota table does not know is manufacturer-specific too`() {
+        assertEquals(DtcDescription(MANUFACTURER_SPECIFIC_DESCRIPTION, null), describe("P1999"))
+    }
+
+    // ---- manufacturer-specific ranges (SAE J2012) ----
+
+    @Test
+    fun `manufacturer-specific ranges are recognised`() {
+        val manufacturer = listOf("P1000", "P1FFF", "P3000", "P33FF", "B1000", "B2FFF", "C1234", "C2000", "U1000", "U2FFF")
+        for (code in manufacturer) assertTrue(code, Dtc(code).isManufacturerSpecific)
+    }
+
+    @Test
+    fun `generic and reserved ranges are not manufacturer-specific`() {
+        val others = listOf("P0000", "P0FFF", "P2000", "P2FFF", "P3400", "P3FFF", "B0000", "B3000", "C0035", "C3000", "U0100", "U3000")
+        for (code in others) assertFalse(code, Dtc(code).isManufacturerSpecific)
     }
 
     // ---- merge rules ----

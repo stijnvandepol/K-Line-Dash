@@ -63,6 +63,7 @@ internal class NavigationSmokeTest private constructor(
 
         val sections = listOf(
             "Connection" to "Adapter type",
+            "Car" to "Red line (rpm)",
             "Warnings" to "Coolant too hot",
             "Dashboard" to "Pages",
             "Display" to "Day and night",

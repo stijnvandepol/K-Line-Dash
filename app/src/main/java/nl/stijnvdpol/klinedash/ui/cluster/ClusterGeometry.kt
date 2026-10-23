@@ -17,8 +17,7 @@ private const val FULL_TURN_DEG = 360f
 private const val QUARTER_TURN_DEG = 90f
 private const val DEG_TO_RAD = (Math.PI / 180.0).toFloat()
 
-/** The tach and the speedometer scales of docs/cluster-styles.md. */
-internal const val TACH_MAX_RPM = 9_000.0
+/** The speedometer scales of docs/cluster-styles.md; the tach scale follows the car's redline (see the tach functions below). */
 internal const val SPEEDO_MAX_KMH = 260.0
 
 /** The imperial speedometer: 0 to 160 mph, ticks every 10 and a numeral every 40 like the metric one. */
@@ -176,20 +175,20 @@ internal class RingLayout(width: Float, height: Float) {
 private const val RING_SWEEP_DEG = 236f
 private const val RING_START_DEG = 118f
 
-/** The tach ring: the left one, filling from the bottom up along its inside (counter-clockwise). */
-internal val LeftRingTach = ArcScale(0.0, TACH_MAX_RPM, RING_START_DEG, -RING_SWEEP_DEG)
+/** The tach ring, from 0 to [maxRpm]: the left one, filling from the bottom up along its inside (counter-clockwise). */
+internal fun leftRingTach(maxRpm: Int) = ArcScale(0.0, maxRpm.toDouble(), RING_START_DEG, -RING_SWEEP_DEG)
 
-/** The speed ring: the right one, the mirror image of [LeftRingTach]. */
+/** The speed ring: the right one, the mirror image of [leftRingTach]. */
 internal fun rightRingSpeed(units: UnitSystem) = ArcScale(0.0, speedoMax(units), FULL_TURN_DEG / 2 - RING_START_DEG, RING_SWEEP_DEG)
 
-/** The round tachometer of the twin and centre styles. */
-internal val DialTach = topCentredScale(0.0, TACH_MAX_RPM, DIAL_SWEEP_DEG)
+/** The round tachometer of the twin and centre styles, from 0 to [maxRpm]. */
+internal fun dialTach(maxRpm: Int) = topCentredScale(0.0, maxRpm.toDouble(), DIAL_SWEEP_DEG)
 
 /** The round speedometer of the twin style. */
 internal fun dialSpeedo(units: UnitSystem) = topCentredScale(0.0, speedoMax(units), DIAL_SWEEP_DEG)
 
-/** The segmented tachometer of the arc style. */
-internal val ArcTach = topCentredScale(0.0, TACH_MAX_RPM, ARC_SWEEP_DEG)
+/** The segmented tachometer of the arc style, from 0 to [maxRpm]. */
+internal fun arcTach(maxRpm: Int) = topCentredScale(0.0, maxRpm.toDouble(), ARC_SWEEP_DEG)
 
 private const val COOLANT_COLD_C = 40.0
 private const val COOLANT_HOT_C = 130.0

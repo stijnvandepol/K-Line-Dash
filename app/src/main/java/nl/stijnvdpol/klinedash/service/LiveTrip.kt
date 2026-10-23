@@ -1,7 +1,6 @@
 package nl.stijnvdpol.klinedash.service
 
 import nl.stijnvdpol.klinedash.core.geo.GeoFix
-import nl.stijnvdpol.klinedash.core.geo.LapDetector
 import nl.stijnvdpol.klinedash.core.geo.LapGates
 import nl.stijnvdpol.klinedash.core.geo.LapTimingState
 import nl.stijnvdpol.klinedash.core.trip.LapStats
@@ -33,16 +32,16 @@ data class LiveTripState(
 }
 
 /**
- * The statistics of the trip in progress: one analyzer for the whole trip and, once a track is set,
- * a second one with the gates for the laps. A track can be set or changed at any moment (the user
- * presses "set start/finish here" while driving); lap timing then starts from that moment, because
- * nothing before it could cross a gate that did not exist yet. Only sector lines added to or
- * changed on the same track keep the lap timer and the laps so far (a sector line does not move
- * the start of a lap). Not thread-safe; [TripSession] calls it under the recorder's lock.
+ * The statistics of the trip in progress: one analyzer for the trip and, once a track is set, its
+ * lap timing. A track can be set or changed at any moment (the user presses "set start/finish
+ * here" while driving); lap timing then starts from that moment, with the last seconds before it as
+ * lead-in so that the pass at which the line was set is the start of lap 1 (see [TripAnalyzer]).
+ * Only sector lines added to or changed on the same track keep the lap timer and the laps so far (a
+ * sector line does not move the start of a lap). Not thread-safe; [TripSession] calls it under the
+ * recorder's lock.
  */
 internal class LiveTripAnalysis {
-    private val overall = TripAnalyzer()
-    private var lapped: TripAnalyzer? = null
+    private val analyzer = TripAnalyzer()
     private var hasGps = false
 
     var trackId: Long? = null
@@ -52,43 +51,46 @@ internal class LiveTripAnalysis {
         private set
 
     /**
+     * Where the current lap session started, to be stored with the trip so the recording is
+     * analysed the same way: the time of the last sample before it, null when it covers the whole trip.
+     */
+    val lapTimingAfterMs: Long? get() = analyzer.lapTimingAfterMs
+
+    /**
      * Starts lap timing for [gates] from now on, or ends it with null. Replaces the laps of a previous
      * track or start/finish line; new sector lines on the same track and line are taken over in place.
      */
     fun setTrack(trackId: Long?, gates: LapGates?) {
-        val current = lapped
-        if (current != null && gates != null && trackId == this.trackId && gates.startFinish == this.gates?.startFinish) {
-            this.gates = gates
-            current.updateSectors(gates.sectors)
-            return
+        val current = this.gates
+        if (gates == null) {
+            analyzer.endLapSession()
+        } else if (current != null && trackId == this.trackId && gates.startFinish == current.startFinish) {
+            analyzer.updateSectors(gates.sectors)
+        } else {
+            analyzer.startLapSession(gates)
         }
         this.trackId = trackId.takeIf { gates != null }
         this.gates = gates
-        lapped = gates?.let { TripAnalyzer(it) }
     }
 
-    /** The fixes of the lap in progress so far, see [LapDetector.currentLapFixes]; empty without a track. */
-    fun currentLapFixes(): List<GeoFix> = lapped?.currentLapFixes().orEmpty()
+    /** The fixes of the lap in progress so far, see [TripAnalyzer.currentLapFixes]; empty without a track. */
+    fun currentLapFixes(): List<GeoFix> = analyzer.currentLapFixes()
 
     /** The location source changed: no distance between the old source's last fix and the new one's first. */
-    fun startNewGpsSegment() {
-        overall.startNewGpsSegment()
-        lapped?.startNewGpsSegment()
-    }
+    fun startNewGpsSegment() = analyzer.startNewGpsSegment()
 
     fun add(sample: TripSample) {
         if (sample.gps != null) hasGps = true
-        overall.add(sample)
-        lapped?.add(sample)
+        analyzer.add(sample)
     }
 
-    fun state(): LiveTripState = LiveTripState(overall.stats(), lapped?.timing(), lapped?.lapStats().orEmpty(), trackId)
+    fun state(): LiveTripState = LiveTripState(analyzer.stats(), analyzer.timing(), analyzer.lapStats(), trackId)
 
     /** The totals that go into the trip row when it ends; null while no sample was added. */
-    fun summary(): TripSummary? = overall.stats()?.toTripSummary()
+    fun summary(): TripSummary? = analyzer.stats()?.toTripSummary()
 
     /** The cached statistics of the trip row; laps are null without a track. */
-    fun cache(): TripSummaryCache = tripSummaryCache(overall.stats(), lapped?.lapStats(), hasGps)
+    fun cache(): TripSummaryCache = tripSummaryCache(analyzer.stats(), analyzer.lapStats().takeIf { gates != null }, hasGps)
 }
 
 /** The cache columns of a trip row from its statistics; [laps] is null when the trip has no track. */

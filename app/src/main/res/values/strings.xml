@@ -115,12 +115,22 @@
     <!-- Setup -->
     <string name="setup_back_description">Back to the setup menu</string>
     <string name="setup_connection">Connection</string>
+    <string name="setup_car">Car</string>
     <string name="setup_warnings">Warnings</string>
     <string name="setup_dashboard">Dashboard</string>
     <string name="setup_display">Display</string>
     <string name="setup_startup">Startup</string>
     <string name="setup_gps_tracks">GPS &amp; Tracks</string>
     <string name="setup_debug">Debug</string>
+
+    <!-- Setup: car -->
+    <string name="car_redline">Red line (rpm)</string>
+    <string name="car_redline_hint">Where your rev counter turns red. Sets the scale of every tachometer.</string>
+    <string name="car_codes_title">Trouble codes</string>
+    <string name="car_codes_generic">Any car</string>
+    <string name="car_codes_generic_hint">Standard meanings only. Codes that only the maker defines are marked as such.</string>
+    <string name="car_codes_toyota">Toyota 2ZZ-GE</string>
+    <string name="car_codes_toyota_hint">Corolla T-Sport, Celica 1.8 VVTL-i: Toyota meanings and notes.</string>
 
     <!-- Setup: warnings -->
     <string name="warnings_column_warning">Warning</string>

@@ -96,7 +96,7 @@ private fun WizardContent(
 ) {
     when (step) {
         WizardStep.WELCOME -> WelcomeStep()
-        WizardStep.ADAPTER -> AdapterStep(connection)
+        WizardStep.ADAPTER -> AdapterStep(connection, wizard)
         WizardStep.CONNECT -> ConnectStep(connection, permissions)
         WizardStep.TEST -> TestStep(wizard, connection, permissions, onChooseAnotherAdapter)
         WizardStep.PREFERENCES -> PreferencesStep(wizard, permissions)

@@ -13,8 +13,8 @@ and the meaning of colour stay fixed.
    icons. Structure comes from a strict grid and 1 dp rules, like the fields on a race display.
 2. **One glance, one answer.** The RPM bar and the RPM number dominate. Everything else is quieter
    and smaller, in a fixed position so the eye learns where to look.
-3. **Colour means state.** White and greys carry all normal content. Amber = caution (VVTL-i cam
-   zone, reconnecting), red = danger (redline, failed). Green only for "connected". A red pixel
+3. **Colour means state.** White and greys carry all normal content. Amber = caution (the last 1 000 rpm before the
+   redline, reconnecting), red = danger (redline, failed). Green only for "connected". A red pixel
    always means something.
 4. **Numbers never move.** Tabular figures, right-aligned in fixed-width slots, units outside the
    slot. A stale value is dimmed, a missing one shows "--" in the same slot. No thousands
@@ -34,8 +34,8 @@ and the meaning of colour stay fixed.
 | `inkMuted` | `#8C8C8C` | Field labels, units, secondary text |
 | `inkFaint` | `#4D4D4D` | Stale values, disabled controls, minor scale marks |
 | `ok` | `#2ED47A` | Connected dot only |
-| `caution` | `#FFB000` | VVTL-i zone segments (from 6 200 rpm), reconnecting, values nearing a limit |
-| `danger` | `#FF2D2D` | Redline segments (from 7 800 rpm), failed, over-limit values |
+| `caution` | `#FFB000` | Caution zone segments (from 1 000 rpm below the car's redline), reconnecting, values nearing a limit |
+| `danger` | `#FF2D2D` | Redline segments (from the redline set for the car), failed, over-limit values |
 | `accent` | `#FFFFFF` | Lit RPM segments below the caution zone, the active-page marker (phase 5; follows `ink` in themes that do not set it) |
 
 ## Typography
@@ -95,13 +95,17 @@ measured request rate ("ISO 9141-2  4.4/s").
   scale, 8 dp), primary row takes the rest (about 400 dp), field row 104 dp, bottom bar 72 dp.
   The bar is the first thing the eye finds, so it gets real height; the primary row is only as
   tall as its numerals need plus room for the label.
-- **RPM bar:** 45 segments of 200 rpm (0 to 9 000), 2 dp gaps, full width, 96 dp high. Lit
-  segments up to the current RPM: white below 6 200, `caution` 6 200 to 7 800, `danger` from
-  7 800. Unlit segments are `surface` (#1C1C1C, clearly visible on black but quiet), with the
+- **RPM bar:** segments of 200 rpm over the car's rpm scale, 2 dp gaps, full width, 96 dp high.
+  The scale follows the redline set for the car: it ends at the next whole 1 000 rpm at least
+  1 000 above it, so the red zone is always on the bar (redline 4 500: 0 to 6 000, 30 segments;
+  6 500: 0 to 8 000, 40; 8 000: 0 to 9 000, 45; 10 000: 0 to 11 000, 55). Lit
+  segments up to the current RPM: white below the caution rpm (1 000 below the redline), `caution`
+  from there to the redline, `danger` from the redline. Unlit segments are `surface` (#1C1C1C, clearly visible on black but quiet), with the
   zone colour at 25 % opacity on top for the amber and red zones, so the whole bar and its zones
   keep the screen's structure at idle and with the engine off. A stale reading draws the lit
   segments in `inkFaint`. Scale numbers every 1 000 rpm below the bar in `fieldLabel`/`inkMuted`,
-  left-aligned to their segment (the 9 right-aligned to the end of the bar).
+  left-aligned to their segment (the last one right-aligned to the end of the bar). The
+  tachometers of the cluster styles use the same scale, zones and numerals.
 - **Bar motion:** the lit length is interpolated between readings with a linear tween as long
   as the measured RPM update interval (clamped 100 to 1 000 ms), so the bar sweeps instead of
   jumping. No other animation on the dashboard.
@@ -135,7 +139,7 @@ rules. No cards.
 
 Five pages: **DASH · SENSORS · DIAG · TRIPS · SETUP**. Driving pages first, setup last. SETUP has
 its own left menu (240 dp, 72 dp rows, selected row with the 4 dp white left bar like the adapter
-list): **Connection**, **Warnings**, **Debug** (and in phase 5 Display and Startup; in phase 7 Help and About, placed before Debug, and the menu scrolls). The right
+list): **Connection**, **Car**, **Warnings**, **Debug** (and in phase 5 Display and Startup; in phase 7 Help and About, placed before Debug, and the menu scrolls). The right
 part shows the chosen section; Connection and Debug keep their layouts below, narrowed to the
 remaining width (Connection's 400 dp adapter column becomes the section's left column).
 
@@ -177,6 +181,17 @@ One row per warning, 72 dp: name (`body`), on/off toggle, sound toggle (labelled
 thresholds a stepper: **−** and **+** cells (72 x 72 dp) around the value in `rowValue` with its
 unit. No keyboard input while driving. Steps: coolant 1 °C, voltage 0.1 V. The two coolant limits
 cannot cross (caution stays below danger). "Reset to defaults" as a text cell at the bottom.
+
+### Car (SETUP section)
+
+What the app cannot read from the car, in one scrolling column of 72 dp rows (so it needs no layout
+of its own on a small screen). First the **Red line (rpm)** stepper (250 rpm steps from 3 000 to
+10 000, the same stepper as Warnings) with a one-line hint in `caption`: it sets the scale of every
+tachometer. Then **Trouble codes** as two selectable rows with a `caption` line each: **Any car**
+(standard SAE meanings; a manufacturer-specific code reads "Manufacturer-specific code. Its meaning
+depends on the make.") and **Toyota 2ZZ-GE** (adds Toyota's meanings and the notes for this engine).
+Choosing the Toyota row also sets the red line to 8 000, but only while it is still the default
+6 500. The DIAG page follows the choice at once.
 
 ### Connection
 
@@ -268,7 +283,7 @@ add/delete cells under it) and the sketch on the right, sized to the room that i
 no name of its own: it is called after its template ("Main", "Grid", "Track"), numbered when the
 template occurs more than once ("Grid 2"). Up to 12 pages; the last page cannot be deleted. A grid
 page has a size choice above the sketch (72 dp cells separated by rules, the chosen one filled),
-the track page a shift point stepper (100 rpm steps, 4 000 to 9 000) in the 72 dp −/value/+ cells
+the track page a shift point stepper (100 rpm steps, 3 000 to 11 000) in the 72 dp −/value/+ cells
 of the Warnings and Display steppers. The signal list shows what the car supports, or everything with a note while not
 connected. A stored signal this version does not know shows "--" until the user picks another. All
 numbers of one grid page share one size, so "0.0" and "13.9" read at the same height. Peak hold is
@@ -279,7 +294,7 @@ kept per session only.
 For track days. RPM as the full-height numeral on the left two thirds, the RPM bar across the top,
 coolant (`primaryValue`) and speed on the right, and **peak hold** below them: max RPM and max
 speed since the last reset, with a 72 dp "Reset peaks" cell. **Shift light:** from the shift
-point (default 7 800 rpm, set in SETUP > Dashboard) the whole RPM bar and a 12 dp frame around
+point (default 6 200 rpm, set in SETUP > Dashboard; never used past the end of the car's rpm scale) the whole RPM bar and a 12 dp frame around
 the screen flash `danger` at 4 Hz. This is the one place the app flashes: on a track it is the
 convention and the point, and it only happens above the user's own shift point. The page keeps a
 12 dp margin for the frame also while it is dark, so the flash never covers a value and nothing
@@ -401,7 +416,7 @@ header row ("Step 3 of 6" in `fieldLabel`, as text, and a "Skip setup" cell) and
 and one filled Next cell) frame it, the content between scrolls. From 840 dp wide the content is two
 halves side by side (instructions left, list or choices right), narrower it stacks. Steps: Welcome,
 Adapter (Bluetooth, Bluetooth LE, Wi-Fi, simulator), Connect (not for the simulator, so the count
-becomes "of 5"), Test, Preferences (units, theme, record trips), Done. Runtime permissions are asked
+becomes "of 5"), Test, Preferences (units, red line, theme, record trips), Done. Runtime permissions are asked
 only where needed, with a one-line reason above the button that opens the system dialog. The Test
 step shows the connection states as they happen, then protocol, adapter, battery and the number of
 sensors, or one specific fix per failure kind with Retry and Choose another adapter. The wizard

@@ -5,7 +5,7 @@ import org.junit.Test
 
 /**
  * DIAG with the simulated car: it stores P0171 and P1349, and clearing them takes two confirmations
- * and an engine that is off.
+ * and an engine that is off. P1349 only has a meaning once SETUP > Car says the car is the Toyota.
  */
 internal class DiagnosticsFlowTest : AppUiTest() {
 
@@ -14,7 +14,20 @@ internal class DiagnosticsFlowTest : AppUiTest() {
         openDiagnostics()
 
         compose.waitFor(text("System Too Lean (Bank 1)"))
+        compose.waitFor(text("Manufacturer-specific code"))
+        assertFalse("Another make would get Toyota's meaning", compose.exists(text("VVT System Malfunction (Bank 1)")))
+    }
+
+    @Test
+    fun theToyotaProfileGivesTheMakeSpecificMeaningAtOnce() {
+        openDiagnostics()
+
+        compose.openSetupSection("Car")
+        compose.tap(option("Toyota 2ZZ-GE"))
+        compose.openPage(Page.Diag)
+
         compose.waitFor(text("VVT System Malfunction (Bank 1)"))
+        assertFalse(compose.exists(text("Manufacturer-specific code")))
     }
 
     @Test

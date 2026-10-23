@@ -27,6 +27,7 @@ import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.GridPage
 import nl.stijnvdpol.klinedash.data.MainPage
 import nl.stijnvdpol.klinedash.data.TrackPage
+import nl.stijnvdpol.klinedash.data.shiftPoint
 import nl.stijnvdpol.klinedash.data.shiftRpm
 import nl.stijnvdpol.klinedash.ui.pages.GridPageContent
 import nl.stijnvdpol.klinedash.ui.pages.MainPageContent
@@ -77,7 +78,8 @@ private fun DashboardPager(layout: DashboardLayout, live: LiveDataViewModel, das
     val currentPage = pages[pagerState.currentPage.coerceIn(pages.indices)]
     val cluster = LocalClusterLook.current.style
     DemandWhileVisible(poller, DEMAND_OWNER, remember(currentPage, supportedPids, cluster) { pageDemandIds(currentPage, supportedPids, cluster) })
-    val shiftRpm = remember(layout) { layout.shiftRpm() }
+    val rpmScale = LocalRpmScale.current
+    val shiftRpm = remember(layout, rpmScale) { rpmScale.shiftPoint(layout.shiftRpm()) }
 
     // States, not values: only the small composables below read them, so this one never recomposes
     // for a new reading.

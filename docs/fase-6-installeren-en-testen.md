@@ -100,7 +100,8 @@ Zie `fase-6-trips-lap-session.png` voor de rondensessie en `fase-6-trips-recordi
 ### Een rit opnemen
 
 Een gewone rit toont 2 x 3 velden: **TIME**, **DISTANCE**, **AVG KM/H**, **MAX KM/H**, **MAX RPM** en **FUEL**
-(een schatting uit de luchtmassa, "L est."). Onder de velden **STOP** en **START LAP TIMING**: dat laatste maakt
+(een schatting uit de luchtmassa, "L est."; de rit vraagt zelf de luchtmassa en de gaspedaalstand op en schrijft
+ze als kolommen `maf (g/s)` en `throttle (%)` in het ritbestand). Onder de velden **STOP** en **START LAP TIMING**: dat laatste maakt
 van de lopende rit een rondensessie, waarna je de startlijn zet.
 
 ### Een rondensessie
@@ -119,7 +120,8 @@ Daarna het rondeklokje:
   **LAPS** (voltooide ronden).
 - Eronder de **sectortijden** van de lopende ronde (**S1**, **S2**, ...). Een sectorlijn zet je met
   **ADD SECTOR HERE**, op dezelfde manier als de startlijn; de klok loopt daarbij gewoon door. Na het
-  zetten van een nieuwe startlijn begint de klok opnieuw: het eerste passeren ervan start ronde 1.
+  zetten van een nieuwe startlijn begint de klok opnieuw: het moment waarop je de lijn zet (je tikt terwijl je
+  er overheen rijdt) is meteen de start van ronde 1, en de klok toont direct een lopende ronde.
 - **STOP** beëindigt de rit en daarmee de sessie; het circuit blijft bewaard als "laatst gebruikt".
 
 Hoe de ronden geteld worden (zoals in de kern, zie `docs/research/gps-laps-export.md`): de lijn telt alleen in de
@@ -127,7 +129,11 @@ richting waarin je hem zette; een ronde korter dan 10 seconden (of korter dan de
 na een passage moet je 50 m bij de lijn vandaan zijn voor de volgende telt; fixes slechter dan 20 m worden
 genegeerd; een GPS-onderbreking van meer dan 3 seconden maakt die ronde **ongeldig** (in de tabel **NO GPS**,
 nooit de beste). De ronden worden niet opgeslagen maar steeds uit het ritbestand berekend, dus een gewijzigde
-lijn herberekent oude ritten.
+lijn herberekent oude ritten. Alleen de rondensessie telt: bij een lijn die midden in een rit wordt gezet bewaart
+de rit het moment van de laatste meting ervoor, en passeringen van die plek daarvóór (een opwarmronde, of
+rijden langs de plek voordat je de sessie startte) geven geen ronden. Dat geldt voor de live klok, de ritlijst,
+het ritdetail en de exports. Ritten van vóór deze regel hebben dat moment niet en tellen vanaf het begin. Zet je
+midden in een rit een andere lijn, dan telt de nieuwe sessie vanaf dat moment en vervalt de vorige.
 
 ### De ritlijst
 

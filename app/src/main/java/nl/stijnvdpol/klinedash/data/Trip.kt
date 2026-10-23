@@ -19,6 +19,11 @@ import kotlinx.coroutines.flow.Flow
  * the cache. [trackId] is the track (start/finish gate) the laps are computed for, null for none.
  * [lapCount] and [bestLapMs] are null while no track is set (0 laps is a real answer with a track).
  * [hasGps] is true when at least one row has a position.
+ *
+ * [lapTimingAfterMs] is where the lap session of [trackId] began, as the time of the last sample
+ * before it: laps are only timed from there (plus a lead-in of a few seconds, so the pass at which
+ * the line was set counts). Null times the whole trip, as for a track set at the start and for
+ * trips recorded before the column existed.
  */
 @Entity(tableName = "trips", indices = [Index("startMs"), Index("trackId")])
 data class Trip(
@@ -37,6 +42,7 @@ data class Trip(
     val estimatedFuelLiters: Double? = null,
     val lapCount: Int? = null,
     val bestLapMs: Long? = null,
+    val lapTimingAfterMs: Long? = null,
 )
 
 /** The cached part of a [Trip] row, see [TripDao.updateSummary]. */
@@ -89,9 +95,9 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    /** Sets the track the laps of a trip are computed for; null removes it. */
-    @Query("UPDATE trips SET trackId = :trackId WHERE id = :id")
-    suspend fun setTrack(id: Long, trackId: Long?)
+    /** Sets the track the laps of a trip are computed for (null removes it) and where its lap session began. */
+    @Query("UPDATE trips SET trackId = :trackId, lapTimingAfterMs = :lapTimingAfterMs WHERE id = :id")
+    suspend fun setTrack(id: Long, trackId: Long?, lapTimingAfterMs: Long?)
 
     @Query(
         "UPDATE trips SET hasGps = :hasGps, movingTimeMs = :movingTimeMs, estimatedFuelLiters = :estimatedFuelLiters, " +
@@ -111,7 +117,7 @@ interface TripDao {
     suspend fun getByTrack(trackId: Long, limit: Int): List<Trip>
 
     /** Forgets [trackId] on every trip that used it (the track is being deleted). */
-    @Query("UPDATE trips SET trackId = NULL, lapCount = NULL, bestLapMs = NULL WHERE trackId = :trackId")
+    @Query("UPDATE trips SET trackId = NULL, lapTimingAfterMs = NULL, lapCount = NULL, bestLapMs = NULL WHERE trackId = :trackId")
     suspend fun clearTrack(trackId: Long)
 }
 

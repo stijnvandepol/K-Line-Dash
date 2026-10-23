@@ -32,6 +32,7 @@ import nl.stijnvdpol.klinedash.ui.theme.Spacing
 /** The sections of the SETUP page, in menu order. */
 internal enum class SetupSection(@StringRes val labelRes: Int) {
     Connection(R.string.setup_connection),
+    Car(R.string.setup_car),
     Warnings(R.string.setup_warnings),
     Dashboard(R.string.setup_dashboard),
     Display(R.string.setup_display),
@@ -101,6 +102,7 @@ private fun SetupSectionContent(
 ) {
     when (section) {
         SetupSection.Connection -> connection()
+        SetupSection.Car -> CarScreen()
         SetupSection.Warnings -> WarningsScreen()
         SetupSection.Dashboard -> DashboardSetupScreen()
         SetupSection.Display -> DisplayScreen()
@@ -117,7 +119,7 @@ private fun SetupMenu(section: SetupSection, onSelect: (SetupSection) -> Unit, m
     Column(modifier) {
         SectionTitle(stringResource(R.string.nav_setup), Modifier.height(Spacing.sectionHeaderHeight))
         HorizontalRule()
-        // Nine rows are taller than a 720 dp screen minus the bottom bar, so the menu scrolls.
+        // Ten rows are taller than a 720 dp screen minus the bottom bar, so the menu scrolls.
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             SetupSection.entries.forEach { entry ->
                 val isSelected = entry == section

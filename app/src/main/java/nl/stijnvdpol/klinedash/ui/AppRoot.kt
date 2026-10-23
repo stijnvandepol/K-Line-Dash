@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.appGraph
+import nl.stijnvdpol.klinedash.data.rpmScale
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.ui.help.AboutScreen
 import nl.stijnvdpol.klinedash.ui.help.HelpScreen
@@ -25,20 +26,27 @@ import nl.stijnvdpol.klinedash.ui.wizard.SetupWizard
 /**
  * The whole app: the first-run setup while it has not been finished or skipped (and when SETUP >
  * Help runs it again), otherwise the five pages with the warning overlay and the bottom bar. Nothing
- * is drawn until the general settings are read, so neither the setup nor the dashboard flashes by.
+ * is drawn until the general and car settings are read, so neither the setup nor the dashboard
+ * flashes by, and no tachometer is drawn on the default scale first.
  */
 @Composable
 fun AppRoot() {
-    val general by LocalContext.current.appGraph.generalSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
+    val graph = LocalContext.current.appGraph
+    val general by graph.generalSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
+    val car by graph.carSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
     val permissions = rememberPermissionRequests()
     var isRerunningSetup by remember { mutableStateOf(false) }
     var screen by remember { mutableStateOf(Screen.Dashboard) }
     val loaded = general
+    val loadedCar = car
     LaunchedEffect(loaded?.setupCompleted) { if (loaded?.setupCompleted == true) permissions.startAtLaunch() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = KLineTheme.colors.background) {
-        if (loaded == null) return@Surface
-        CompositionLocalProvider(LocalUnitSystem provides loaded.unitSystem) {
+        if (loaded == null || loadedCar == null) return@Surface
+        CompositionLocalProvider(
+            LocalUnitSystem provides loaded.unitSystem,
+            LocalRpmScale provides rpmScale(loadedCar.redlineRpm),
+        ) {
             if (!loaded.setupCompleted || isRerunningSetup) {
                 SetupWizard(permissions, onFinished = {
                     isRerunningSetup = false

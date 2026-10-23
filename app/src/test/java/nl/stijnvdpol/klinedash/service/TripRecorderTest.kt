@@ -66,7 +66,11 @@ class TripRecorderTest {
         val recording = recorder.state.value as RecordingState.Recording
         assertTrue(recording.isAuto)
         assertEquals("trip-20261022-140307.csv".length, recording.fileName.length)
-        assertEquals("recording demands what the summary needs", setOf("rpm", "speed", "coolant"), poller.demands["trip"])
+        assertEquals(
+            "recording demands what the summary, the fuel estimate and the full-throttle time need",
+            setOf("rpm", "speed", "coolant", "maf", "throttle"),
+            poller.demands["trip"],
+        )
 
         advanceTimeBy(30_000) // the rpm reading goes stale: the engine counts as off
         assertTrue(recorder.state.value is RecordingState.Recording)

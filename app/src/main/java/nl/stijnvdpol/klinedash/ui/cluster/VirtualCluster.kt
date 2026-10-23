@@ -37,13 +37,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.MainPage
+import nl.stijnvdpol.klinedash.data.RpmScale
 import nl.stijnvdpol.klinedash.data.UnitSystem
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
-import nl.stijnvdpol.klinedash.ui.CAUTION_RPM
-import nl.stijnvdpol.klinedash.ui.DANGER_RPM
 import nl.stijnvdpol.klinedash.ui.FieldCaption
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.LiveState
+import nl.stijnvdpol.klinedash.ui.LocalRpmScale
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RPM_ID
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
@@ -104,7 +104,7 @@ private const val SPEED_LABEL_STEP_KMH = 40
 private val UnitSlotWidth = 48.dp
 private val ListRowGap = Spacing.grid
 
-/** What one ring shows: its scale and ticks, where its middle is, whether the rpm zones show on it, and its caption. */
+/** What one ring shows: its scale and ticks, where its middle is, the rpm zones it shows (null for the speed ring), and its caption. */
 private class RingSpec(
     val scale: ArcScale,
     val centerX: Float,
@@ -112,15 +112,15 @@ private class RingSpec(
     val majorStep: Int,
     val labelStep: Int,
     val labelDivisor: Int,
-    val hasZones: Boolean,
+    val zones: RpmScale?,
     val caption: String,
 )
 
-private fun tachRing(centerX: Float, caption: String) =
-    RingSpec(LeftRingTach, centerX, TACH_MINOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, hasZones = true, caption = caption)
+private fun tachRing(centerX: Float, caption: String, rpm: RpmScale) =
+    RingSpec(leftRingTach(rpm.maxRpm), centerX, TACH_MINOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, zones = rpm, caption = caption)
 
 private fun speedRing(centerX: Float, caption: String, units: UnitSystem) =
-    RingSpec(rightRingSpeed(units), centerX, SPEED_MINOR_STEP_KMH, SPEED_MAJOR_STEP_KMH, SPEED_LABEL_STEP_KMH, labelDivisor = 1, hasZones = false, caption = caption)
+    RingSpec(rightRingSpeed(units), centerX, SPEED_MINOR_STEP_KMH, SPEED_MAJOR_STEP_KMH, SPEED_LABEL_STEP_KMH, labelDivisor = 1, zones = null, caption = caption)
 
 private class RingStatic(
     size: Size,
@@ -162,9 +162,9 @@ private class RingStatic(
     private fun DrawScope.drawGauge(spec: RingSpec) {
         val stroke = Stroke(GAUGE_WIDTH * unit)
         drawRingArc(layout, unit, spec, spec.scale.min, spec.scale.max, colors.ring, stroke)
-        if (!spec.hasZones) return
-        drawRingArc(layout, unit, spec, CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution, stroke)
-        drawRingArc(layout, unit, spec, DANGER_RPM.toDouble(), spec.scale.max, colors.danger, stroke)
+        val zones = spec.zones ?: return
+        drawRingArc(layout, unit, spec, zones.cautionRpm.toDouble(), zones.redlineRpm.toDouble(), colors.caution, stroke)
+        drawRingArc(layout, unit, spec, zones.redlineRpm.toDouble(), spec.scale.max, colors.danger, stroke)
     }
 
     private fun DrawScope.drawTicks(spec: RingSpec, ticks: List<Tick>) {
@@ -202,15 +202,19 @@ private class RingLit(size: Size, private val colors: KLineColors, private val s
     private val layout = RingLayout(size.width, size.height)
     private val unit = layout.radius / RING_REF
     private val litStroke = Stroke(LIT_WIDTH * unit)
-    private val tachBands = listOf(
-        LitBand(LeftRingTach.min, CAUTION_RPM.toDouble(), colors.needle),
-        LitBand(CAUTION_RPM.toDouble(), DANGER_RPM.toDouble(), colors.caution),
-        LitBand(DANGER_RPM.toDouble(), LeftRingTach.max, colors.danger),
-    )
 
     /** Per ring, made once, so that drawing a frame allocates nothing. */
     private val bandsByRing = specs.map { spec ->
-        if (spec.hasZones) tachBands else listOf(LitBand(spec.scale.min, spec.scale.max, colors.needle))
+        val zones = spec.zones
+        if (zones == null) {
+            listOf(LitBand(spec.scale.min, spec.scale.max, colors.needle))
+        } else {
+            listOf(
+                LitBand(spec.scale.min, zones.cautionRpm.toDouble(), colors.needle),
+                LitBand(zones.cautionRpm.toDouble(), zones.redlineRpm.toDouble(), colors.caution),
+                LitBand(zones.redlineRpm.toDouble(), spec.scale.max, colors.danger),
+            )
+        }
     }
 
     fun draw(scope: DrawScope, index: Int, value: Float, isStale: Boolean) = with(scope) {
@@ -249,8 +253,9 @@ internal fun VirtualCluster(page: MainPage, live: LiveState, modifier: Modifier 
         val heightPx = constraints.maxHeight.toFloat()
         val layout = remember(widthPx, heightPx) { RingLayout(widthPx, heightPx) }
         val units = LocalUnitSystem.current
-        val specs = remember(layout, captions, units) {
-            listOf(tachRing(layout.leftCenterX, captions.first), speedRing(layout.rightCenterX, captions.second, units))
+        val rpmScale = LocalRpmScale.current
+        val specs = remember(layout, captions, units, rpmScale) {
+            listOf(tachRing(layout.leftCenterX, captions.first, rpmScale), speedRing(layout.rightCenterX, captions.second, units))
         }
         Spacer(
             Modifier

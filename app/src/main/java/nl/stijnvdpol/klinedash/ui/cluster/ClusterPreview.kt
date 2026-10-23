@@ -13,7 +13,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import nl.stijnvdpol.klinedash.data.ClusterStyle
+import nl.stijnvdpol.klinedash.data.DEFAULT_REDLINE_RPM
 import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.data.rpmScale
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -33,6 +35,9 @@ private const val ARC_LIT = 8
 private const val ARC_GAP_DEG = 3f
 private const val ZONE_ALPHA = 0.45f
 private const val NEEDLE_FRACTION = 0.45f
+
+/** The sketches have no setting to follow: they draw the scale of the default redline. */
+private val PreviewRpmMax = rpmScale(DEFAULT_REDLINE_RPM).maxRpm
 
 /**
  * A small still drawing of cluster [style] in the colours of [colors], for the theme list. It is a
@@ -105,7 +110,7 @@ private fun DrawScope.drawTwinSketch(colors: KLineColors) {
     val top = drawFieldRow(colors)
     val radius = top * 0.45f
     val y = top / 2f
-    drawDial(colors, Offset(size.width * 0.27f, y), radius, DialTach.angleDeg(NEEDLE_FRACTION * TACH_MAX_RPM))
+    drawDial(colors, Offset(size.width * 0.27f, y), radius, dialTach(PreviewRpmMax).angleDeg((NEEDLE_FRACTION * PreviewRpmMax).toDouble()))
     drawDial(colors, Offset(size.width * 0.73f, y), radius, dialSpeedo(UnitSystem.METRIC).angleDeg(NEEDLE_FRACTION * SPEEDO_MAX_KMH))
     val mid = polar(size.width / 2f, y + radius * 0.5f, radius * 0.45f, 270f)
     drawArc(colors.inkMuted, 225f, 90f, false, Offset(size.width / 2f - radius * 0.45f, y + radius * 0.05f), Size(radius * 0.9f, radius * 0.9f), style = Stroke(1.5.dp.toPx()))
@@ -116,7 +121,7 @@ private fun DrawScope.drawCenterSketch(colors: KLineColors) {
     val top = drawFieldRow(colors)
     val radius = top * 0.46f
     val y = top / 2f
-    drawDial(colors, Offset(size.width / 2f, y), radius, DialTach.angleDeg(NEEDLE_FRACTION * TACH_MAX_RPM))
+    drawDial(colors, Offset(size.width / 2f, y), radius, dialTach(PreviewRpmMax).angleDeg((NEEDLE_FRACTION * PreviewRpmMax).toDouble()))
     drawRect(colors.ink, Offset(size.width * 0.06f, y + top * 0.1f), Size(size.width * 0.22f, top * 0.26f))
     drawRect(colors.ink, Offset(size.width * 0.72f, y - top * 0.32f), Size(size.width * 0.2f, top * 0.22f))
     drawRect(colors.ink, Offset(size.width * 0.72f, y + top * 0.12f), Size(size.width * 0.2f, top * 0.22f))
@@ -135,8 +140,9 @@ private fun DrawScope.drawArcSketch(colors: KLineColors) {
     }
     val radius = top * 0.62f
     val center = Offset(size.width / 2f, top * 0.22f + radius)
+    val tach = arcTach(PreviewRpmMax)
     for (i in 0 until ARC_SEGMENTS) {
-        val (start, sweep) = segmentArc(ArcTach, i, ARC_SEGMENTS, ARC_GAP_DEG)
+        val (start, sweep) = segmentArc(tach, i, ARC_SEGMENTS, ARC_GAP_DEG)
         drawArc(
             if (i < ARC_LIT) colors.needle else colors.surface, start, sweep, false,
             Offset(center.x - radius, center.y - radius), Size(radius * 2, radius * 2), style = Stroke(top * 0.1f),
@@ -153,7 +159,7 @@ private fun DrawScope.drawVirtualSketch(colors: KLineColors) {
     val rightCenter = Offset(size.width - radius * 0.64f, y)
     listOf(leftCenter to true, rightCenter to false).forEach { (center, isLeft) ->
         drawCircle(colors.ring, radius, center, style = Stroke(1.5.dp.toPx()))
-        val scale = if (isLeft) LeftRingTach else rightRingSpeed(UnitSystem.METRIC)
+        val scale = if (isLeft) leftRingTach(PreviewRpmMax) else rightRingSpeed(UnitSystem.METRIC)
         val start = scale.startDeg
         drawArc(colors.needle, start, scale.sweepDeg * 0.5f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2, radius * 2), style = Stroke(3.dp.toPx()))
         drawRect(colors.ink, Offset(center.x - radius * 0.25f, y - top * 0.08f), Size(radius * 0.5f, top * 0.16f))

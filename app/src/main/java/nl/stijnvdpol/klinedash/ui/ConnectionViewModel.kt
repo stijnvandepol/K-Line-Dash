@@ -103,10 +103,15 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun selectKind(kind: TransportKind) = updateSettings { it.copy(kind = kind) }
 
-    /** Chooses the simulator and, once that is stored, runs [then] (starting the link): the link must see the new choice. */
+    /**
+     * Chooses the simulator and, once that is stored, runs [then] (starting the link): the link must
+     * see the new choice. Also drives the simulated GPS circuit, so someone trying the app at home
+     * sees laps and routes too, as the setup wizard does.
+     */
     fun useSimulator(then: () -> Unit) {
         viewModelScope.launch {
             repository.update { it.copy(kind = TransportKind.SIMULATOR) }
+            graph.gpsSettingsRepository.update { it.copy(useSimulatedGps = true) }
             then()
         }
     }

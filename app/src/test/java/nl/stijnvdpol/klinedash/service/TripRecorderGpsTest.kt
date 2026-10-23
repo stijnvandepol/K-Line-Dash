@@ -20,6 +20,7 @@ import nl.stijnvdpol.klinedash.core.trip.readTripCsv
 import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.TripSettings
+import nl.stijnvdpol.klinedash.data.newTrack
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -185,6 +186,8 @@ class TripRecorderGpsTest {
         advanceTimeBy(1_000)
         assertEquals(1L, tripDao.rows.value.single().trackId)
         assertNotNull(recorder.live.value.lapTiming)
+        val lapTimingAfterMs = checkNotNull(tripDao.rows.value.single().lapTimingAfterMs)
+        assertTrue("the last sample before the track was set: $lapTimingAfterMs", lapTimingAfterMs in TEST_BASE_MS..TEST_BASE_MS + 3_000)
 
         activeTrack.value = null
         advanceTimeBy(1_000)
@@ -201,8 +204,42 @@ class TripRecorderGpsTest {
         runCurrent()
         assertEquals(StartResult.Started, recorder.start())
         assertEquals(1L, tripDao.rows.value.single().trackId)
+        assertNull("a track set before the first sample times the whole trip", tripDao.rows.value.single().lapTimingAfterMs)
         assertEquals(1L, recorder.live.value.trackId)
         recorder.stop()
+    }
+
+    @Test
+    fun aLineSetMidTripGivesTheSameLapsLiveAndInTheStoredTrip() = runTest {
+        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime })
+        val recorder = recorder(source)
+        backgroundScope.launch { recorder.run() }
+        source.start()
+        driveAt(72.0)
+        runCurrent()
+        assertEquals(StartResult.Started, recorder.start())
+        // 2.6 km at 20 m/s: the car passes the spot below 100 s before it sets the line there.
+        repeat(130) {
+            driveAt(72.0)
+            advanceTimeBy(1_000)
+        }
+
+        val here = checkNotNull(source.freshFix())
+        val tappedMs = TEST_BASE_MS + currentTime
+        trackDao.insert(newTrack("Here", GateSpec(here.lat, here.lon, checkNotNull(here.bearingDeg)), emptyList(), tappedMs))
+        activeTrack.value = trackDao.get(1)
+        repeat(220) {
+            driveAt(72.0)
+            advanceTimeBy(1_000)
+        }
+        val liveLaps = recorder.live.value.lapStats.map { it.lap }
+        recorder.stop()
+
+        val trip = tripDao.rows.value.single()
+        assertEquals("the passes at 130 s (the line set), 230 s and 330 s", 2, liveLaps.size)
+        assertEquals(tappedMs.toDouble(), liveLaps.first().startMs.toDouble(), 400.0)
+        assertEquals("the pass at 30 s was before the lap session", liveLaps.size, trip.lapCount)
+        assertEquals(liveLaps.minOf { it.lapTimeMs }.toDouble(), checkNotNull(trip.bestLapMs).toDouble(), 50.0)
     }
 
     @Test

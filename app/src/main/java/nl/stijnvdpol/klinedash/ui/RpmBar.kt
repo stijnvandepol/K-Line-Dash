@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.data.RpmScale
 import nl.stijnvdpol.klinedash.ui.pages.isFlashLit
 import nl.stijnvdpol.klinedash.ui.pages.isShiftLightOn
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
@@ -42,14 +43,11 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-internal const val RPM_BAR_SEGMENTS = 45
+/** Each segment of the bar and of the arc cluster's tachometer covers this much rpm. */
 internal const val SEGMENT_RPM = 200
 
-/** Where the 2ZZ-GE VVTL-i high cam engages, and where the limiter zone starts (limiter about 8 200). */
-internal const val CAUTION_RPM = 6_200
-internal const val DANGER_RPM = 7_800
-
-private const val SCALE_STEP_RPM = 1_000
+/** The scale numerals stand one per this many rpm. */
+internal const val SCALE_STEP_RPM = 1_000
 private const val SEGMENTS_PER_SCALE_STEP = SCALE_STEP_RPM / SEGMENT_RPM
 private const val UNLIT_ZONE_ALPHA = 0.25f
 private const val MS_PER_SECOND = 1_000.0
@@ -64,14 +62,21 @@ private val BarPaddingBottom = Spacing.grid
 
 internal enum class RpmZone { NORMAL, CAUTION, DANGER }
 
-internal fun rpmZone(rpm: Int): RpmZone = when {
-    rpm >= DANGER_RPM -> RpmZone.DANGER
-    rpm >= CAUTION_RPM -> RpmZone.CAUTION
+/** Normal below the caution rpm, caution from there, danger from the redline. */
+internal fun rpmZone(rpm: Int, scale: RpmScale): RpmZone = when {
+    rpm >= scale.redlineRpm -> RpmZone.DANGER
+    rpm >= scale.cautionRpm -> RpmZone.CAUTION
     else -> RpmZone.NORMAL
 }
 
+/** How many segments cover the scale: 40 for a 6 500 redline (scale to 8 000), 30 for 4 500. */
+internal fun segmentCount(scale: RpmScale): Int = scale.maxRpm / SEGMENT_RPM
+
+/** The numerals of the scale in thousands, 0 to 8 for a 6 500 redline. */
+internal fun scaleNumerals(scale: RpmScale): IntRange = 0..scale.maxRpm / SCALE_STEP_RPM
+
 /** A segment is lit as soon as the rpm passes its start, so 830 rpm lights five of them. */
-internal fun litSegmentCount(rpm: Double): Int = ceil(rpm / SEGMENT_RPM).toInt().coerceIn(0, RPM_BAR_SEGMENTS)
+internal fun litSegmentCount(rpm: Double, segments: Int): Int = ceil(rpm / SEGMENT_RPM).toInt().coerceIn(0, segments)
 
 /**
  * How long the bar takes to travel to a new reading: the measured interval between rpm readings,
@@ -93,8 +98,8 @@ private fun KLineColors.zoneColor(zone: RpmZone): Color = when (zone) {
  * Left edge and width of a segment in pixels. The gap is a whole number of pixels, so rounding the
  * edges keeps every gap identical; only the segments themselves differ by a pixel.
  */
-private class SegmentGeometry(widthPx: Float, gapPx: Float) {
-    private val segmentWidth = (widthPx - gapPx * (RPM_BAR_SEGMENTS - 1)) / RPM_BAR_SEGMENTS
+private class SegmentGeometry(widthPx: Float, gapPx: Float, segments: Int) {
+    private val segmentWidth = (widthPx - gapPx * (segments - 1)) / segments
     private val pitch = segmentWidth + gapPx
 
     fun left(index: Int): Float = (index * pitch).roundToInt().toFloat()
@@ -114,7 +119,8 @@ internal class ShiftLight(val shiftRpm: Int) {
  * The segmented RPM bar with its scale. The unlit bar and the scale are drawn once into their own
  * layer; the lit segments are an [Animatable] that travels to each new reading in about the time
  * between two readings and is read in the draw phase only, so a frame of movement redraws at most
- * 45 rectangles and recomposes nothing.
+ * one rectangle per 200 rpm of the scale (30 to 55) and recomposes nothing. The scale and the zones
+ * are those of the car ([LocalRpmScale]).
  */
 @Composable
 internal fun RpmBar(
@@ -133,6 +139,8 @@ internal fun RpmBar(
     val description = stringResource(R.string.rpm_bar_description)
     val metrics = dashMetricsOf(LocalScreenProfile.current.tier)
     val barHeight = metrics.barHeight
+    val rpmScale = LocalRpmScale.current
+    val segments = segmentCount(rpmScale)
     Box(
         modifier
             .padding(
@@ -150,22 +158,20 @@ internal fun RpmBar(
                 .fillMaxSize()
                 .graphicsLayer()
                 .drawWithCache {
-                    val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat())
+                    val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat(), segments)
                     val barPx = barHeight.toPx()
-                    val scale = (0..RPM_BAR_SEGMENTS step SEGMENTS_PER_SCALE_STEP).map { index ->
-                        measurer.measure((index / SEGMENTS_PER_SCALE_STEP).toString(), KLineType.fieldLabel)
-                    }
+                    val scale = scaleNumerals(rpmScale).map { thousand -> measurer.measure(thousand.toString(), KLineType.fieldLabel) }
                     onDrawBehind {
-                        for (i in 0 until RPM_BAR_SEGMENTS) {
+                        for (i in 0 until segments) {
                             val topLeft = Offset(geometry.left(i), 0f)
                             val segment = Size(geometry.width(i), barPx)
                             drawRect(colors.surface, topLeft, segment)
-                            val zone = rpmZone(i * SEGMENT_RPM)
+                            val zone = rpmZone(i * SEGMENT_RPM, rpmScale)
                             if (zone != RpmZone.NORMAL) drawRect(colors.zoneColor(zone), topLeft, segment, UNLIT_ZONE_ALPHA)
                         }
                         val labelTop = barPx + ScaleGap.toPx()
                         scale.forEachIndexed { step, label ->
-                            // The last label (9 000) has no segment of its own: it ends where the bar ends.
+                            // The last label (the end of the scale) has no segment of its own: it ends where the bar ends.
                             val x = if (step == scale.lastIndex) size.width - label.size.width
                             else geometry.left(step * SEGMENTS_PER_SCALE_STEP)
                             drawText(label, colors.inkMuted, Offset(x, labelTop))
@@ -177,18 +183,18 @@ internal fun RpmBar(
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat())
+                    val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat(), segments)
                     val barPx = barHeight.toPx()
                     onDrawBehind {
                         // Flashing: every segment in danger, so the whole bar blinks, not just its lit part.
                         val isFlashing = shiftLight?.isLit == true
-                        val count = if (isFlashing) RPM_BAR_SEGMENTS else litSegmentCount(lit.value.toDouble())
+                        val count = if (isFlashing) segments else litSegmentCount(lit.value.toDouble(), segments)
                         val dimmed = stale.value
                         for (i in 0 until count) {
                             val color = when {
                                 isFlashing -> colors.danger
                                 dimmed -> colors.inkFaint
-                                else -> colors.zoneColor(rpmZone(i * SEGMENT_RPM))
+                                else -> colors.zoneColor(rpmZone(i * SEGMENT_RPM, rpmScale))
                             }
                             drawRect(color, Offset(geometry.left(i), 0f), Size(geometry.width(i), barPx))
                         }

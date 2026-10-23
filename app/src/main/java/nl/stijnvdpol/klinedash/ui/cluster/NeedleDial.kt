@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.IntOffset
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
+import nl.stijnvdpol.klinedash.ui.LocalRpmScale
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.RPM_ID
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
@@ -36,13 +37,14 @@ private const val SPEEDO_MINOR_STEP_KMH = 10
 private const val SPEEDO_MAJOR_STEP_KMH = 20
 private const val SPEEDO_LABEL_STEP_KMH = 40
 
-/** The tachometer of the twin and centre styles: 0 to 9 with "x1000" on it, the caution and redline bands. */
+/** The tachometer of the twin and centre styles: 0 to the end of the car's rpm scale in thousands with "x1000" on it, the caution and redline bands. */
 @Composable
 internal fun rememberTachSpec(): DialSpec {
     val scale = stringResource(R.string.cluster_tach_scale)
     val caption = fieldLabel(checkNotNull(Signals.byId(RPM_ID)))
-    return remember(scale, caption) {
-        DialSpec(DialTach, TACH_MINOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, hasZones = true, topCaption = scale, caption = caption)
+    val rpm = LocalRpmScale.current
+    return remember(scale, caption, rpm) {
+        DialSpec(dialTach(rpm.maxRpm), TACH_MINOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, TACH_MAJOR_STEP_RPM, zones = rpm, topCaption = scale, caption = caption)
     }
 }
 
@@ -52,7 +54,7 @@ internal fun rememberSpeedoSpec(): DialSpec {
     val caption = fieldLabel(checkNotNull(Signals.byId(SPEED_ID)))
     val units = LocalUnitSystem.current
     return remember(caption, units) {
-        DialSpec(dialSpeedo(units), SPEEDO_MINOR_STEP_KMH, SPEEDO_MAJOR_STEP_KMH, SPEEDO_LABEL_STEP_KMH, 1, hasZones = false, topCaption = null, caption = caption)
+        DialSpec(dialSpeedo(units), SPEEDO_MINOR_STEP_KMH, SPEEDO_MAJOR_STEP_KMH, SPEEDO_LABEL_STEP_KMH, 1, zones = null, topCaption = null, caption = caption)
     }
 }
 

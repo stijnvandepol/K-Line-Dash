@@ -8,10 +8,27 @@ data class Dtc(val code: String) {
         require(DTC_FORMAT.matches(code)) { "Not a DTC: \"$code\"" }
     }
 
+    /**
+     * True when the standard leaves the meaning to the manufacturer (SAE J2012): P1xxx and
+     * P30xx-P33xx, and the 1xxx and 2xxx ranges of B, C and U codes. The same code then means
+     * something else on another make.
+     */
+    val isManufacturerSpecific: Boolean
+        get() {
+            val digit = code[DIGIT_INDEX]
+            return when (code[LETTER_INDEX]) {
+                'P' -> digit == '1' || (digit == '3' && code[SECOND_DIGIT_INDEX] in '0'..'3')
+                else -> digit == '1' || digit == '2'
+            }
+        }
+
     override fun toString(): String = code
 
     private companion object {
         val DTC_FORMAT = Regex("[PCBU][0-3][0-9A-F]{3}")
+        const val LETTER_INDEX = 0
+        const val DIGIT_INDEX = 1
+        const val SECOND_DIGIT_INDEX = 2
     }
 }
 

@@ -181,13 +181,19 @@ internal fun SupportedAdaptersList(modifier: Modifier) {
 
 /**
  * Connect, Disconnect and forgetting the saved protocol: one row of 72 dp cells separated by rules,
- * like the button grids on Debug. Connect is the one filled cell.
+ * like the button grids on Debug. Connect is the one filled cell while there is no link; once the
+ * link is up it stays available (it reconnects) but no longer asks to be tapped.
  */
 @Composable
 private fun Actions(vm: ConnectionViewModel, state: ConnectionState, onConnect: () -> Unit, modifier: Modifier) {
     val notice by vm.notice.collectAsStateWithLifecycle()
     Row(modifier) {
-        PrimaryButton(stringResource(R.string.btn_connect), onConnect, Modifier.weight(1f).fillMaxHeight())
+        val connectModifier = Modifier.weight(1f).fillMaxHeight()
+        if (state is ConnectionState.Connected) {
+            TextActionButton(stringResource(R.string.btn_connect), onConnect, connectModifier)
+        } else {
+            PrimaryButton(stringResource(R.string.btn_connect), onConnect, connectModifier)
+        }
         VerticalRule()
         TextActionButton(
             stringResource(R.string.btn_disconnect), vm::disconnect, Modifier.weight(1f).fillMaxHeight(),

@@ -57,7 +57,9 @@ internal inline fun <T> withTripCsv(file: File, block: (TripCsv) -> T): T =
 /**
  * Statistics, laps and route of recorded trips, derived from the CSV with the same code that runs
  * live while recording (so a track change recomputes old trips exactly as a live run would have
- * seen them). All reading happens off the main thread.
+ * seen them). Laps are timed over the lap session only, from [Trip.lapTimingAfterMs] on, like the
+ * live timer did; a trip without that time is timed from its first sample. All reading happens off
+ * the main thread.
  */
 class TripAnalysisRepository internal constructor(
     private val tripsDir: File,
@@ -106,7 +108,7 @@ class TripAnalysisRepository internal constructor(
         for (trip in tripDao.getByTrack(trackId, REFERENCE_LAP_TRIPS).filter { it.endMs != null }) {
             val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile } ?: continue
             val lap = try {
-                withContext(ioDispatcher) { referenceLapOf(file, track) }
+                withContext(ioDispatcher) { referenceLapOf(file, track, trip.lapTimingAfterMs) }
             } catch (e: IOException) {
                 Log.e(TAG, "Could not read ${trip.fileName} for a reference lap", e)
                 continue
@@ -127,14 +129,14 @@ class TripAnalysisRepository internal constructor(
         return result
     }
 
-    private fun referenceLapOf(file: File, track: Track): List<GeoFix> = withTripCsv(file) { csv ->
-        val analyzer = TripAnalyzer(track.lapGates())
+    private fun referenceLapOf(file: File, track: Track, lapTimingAfterMs: Long?): List<GeoFix> = withTripCsv(file) { csv ->
+        val analyzer = TripAnalyzer(track.lapGates(), lapTimingAfterMs = lapTimingAfterMs)
         csv.samples.forEach(analyzer::add)
         analyzer.timing()?.referenceLap.orEmpty()
     }
 
     private fun analyzeFile(trip: Trip, file: File, track: Track?): TripDetail = withTripCsv(file) { csv ->
-        val analyzer = TripAnalyzer(track?.lapGates())
+        val analyzer = TripAnalyzer(track?.lapGates(), lapTimingAfterMs = trip.lapTimingAfterMs)
         val fixes = ArrayList<GeoFix>()
         for (sample in csv.samples) {
             analyzer.add(sample)

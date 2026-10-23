@@ -25,6 +25,7 @@ import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import nl.stijnvdpol.klinedash.core.obd.Signals
 import nl.stijnvdpol.klinedash.data.TrackPage
+import nl.stijnvdpol.klinedash.data.shiftPoint
 import nl.stijnvdpol.klinedash.ui.COOLANT_ID
 import nl.stijnvdpol.klinedash.ui.DataField
 import nl.stijnvdpol.klinedash.ui.FieldFrame
@@ -39,6 +40,7 @@ import nl.stijnvdpol.klinedash.ui.ValueTone
 import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.VerticalRule
 import nl.stijnvdpol.klinedash.ui.dashMetricsOf
+import nl.stijnvdpol.klinedash.ui.LocalRpmScale
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.slotSample
 import nl.stijnvdpol.klinedash.ui.unitOf
@@ -71,7 +73,8 @@ private val PeakLook = ValueLook(KLineType.fieldValue)
  */
 @Composable
 internal fun TrackPageContent(page: TrackPage, live: LiveState, peaks: State<Peaks>, onResetPeaks: () -> Unit) {
-    val shiftLight = remember(page.shiftRpm) { ShiftLight(page.shiftRpm) }
+    val rpmScale = LocalRpmScale.current
+    val shiftLight = remember(page.shiftRpm, rpmScale) { ShiftLight(rpmScale.shiftPoint(page.shiftRpm)) }
     val danger = KLineTheme.colors.danger
     Box(
         Modifier.fillMaxSize().drawWithContent {

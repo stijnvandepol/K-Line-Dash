@@ -69,9 +69,12 @@ const val MAX_PAGES = 12
 
 private val TRACK_SIGNAL_IDS = listOf("rpm", "speed", "coolant")
 
-const val DEFAULT_SHIFT_RPM = 7_800
-const val MIN_SHIFT_RPM = 4_000
-const val MAX_SHIFT_RPM = 9_000
+/** A little below the default redline, so the shift light of a new install flashes before the red zone. */
+const val DEFAULT_SHIFT_RPM = 6_200
+const val MIN_SHIFT_RPM = MIN_REDLINE_RPM
+
+/** The end of the tachometer scale of the highest redline ([MAX_REDLINE_RPM] plus the 1 000 rpm of red zone [rpmScale] keeps). */
+const val MAX_SHIFT_RPM = 11_000
 const val SHIFT_RPM_STEP = 100
 
 val DEFAULT_PRIMARY_IDS = listOf("rpm", "speed", "coolant")
@@ -96,6 +99,12 @@ fun defaultGridCells(size: GridSize, skip: Int = 0): List<GridCell> =
     List(size.cellCount - skip) { GridCell(FILL_SIGNAL_IDS[(skip + it) % FILL_SIGNAL_IDS.size]) }
 
 fun clampShiftRpm(rpm: Int): Int = rpm.coerceIn(MIN_SHIFT_RPM, MAX_SHIFT_RPM)
+
+/**
+ * The shift point to flash at on a car with this scale: the stored [shiftRpm], but never past the
+ * end of the tachometer scale, because the bar cannot show a higher rpm than that.
+ */
+fun RpmScale.shiftPoint(shiftRpm: Int): Int = shiftRpm.coerceAtMost(maxRpm)
 
 /** A new page of [template] with its default content. */
 fun newPage(template: PageTemplate): Page = when (template) {

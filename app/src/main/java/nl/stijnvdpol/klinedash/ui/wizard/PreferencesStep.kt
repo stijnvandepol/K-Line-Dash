@@ -22,10 +22,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.TwoPane
 import nl.stijnvdpol.klinedash.ui.ButtonRow
+import nl.stijnvdpol.klinedash.ui.CarViewModel
 import nl.stijnvdpol.klinedash.ui.DisplayViewModel
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
 import nl.stijnvdpol.klinedash.ui.LocalUnitSystem
 import nl.stijnvdpol.klinedash.ui.PermissionRequests
+import nl.stijnvdpol.klinedash.ui.RedlineHint
+import nl.stijnvdpol.klinedash.ui.RedlineStepper
 import nl.stijnvdpol.klinedash.ui.SecondaryButton
 import nl.stijnvdpol.klinedash.ui.SectionTitle
 import nl.stijnvdpol.klinedash.ui.SelectableRow
@@ -46,13 +49,15 @@ private val ThemeGap = 12.dp
 private val ThemeCellMinWidth = 340.dp
 
 /**
- * Step 5: units, theme and whether trips record by themselves. Every choice applies at once, so the
- * screen already looks the way it will. Permissions the app can use are offered here with their
- * reason, and only while they are missing.
+ * Step 5: units, the red line, theme and whether trips record by themselves. Every choice applies at
+ * once, so the screen already looks the way it will. Permissions the app can use are offered here
+ * with their reason, and only while they are missing.
  */
 @Composable
 internal fun PreferencesStep(wizard: WizardViewModel, permissions: PermissionRequests) {
     val display = graphViewModel { DisplayViewModel.forGraph(it) }
+    val car = graphViewModel { CarViewModel(it.carSettingsRepository) }
+    val carSettings by car.settings.collectAsStateWithLifecycle()
     val isRecordingTrips by wizard.isRecordingTrips.collectAsStateWithLifecycle()
     var resumes by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) {
@@ -66,6 +71,12 @@ internal fun PreferencesStep(wizard: WizardViewModel, permissions: PermissionReq
         left = {
             SectionTitle(stringResource(R.string.units_title))
             UnitSystemChoice(LocalUnitSystem.current, display::setUnits)
+            carSettings?.let { settings ->
+                RedlineStepper(settings, car)
+                HorizontalRule()
+                RedlineHint()
+                HorizontalRule()
+            }
             SwitchRow(stringResource(R.string.wiz_prefs_trips), isRecordingTrips ?: true, wizard::setRecordTrips)
             HorizontalRule()
             StepText(stringResource(R.string.wiz_prefs_trips_hint))

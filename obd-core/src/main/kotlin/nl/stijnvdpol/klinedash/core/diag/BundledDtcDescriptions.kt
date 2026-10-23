@@ -2,12 +2,14 @@ package nl.stijnvdpol.klinedash.core.diag
 
 /**
  * [DtcDescriptions] backed by the two data files bundled in the jar (and so in the APK):
- * `/dtc/generic.tsv` (SAE J2012 generic meanings) and `/dtc/toyota-2zz.tsv` (Toyota P1xxx meanings
- * plus notes for this car). Both files are programmer-maintained data, so a malformed line is a
- * bug and throws [IllegalArgumentException] naming the file and line number.
+ * `/dtc/generic.tsv` (SAE J2012 generic meanings, valid for every car) and `/dtc/toyota-2zz.tsv`
+ * (Toyota meanings plus notes for the 2ZZ-GE, only for that car). Both files are
+ * programmer-maintained data, so a malformed line is a bug and throws [IllegalArgumentException]
+ * naming the file and line number.
  *
  * Merge rule: a vehicle description overrides the generic one when it is non-empty; the vehicle
- * note is attached either way.
+ * note is attached either way. A manufacturer-specific code that neither file describes gets
+ * [MANUFACTURER_SPECIFIC_DESCRIPTION], because its meaning depends on the make.
  */
 class BundledDtcDescriptions(genericLines: List<String>, vehicleLines: List<String>) : DtcDescriptions {
 
@@ -24,7 +26,10 @@ class BundledDtcDescriptions(genericLines: List<String>, vehicleLines: List<Stri
 
     override fun describe(dtc: Dtc): DtcDescription? {
         val vehicleEntry = vehicle[dtc.code]
-        val description = vehicleEntry?.description?.ifEmpty { null } ?: generic[dtc.code] ?: return null
+        val description = vehicleEntry?.description?.ifEmpty { null }
+            ?: generic[dtc.code]
+            ?: MANUFACTURER_SPECIFIC_DESCRIPTION.takeIf { dtc.isManufacturerSpecific }
+            ?: return null
         return DtcDescription(description, vehicleEntry?.note?.ifEmpty { null })
     }
 
@@ -40,12 +45,21 @@ class BundledDtcDescriptions(genericLines: List<String>, vehicleLines: List<Stri
         private const val GENERIC_COLUMNS = 2
         private const val VEHICLE_COLUMNS = 3
 
-        private val bundled: BundledDtcDescriptions by lazy {
+        private val genericOnly: BundledDtcDescriptions by lazy {
+            BundledDtcDescriptions(readResource(GENERIC_RESOURCE), emptyList())
+        }
+
+        private val withToyota2zz: BundledDtcDescriptions by lazy {
             BundledDtcDescriptions(readResource(GENERIC_RESOURCE), readResource(VEHICLE_RESOURCE))
         }
 
-        /** The bundled database; parsed on first use and shared afterwards. */
-        fun load(): BundledDtcDescriptions = bundled
+        /**
+         * The bundled database; each variant is parsed on first use and shared afterwards. With
+         * [includeToyota2zz] false only the generic meanings apply (any car); true adds the Toyota
+         * 2ZZ-GE meanings and notes.
+         */
+        fun load(includeToyota2zz: Boolean): BundledDtcDescriptions =
+            if (includeToyota2zz) withToyota2zz else genericOnly
 
         /** Parses `CODE<TAB>description` lines; comment (`#`) and blank lines are skipped. */
         internal fun parseGeneric(lines: List<String>): Map<String, String> {

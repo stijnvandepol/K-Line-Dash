@@ -2,6 +2,8 @@ package nl.stijnvdpol.klinedash.service
 
 import java.io.File
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.core.trip.analyzeTrip
+import nl.stijnvdpol.klinedash.core.trip.readTripCsv
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,6 +44,37 @@ class TripSessionTest {
             assertTrue("forced summary columns are always there", header.contains("speed") && header.contains("coolant"))
             assertEquals("header and the three kept samples", 4, text().lines().count { it.isNotEmpty() })
         }
+    }
+
+    @Test
+    fun theAirFlowAndThrottleColumnsAreAlwaysThereBecauseTheStatisticsNeedThem() {
+        newSession().use { it.add(startMs, readings(startMs, "rpm")) }
+        val header = text().lines().first()
+        assertTrue(header, "maf (g/s)" in header && "throttle (%)" in header)
+    }
+
+    @Test
+    fun fuelAndFullThrottleThatAppearAfterTheHeaderAreInTheFileAndReadBackLikeTheLiveOnes() {
+        val session = newSession()
+        for (second in 0..40) {
+            val now = startMs + second * 1_000L
+            // The signals only a screen polls show up once the header is long written.
+            val ids = if (second < 30) arrayOf("rpm", "speed", "coolant") else arrayOf("rpm", "speed", "coolant", "maf", "throttle")
+            val values = readings(now, *ids).mapValues { (id, reading) ->
+                reading.copy(value = if (id == "throttle") 100.0 else if (id == "maf") 10.0 else reading.value)
+            }
+            session.add(now, values)
+        }
+        session.close()
+        val live = checkNotNull(session.liveState().stats)
+
+        val reread = File(folder.root, "t.csv").bufferedReader(Charsets.UTF_8).use { reader ->
+            analyzeTrip(readTripCsv(reader).samples).stats
+        }
+
+        assertTrue("the live statistics saw the fuel", checkNotNull(live.estimatedFuelLiters) > 0.0)
+        assertEquals(live.estimatedFuelLiters, checkNotNull(reread).estimatedFuelLiters)
+        assertEquals(live.fullThrottleTimeMs, reread.fullThrottleTimeMs)
     }
 
     @Test
@@ -99,6 +132,25 @@ class TripSessionTest {
             assertEquals(5L, session.liveState().trackId)
             assertEquals(false, checkNotNull(session.liveState().lapTiming).isTiming)
             assertEquals(0, session.cache().lapCount)
+        }
+    }
+
+    @Test
+    fun theLapSessionRemembersTheLastSampleBeforeItStarted() {
+        newSession().use { session ->
+            session.setTrack(5, circuitTrack().lapGates())
+            assertEquals("a line set before any sample times the whole trip", null, session.lapTimingAfterMs)
+
+            session.setTrack(null, null)
+            session.add(startMs, readings(startMs, "rpm"))
+            session.add(startMs + 1_000, readings(startMs + 1_000, "rpm"))
+            session.setTrack(6, circuitTrack().lapGates())
+            assertEquals(startMs + 1_000, session.lapTimingAfterMs)
+
+            session.add(startMs + 2_000, readings(startMs + 2_000, "rpm"))
+            val withSector = circuitTrack(sectors = listOf(circuitStartLine())).lapGates()
+            session.setTrack(6, withSector)
+            assertEquals("a sector line added on the same track does not restart the session", startMs + 1_000, session.lapTimingAfterMs)
         }
     }
 }

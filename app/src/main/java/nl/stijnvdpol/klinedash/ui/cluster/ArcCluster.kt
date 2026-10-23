@@ -27,14 +27,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import nl.stijnvdpol.klinedash.data.RpmScale
 import nl.stijnvdpol.klinedash.ui.BATTERY_ID
 import nl.stijnvdpol.klinedash.ui.CAP_HEIGHT_EM
 import nl.stijnvdpol.klinedash.ui.COOLANT_ID
 import nl.stijnvdpol.klinedash.ui.DataField
 import nl.stijnvdpol.klinedash.ui.LiveState
+import nl.stijnvdpol.klinedash.ui.LocalRpmScale
 import nl.stijnvdpol.klinedash.ui.RPM_ID
-import nl.stijnvdpol.klinedash.ui.RPM_BAR_SEGMENTS
 import nl.stijnvdpol.klinedash.ui.RpmZone
+import nl.stijnvdpol.klinedash.ui.SCALE_STEP_RPM
 import nl.stijnvdpol.klinedash.ui.SEGMENT_RPM
 import nl.stijnvdpol.klinedash.ui.SPEED_ID
 import nl.stijnvdpol.klinedash.ui.ValueLook
@@ -42,6 +44,8 @@ import nl.stijnvdpol.klinedash.ui.ValueText
 import nl.stijnvdpol.klinedash.ui.fieldLabel
 import nl.stijnvdpol.klinedash.ui.litSegmentCount
 import nl.stijnvdpol.klinedash.ui.rpmZone
+import nl.stijnvdpol.klinedash.ui.scaleNumerals
+import nl.stijnvdpol.klinedash.ui.segmentCount
 import nl.stijnvdpol.klinedash.ui.theme.KLineColors
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -63,7 +67,6 @@ private const val NUMERAL_SIZE_SHARE = 0.05f
 private const val NUMERAL_RADIUS_SHARE = 0.115f
 private const val CAPTION_SIZE_SHARE = 0.045f
 private const val CAPTION_ALPHA = 0.8f
-private const val SCALE_STEP_RPM = 1_000
 
 private const val SPEED_SIZE_SHARE = 0.5f
 private const val SPEED_BASELINE_SHARE = -0.16f
@@ -110,17 +113,19 @@ private class ArcStatic(
     measurer: TextMeasurer,
     captions: Pair<String, String>,
     margin: Float,
+    private val rpmScale: RpmScale,
 ) {
     private val layout = ArcLayout(size.width, size.height)
     private val strip = LightStrip(size.width, layout, margin)
     private val stroke = layout.radius * STROKE_SHARE
-    private val segments = ArcSegments(layout, stroke)
+    private val tach = arcTach(rpmScale.maxRpm)
+    private val segments = ArcSegments(layout, stroke, tach, segmentCount(rpmScale))
     private val numeralStyle = with(density) { numeralStyle(numerals, (layout.radius * NUMERAL_SIZE_SHARE).toSp()) }
     private val captionStyle = with(density) { numeralStyle(numerals, (layout.radius * CAPTION_SIZE_SHARE).toSp()) }
-    private val numeralTexts = (0..RPM_BAR_SEGMENTS * SEGMENT_RPM / SCALE_STEP_RPM).map { thousand ->
+    private val numeralTexts = scaleNumerals(rpmScale).map { thousand ->
         val layoutResult = measurer.measure(thousand.toString(), numeralStyle)
         val radius = layout.radius * (1 - NUMERAL_RADIUS_SHARE) - stroke
-        val middle = polar(layout.centerX, layout.centerY, radius, ArcTach.angleDeg(thousand * SCALE_STEP_RPM.toDouble()))
+        val middle = polar(layout.centerX, layout.centerY, radius, tach.angleDeg(thousand * SCALE_STEP_RPM.toDouble()))
         val capHeight = layout.radius * NUMERAL_SIZE_SHARE * CAP_HEIGHT_EM
         layoutResult to Offset(middle.x - layoutResult.size.width / 2f, middle.y + capHeight / 2f - layoutResult.firstBaseline)
     }
@@ -136,9 +141,9 @@ private class ArcStatic(
             drawRect(colors.surface, topLeft, lightSize)
             drawRect(colors.lightColour(i), topLeft, lightSize, UNLIT_ALPHA)
         }
-        for (i in 0 until RPM_BAR_SEGMENTS) {
+        for (i in 0 until segments.count) {
             drawArcSegment(segments, i, colors.surface, 1f)
-            val zone = rpmZone(i * SEGMENT_RPM)
+            val zone = rpmZone(i * SEGMENT_RPM, rpmScale)
             if (zone != RpmZone.NORMAL) drawArcSegment(segments, i, colors.zoneColour(zone), UNLIT_ALPHA)
         }
         numeralTexts.forEach { (text, at) -> drawText(text, colors.inkMuted, at) }
@@ -147,17 +152,17 @@ private class ArcStatic(
 }
 
 /** Where the tachometer segments go, worked out once per size so that drawing a frame allocates nothing. */
-private class ArcSegments(layout: ArcLayout, strokeWidth: Float) {
+private class ArcSegments(layout: ArcLayout, strokeWidth: Float, tach: ArcScale, val count: Int) {
     private val middle = layout.radius - strokeWidth / 2f
     val topLeft = Offset(layout.centerX - middle, layout.centerY - middle)
     val size = Size(middle * 2, middle * 2)
     val stroke = Stroke(strokeWidth)
-    val startDeg = FloatArray(RPM_BAR_SEGMENTS)
-    val sweepDeg = FloatArray(RPM_BAR_SEGMENTS)
+    val startDeg = FloatArray(count)
+    val sweepDeg = FloatArray(count)
 
     init {
-        for (i in 0 until RPM_BAR_SEGMENTS) {
-            val (start, sweep) = segmentArc(ArcTach, i, RPM_BAR_SEGMENTS, SEGMENT_GAP_DEG)
+        for (i in 0 until count) {
+            val (start, sweep) = segmentArc(tach, i, count, SEGMENT_GAP_DEG)
             startDeg[i] = start
             sweepDeg[i] = sweep
         }
@@ -172,18 +177,18 @@ private fun DrawScope.drawArcSegment(segments: ArcSegments, index: Int, color: C
 }
 
 /** The lit lights and segments for the glided rpm: all there is to redraw while the engine speed moves. */
-private class ArcLit(size: Size, private val colors: KLineColors, private val shiftRpm: Int, margin: Float) {
+private class ArcLit(size: Size, private val colors: KLineColors, private val shiftRpm: Int, margin: Float, private val rpmScale: RpmScale) {
     private val layout = ArcLayout(size.width, size.height)
     private val strip = LightStrip(size.width, layout, margin)
-    private val segments = ArcSegments(layout, layout.radius * STROKE_SHARE)
+    private val segments = ArcSegments(layout, layout.radius * STROKE_SHARE, arcTach(rpmScale.maxRpm), segmentCount(rpmScale))
     private val lightSize = Size(strip.lightWidth, strip.height)
 
     fun draw(scope: DrawScope, rpm: Float, isStale: Boolean) = with(scope) {
         for (i in 0 until shiftLightCount(rpm.toDouble(), shiftRpm)) {
             drawRect(colors.lightColour(i), Offset(strip.left(i), strip.top), lightSize)
         }
-        for (i in 0 until litSegmentCount(rpm.toDouble())) {
-            val color = if (isStale) colors.inkFaint else colors.zoneColour(rpmZone(i * SEGMENT_RPM))
+        for (i in 0 until litSegmentCount(rpm.toDouble(), segments.count)) {
+            val color = if (isStale) colors.inkFaint else colors.zoneColour(rpmZone(i * SEGMENT_RPM, rpmScale))
             drawArcSegment(segments, i, color, 1f)
         }
     }
@@ -191,8 +196,8 @@ private class ArcLit(size: Size, private val colors: KLineColors, private val sh
 
 /**
  * Digital arc: ten shift lights across the top (green, amber, red over the last 1 500 rpm before
- * [shiftRpm]), below them a 200 degree segmented tachometer arc with the speed as the hero numeral
- * in its middle and the rpm under it; the coolant and the battery in the two bottom corners, where
+ * [shiftRpm]), below them a 200 degree segmented tachometer arc over the car's rpm scale
+ * ([LocalRpmScale]) with the speed as the hero numeral in its middle and the rpm under it; the coolant and the battery in the two bottom corners, where
  * the arc leaves room.
  */
 @Composable
@@ -202,6 +207,7 @@ internal fun ArcCluster(live: LiveState, shiftRpm: Int, modifier: Modifier = Mod
     val colors = KLineTheme.colors
     val numerals = LocalClusterLook.current.numerals
     val measurer = rememberTextMeasurer()
+    val rpmScale = LocalRpmScale.current
     val captions = fieldLabel(speed.signal) to fieldLabel(rpm.signal)
     BoxWithConstraints(modifier.clipToBounds()) {
         val density = LocalDensity.current
@@ -212,7 +218,7 @@ internal fun ArcCluster(live: LiveState, shiftRpm: Int, modifier: Modifier = Mod
                 .fillMaxSize()
                 .graphicsLayer()
                 .drawWithCache {
-                    val painter = ArcStatic(size, this, colors, numerals, measurer, captions, margin)
+                    val painter = ArcStatic(size, this, colors, numerals, measurer, captions, margin, rpmScale)
                     onDrawBehind { painter.draw(this) }
                 },
         )
@@ -220,7 +226,7 @@ internal fun ArcCluster(live: LiveState, shiftRpm: Int, modifier: Modifier = Mod
             Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val painter = ArcLit(size, colors, shiftRpm, margin)
+                    val painter = ArcLit(size, colors, shiftRpm, margin, rpmScale)
                     onDrawBehind { painter.draw(this, rpm.drawnValue(), rpm.stale.value) }
                 },
         )

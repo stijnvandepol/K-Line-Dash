@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.ui.cluster
 
 import nl.stijnvdpol.klinedash.data.UnitSystem
+import nl.stijnvdpol.klinedash.data.rpmScale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -10,6 +11,14 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 private const val EPSILON = 0.001f
+
+/** The scale of an 8 000 rpm redline, to 9 000 rpm: the one the geometry tests below are written for. */
+private const val TACH_MAX_RPM = 9_000.0
+private val DialTach = dialTach(TACH_MAX_RPM.toInt())
+private val ArcTach = arcTach(TACH_MAX_RPM.toInt())
+private val LeftRingTach = leftRingTach(TACH_MAX_RPM.toInt())
+
+private val REDLINES = listOf(4_500, 6_500, 8_000, 10_000)
 
 class ArcScaleTest {
     @Test
@@ -24,6 +33,27 @@ class ArcScaleTest {
         assertEquals(170f, ArcTach.angleDeg(0.0), EPSILON)
         assertEquals(370f, ArcTach.angleDeg(TACH_MAX_RPM), EPSILON)
         assertEquals(270f, ArcTach.angleDeg(4_500.0), EPSILON)
+    }
+
+    @Test
+    fun everyTachScaleFillsTheWholeSweepWhateverTheRedline() {
+        for (redline in REDLINES) {
+            val max = rpmScale(redline).maxRpm
+            assertEquals(145f, dialTach(max).angleDeg(0.0), EPSILON)
+            assertEquals(395f, dialTach(max).angleDeg(max.toDouble()), EPSILON)
+            assertEquals(170f, arcTach(max).angleDeg(0.0), EPSILON)
+            assertEquals(370f, arcTach(max).angleDeg(max.toDouble()), EPSILON)
+            assertEquals(118f, leftRingTach(max).angleDeg(0.0), EPSILON)
+            assertEquals(-118f, leftRingTach(max).angleDeg(max.toDouble()), EPSILON)
+        }
+    }
+
+    @Test
+    fun theRedlineSitsFurtherAlongTheDialTheLowerTheScaleEnds() {
+        val redlineAt4500 = dialTach(rpmScale(4_500).maxRpm).angleDeg(4_500.0)
+        val redlineAt8000 = dialTach(rpmScale(8_000).maxRpm).angleDeg(8_000.0)
+        assertEquals(145f + 250f * 4_500f / 6_000f, redlineAt4500, EPSILON)
+        assertEquals(145f + 250f * 8_000f / 9_000f, redlineAt8000, EPSILON)
     }
 
     @Test
@@ -96,6 +126,16 @@ class DialTicksTest {
         assertEquals(145f, ticks.first().angleDeg, EPSILON)
         assertEquals(395f, ticks.last().angleDeg, EPSILON)
         assertTrue(ticks.filter { it.kind == TickKind.MINOR }.none { it.hasLabel })
+    }
+
+    @Test
+    fun theTachHasANumeralPerThousandUpToTheEndOfTheScaleWhateverTheRedline() {
+        for (redline in REDLINES) {
+            val max = rpmScale(redline).maxRpm
+            val ticks = dialTicks(dialTach(max), minorStep = 500, majorStep = 1_000, labelStep = 1_000)
+            assertEquals(2 * max / 1_000 + 1, ticks.size)
+            assertEquals((0..max / 1_000).map { it * 1_000.0 }, ticks.filter { it.hasLabel }.map { it.value })
+        }
     }
 
     @Test

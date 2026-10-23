@@ -18,6 +18,7 @@ import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.PollStats
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.data.EngineProfile
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,6 +72,7 @@ class DiagnosticsViewModelTest {
     private val poller = FakePoller()
     private val pollerFlow = MutableStateFlow<ObdPoller?>(null)
     private val connected = MutableStateFlow(true)
+    private val profile = MutableStateFlow(EngineProfile.GENERIC)
     private lateinit var reader: FakeReader
 
     @Before
@@ -83,11 +85,9 @@ class DiagnosticsViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel(): DiagnosticsViewModel {
-        val descriptions = object : DtcDescriptions {
-            override fun describe(dtc: Dtc) = DtcDescription("text of ${dtc.code}", null)
-        }
         val vm = DiagnosticsViewModel(
-            loadDescriptions = { descriptions },
+            loadDescriptions = ::descriptionsFor,
+            engineProfile = profile,
             pollerFlow = pollerFlow,
             connectedFlow = connected,
             createReader = { reader },
@@ -96,6 +96,14 @@ class DiagnosticsViewModelTest {
         pollerFlow.value = poller
         return vm
     }
+
+    /** The texts of a profile differ, so a test can tell which profile a row was resolved with. */
+    private fun descriptionsFor(engineProfile: EngineProfile) = object : DtcDescriptions {
+        override fun describe(dtc: Dtc) = DtcDescription("${engineProfile.name} text of ${dtc.code}", null)
+    }
+
+    private fun DiagnosticsViewModel.storedDescriptions(): List<String?> =
+        (state.value.codeLists?.stored as CodeListState.Codes).rows.map { it.description }
 
     private fun setRpm(value: Double, atMs: Long = nowMs) {
         poller.readings.value = mapOf("rpm" to Reading("rpm", value, atMs))
@@ -165,8 +173,32 @@ class DiagnosticsViewModelTest {
     fun `descriptions are resolved when the report arrives`() {
         val vm = viewModel()
         vm.read()
-        val stored = vm.state.value.codeLists?.stored as CodeListState.Codes
-        assertEquals("text of P0171", stored.rows.first().description)
+        assertEquals(listOf("GENERIC text of P0171", "GENERIC text of P1349"), vm.storedDescriptions())
+    }
+
+    @Test
+    fun `a report read under another profile is described with that profile`() {
+        profile.value = EngineProfile.TOYOTA_2ZZ_GE
+        val vm = viewModel()
+        vm.read()
+        assertEquals(listOf("TOYOTA_2ZZ_GE text of P0171", "TOYOTA_2ZZ_GE text of P1349"), vm.storedDescriptions())
+    }
+
+    @Test
+    fun `changing the profile re-describes the report on screen without reading again`() {
+        val vm = viewModel()
+        vm.read()
+        profile.value = EngineProfile.TOYOTA_2ZZ_GE
+        assertEquals(listOf("TOYOTA_2ZZ_GE text of P0171", "TOYOTA_2ZZ_GE text of P1349"), vm.storedDescriptions())
+        assertEquals(withCodes, vm.state.value.report)
+        assertEquals(1, reader.readCalls)
+    }
+
+    @Test
+    fun `changing the profile without a report changes nothing`() {
+        val vm = viewModel()
+        profile.value = EngineProfile.TOYOTA_2ZZ_GE
+        assertNull(vm.state.value.codeLists)
     }
 
     @Test
