@@ -13,6 +13,7 @@ internal fun sampleReport(
     freezeFrame: FreezeFrame? = null,
     isMilOn: Boolean = stored.isNotEmpty(),
     readAtMs: Long = 1_000,
+    vin: String? = null,
 ) = DiagnosticReport(
     isMilOn = isMilOn,
     reportedDtcCount = stored.size,
@@ -22,6 +23,6 @@ internal fun sampleReport(
     pending = DtcList(DtcKind.PENDING, true, pending),
     permanent = DtcList(DtcKind.PERMANENT, false, emptyList()),
     freezeFrame = freezeFrame,
-    vehicleInfo = VehicleInfo(vin = null, ecuName = null),
+    vehicleInfo = VehicleInfo(vin = vin, ecuName = null),
     readAtMs = readAtMs,
 )

@@ -87,7 +87,10 @@ private fun MainPages(
                     onTrySimulator = { connection.useSimulator { permissions.connect(needsBluetooth = false) } },
                 )
                 Screen.Sensors -> SensorsScreen(onOpenConnection = { openSetup(SetupSection.Connection) })
-                Screen.Diagnostics -> DiagnosticsScreen(onOpenConnection = { openSetup(SetupSection.Connection) })
+                Screen.Diagnostics -> DiagnosticsScreen(
+                    onOpenConnection = { openSetup(SetupSection.Connection) },
+                    onOpenCar = { openSetup(SetupSection.Car) },
+                )
                 Screen.Trips -> TripsScreen()
                 Screen.Setup -> SetupScreen(
                     section = setupSection,

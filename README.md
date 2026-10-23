@@ -22,9 +22,10 @@ day. It works fully offline: no account, no cloud, no ads, no Google Play Servic
   to edit.
 - **Sensors:** everything your car reports, with how often each value updates.
 - **Diagnostics:** stored, pending and permanent fault codes with offline descriptions (the
-  standard meanings for any car, plus Toyota 2ZZ-GE notes when chosen under SETUP > Car), the
-  check-engine light, readiness monitors, freeze frame and VIN. Clearing codes asks twice and
-  only works with the engine off.
+  standard meanings for any car, plus what the maker's own codes mean for the makes the app knows;
+  the make comes from the car's VIN or is chosen under SETUP > Car, which also has Toyota 2ZZ-GE
+  notes), the check-engine light, readiness monitors, freeze frame and VIN. Clearing codes asks
+  twice and only works with the engine off.
 - **Warnings:** coolant temperature, battery voltage, a new fault code, the check-engine light and
   a lost adapter, as a coloured frame and banner on every page, with an optional tone.
 - **Trips:** recorded automatically while the engine runs (or while the car moves, without an

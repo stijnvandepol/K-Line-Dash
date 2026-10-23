@@ -7,10 +7,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import nl.stijnvdpol.klinedash.core.car.CarMake
+import nl.stijnvdpol.klinedash.core.car.EngineNotes
 import nl.stijnvdpol.klinedash.data.CarSettings
 import nl.stijnvdpol.klinedash.data.CarSettingsRepository
 import nl.stijnvdpol.klinedash.data.DEFAULT_REDLINE_RPM
-import nl.stijnvdpol.klinedash.data.EngineProfile
+import nl.stijnvdpol.klinedash.data.MakeChoice
 import nl.stijnvdpol.klinedash.data.MAX_REDLINE_RPM
 import nl.stijnvdpol.klinedash.data.MIN_REDLINE_RPM
 import nl.stijnvdpol.klinedash.data.REDLINE_STEP_RPM
@@ -19,6 +21,7 @@ import nl.stijnvdpol.klinedash.service.FakeSettingsDao
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -78,41 +81,65 @@ class CarViewModelTest {
         assertEquals(0, (TOYOTA_2ZZ_GE_REDLINE_RPM - MIN_REDLINE_RPM) % REDLINE_STEP_RPM)
     }
 
-    // --- the trouble code profile -----------------------------------------------------------------
+    // --- the make and the engine notes --------------------------------------------------------------
 
     @Test
-    fun `a fresh install is the generic profile with the default red line`() {
-        assertEquals(CarSettings(DEFAULT_REDLINE_RPM, EngineProfile.GENERIC), stored())
+    fun `a fresh install follows the VIN with the default red line`() {
+        assertEquals(CarSettings(DEFAULT_REDLINE_RPM, MakeChoice.Automatic), stored())
     }
 
     @Test
-    fun `choosing Toyota brings the 2ZZ-GE red line while the red line is still the default`() {
-        CarViewModel(repository).chooseProfile(EngineProfile.TOYOTA_2ZZ_GE)
-        assertEquals(CarSettings(TOYOTA_2ZZ_GE_REDLINE_RPM, EngineProfile.TOYOTA_2ZZ_GE), stored())
-    }
-
-    @Test
-    fun `choosing Toyota keeps a red line the user has set`() {
-        storeRedline(customRedline)
-        CarViewModel(repository).chooseProfile(EngineProfile.TOYOTA_2ZZ_GE)
-        assertEquals(CarSettings(customRedline, EngineProfile.TOYOTA_2ZZ_GE), stored())
-    }
-
-    @Test
-    fun `choosing any car again keeps the red line`() {
+    fun `a chosen make is stored, and so is going back to automatic or another make`() {
         val vm = CarViewModel(repository)
-        vm.chooseProfile(EngineProfile.TOYOTA_2ZZ_GE)
-        vm.chooseProfile(EngineProfile.GENERIC)
-        assertEquals(CarSettings(TOYOTA_2ZZ_GE_REDLINE_RPM, EngineProfile.GENERIC), stored())
+        vm.chooseMake(MakeChoice.Specific(CarMake.VW_GROUP))
+        assertEquals(MakeChoice.Specific(CarMake.VW_GROUP), stored().makeChoice)
+        vm.chooseMake(MakeChoice.Other)
+        assertEquals(MakeChoice.Other, stored().makeChoice)
+        vm.chooseMake(MakeChoice.Automatic)
+        assertEquals(MakeChoice.Automatic, stored().makeChoice)
+    }
+
+    @Test
+    fun `choosing a make leaves the red line alone`() {
+        CarViewModel(repository).chooseMake(MakeChoice.Specific(CarMake.TOYOTA_LEXUS))
+        assertEquals(DEFAULT_REDLINE_RPM, stored().redlineRpm)
+    }
+
+    @Test
+    fun `the 2ZZ-GE notes bring the 2ZZ-GE red line while the red line is still the default`() {
+        val vm = CarViewModel(repository)
+        vm.chooseMake(MakeChoice.Specific(CarMake.TOYOTA_LEXUS))
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = true)
+        assertEquals(
+            CarSettings(TOYOTA_2ZZ_GE_REDLINE_RPM, MakeChoice.Specific(CarMake.TOYOTA_LEXUS), engineNotes = EngineNotes.TOYOTA_2ZZ_GE),
+            stored(),
+        )
+    }
+
+    @Test
+    fun `the 2ZZ-GE notes keep a red line the user has set`() {
+        storeRedline(customRedline)
+        CarViewModel(repository).setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = true)
+        assertEquals(customRedline, stored().redlineRpm)
+        assertEquals(EngineNotes.TOYOTA_2ZZ_GE, stored().engineNotes)
+    }
+
+    @Test
+    fun `switching the notes off removes them and keeps the red line`() {
+        val vm = CarViewModel(repository)
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = true)
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = false)
+        assertNull(stored().engineNotes)
+        assertEquals(TOYOTA_2ZZ_GE_REDLINE_RPM, stored().redlineRpm)
     }
 
     @Test
     fun `the 2ZZ-GE red line is not brought a second time over a changed one`() {
         val vm = CarViewModel(repository)
-        vm.chooseProfile(EngineProfile.TOYOTA_2ZZ_GE)
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = true)
         vm.stepRedline(-1)
-        vm.chooseProfile(EngineProfile.GENERIC)
-        vm.chooseProfile(EngineProfile.TOYOTA_2ZZ_GE)
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = false)
+        vm.setEngineNotes(EngineNotes.TOYOTA_2ZZ_GE, isOn = true)
         assertEquals(TOYOTA_2ZZ_GE_REDLINE_RPM - REDLINE_STEP_RPM, stored().redlineRpm)
     }
 }

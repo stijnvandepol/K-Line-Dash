@@ -7,7 +7,8 @@ where the limits are. It was last reviewed for release 1.0.0.
 ## Threat model
 
 - **Assets:** trips (CSV files with GPS positions, so where and when the owner drove), saved tracks,
-  the adapter's Bluetooth address, settings, and the car itself (the app can clear trouble codes).
+  the adapter's Bluetooth address, the VIN last read from the car (kept in the settings to pick the
+  car's make), settings, and the car itself (the app can clear trouble codes).
 - **Who we defend against:** other apps on the same head unit or phone, and other devices on the
   same Wi-Fi or hotspot while the Wi-Fi export runs.
 - **Out of scope:** someone with physical, unlocked access to the device, a rooted device, and a
@@ -22,7 +23,7 @@ where the limits are. It was last reviewed for release 1.0.0.
 | Storage | Settings and tracks live in the app's private database. Trips are in the app-specific external folder (`Android/data/nl.stijnvdpol.klinedash/files/trips`). Backup and device transfer are off (`allowBackup="false"` plus exclude-all rules). |
 | Files from outside | User theme files: at most 50 files of 64 KB, nesting depth checked before parsing, every value validated, invalid files listed and ignored. Trip file names from the database are resolved inside the trips folder only (`resolveTripFile`). The USB/SD copy writes only through the folder the user picked in the system picker. |
 | Wi-Fi export | Off by default and started by the user. Read-only: GET of files from the current list, by index, never by a path from the request. Answers only IPv4 peers in private ranges (10/8, 172.16/12, 192.168/16), so a public IPv6 address on mobile data does not expose it. A new random 4-digit PIN (`SecureRandom`) per start; 5 wrong PINs lock the export until it is restarted on the device (1 in 2 000 chance for a guesser per run). 128-bit random session cookie, `HttpOnly`, `SameSite=Strict`. Strict request parser (size limits, no chunked bodies, 15 s read deadline), a stalled download is dropped after 30 s, the server stops after 10 minutes without requests. Headers: `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Cache-Control: no-store`. File names are sanitised for downloads and HTML-encoded on the page. |
-| Logs and crash reports | No log line contains a position, the adapter address, the PIN or a session token. Crash reports stay on the device and hold the exception and app version; they leave only when the user exports them. |
+| Logs and crash reports | No log line contains a position, the adapter address, the VIN, the PIN or a session token. Crash reports stay on the device and hold the exception and app version; they leave only when the user exports them. |
 | Permissions | Each one is used and explained in SETUP > About. Location is only requested for GPS (and for Bluetooth LE scans on Android 11 and older); there is no background location permission. `BLUETOOTH_SCAN` is declared `neverForLocation`. |
 | Release builds | Signed with one release key (see `docs/RELEASING.md`), minified with R8 and no extra keep rules. Every release lists SHA-256 checksums. |
 

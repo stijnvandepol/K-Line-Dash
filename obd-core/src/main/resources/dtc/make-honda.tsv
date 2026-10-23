@@ -1,0 +1,65 @@
+# K-Line Dash: Honda/Acura manufacturer-specific trouble code meanings
+# Format: CODE<TAB>description<TAB>note
+#   - description: our own short wording of the Honda/Acura meaning of a P1xxx code.
+#   - note: a short first check, only where sources widely agree; empty otherwise.
+# Curated selection, not an import. A code is listed only if at least two independent publications agree
+# on its meaning; codes where sources disagree were left out. Per-code sources: docs/research/dtc-sources-vag-honda.md
+# Sources (publications; the two Honda pages that share wording count once):
+#   FF  https://www.ffchips.com/obd2-p-codes/ and https://icarsoft.com/knowledge/article/specific-trouble-codes-for-honda
+#   UP  https://blog.upfix.com/honda-acura-dtc-code-definitions
+#   EL  https://www.engine-light-help.com/acura-check-engine-light.html
+#   TC  troublecodes.net, entries labelled Honda/Acura: https://www.troublecodes.net/p1codes/
+# Not used: the "Acura" lists of carvitas.com and icarsoft.com, which are an Audi/VW table under an Acura title.
+# Honda lists the A/F sensor codes (P1162-P1167) as primary O2 or A/F sensor depending on the model.
+P1106	Barometric pressure (BARO) sensor: range/performance problem	
+P1107	Barometric pressure (BARO) sensor circuit: input low	
+P1108	Barometric pressure (BARO) sensor circuit: input high	
+P1121	Throttle position lower than expected	
+P1122	Throttle position higher than expected	
+P1128	MAP sensor: pressure lower than expected	
+P1129	MAP sensor: pressure higher than expected	
+P1162	Primary O2 / A/F sensor: circuit malfunction	
+P1163	Primary O2 / A/F sensor: slow response	
+P1166	Primary O2 / A/F sensor heater: electrical fault	
+P1167	Primary O2 / A/F sensor heater: system fault	
+P1241	Throttle control motor circuit 1: malfunction	
+P1242	Throttle control motor circuit 2: malfunction	
+P1246	Accelerator pedal sensor 1: circuit malfunction	
+P1247	Accelerator pedal sensor 2: circuit malfunction	
+P1248	Accelerator pedal sensors 1 and 2: signals do not correlate	
+P1253	VTEC system malfunction	
+P1257	VTEC system malfunction	
+P1258	VTEC system malfunction	
+P1259	VTEC system malfunction	
+P1279	VTEC system malfunction, front bank	
+P1297	Electrical load detector (ELD) circuit: input low	
+P1298	Electrical load detector (ELD) circuit: input high	
+P1300	Random/multiple cylinder misfire	
+P1301	Cylinder 1 misfire	
+P1302	Cylinder 2 misfire	
+P1303	Cylinder 3 misfire	
+P1304	Cylinder 4 misfire	
+P1305	Cylinder 5 misfire	
+P1306	Cylinder 6 misfire	
+P1316	Spark plug voltage detection circuit fault, front bank	
+P1317	Spark plug voltage detection circuit fault, rear bank	
+P1318	Spark plug voltage detection module reset circuit fault, front bank	
+P1319	Spark plug voltage detection module reset circuit fault, rear bank	
+P1324	Knock sensor circuit: voltage low	
+P1359	CKP/TDC sensor circuit: connector disconnected	
+P1361	TDC sensor 1: intermittent signal	
+P1362	TDC sensor 1: no signal	
+P1366	TDC sensor 2: intermittent signal	
+P1367	TDC sensor 2: no signal	
+P1381	Cylinder position (CYP) sensor: intermittent signal	
+P1382	Cylinder position (CYP) sensor: no signal	
+P1456	EVAP system leak detected (fuel tank side)	
+P1457	EVAP system leak detected (canister side)	
+P1459	EVAP purge flow switch malfunction	
+P1486	Thermostat: range/performance problem	
+P1491	EGR valve lift insufficient	
+P1498	EGR valve lift sensor: voltage high	
+P1508	Idle air control (IAC) valve circuit failure	
+P1519	Idle air control (IAC) valve circuit failure	
+P1607	ECM/PCM internal circuit failure A	
+P1608	ECM/PCM internal circuit failure B	

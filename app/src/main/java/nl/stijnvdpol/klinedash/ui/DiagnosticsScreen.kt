@@ -50,7 +50,7 @@ private val StripLook = ValueLook(KLineType.fieldValue)
  * on a link; after that only when asked.
  */
 @Composable
-fun DiagnosticsScreen(onOpenConnection: () -> Unit) {
+fun DiagnosticsScreen(onOpenConnection: () -> Unit, onOpenCar: () -> Unit) {
     val vm = graphViewModel { DiagnosticsViewModel.forGraph(it) }
     val ui by vm.state.collectAsStateWithLifecycle()
     val poller by vm.poller.collectAsStateWithLifecycle()
@@ -61,13 +61,13 @@ fun DiagnosticsScreen(onOpenConnection: () -> Unit) {
     DisposableEffect(vm) { onDispose(vm::dismissDialog) }
 
     Box(Modifier.fillMaxSize()) {
-        DiagnosticsContent(ui, vm, onOpenConnection)
+        DiagnosticsContent(ui, vm, onOpenConnection, onOpenCar)
         ClearDialogHost(ui.dialog, vm)
     }
 }
 
 @Composable
-private fun DiagnosticsContent(ui: DiagnosticsUiState, vm: DiagnosticsViewModel, onOpenConnection: () -> Unit) {
+private fun DiagnosticsContent(ui: DiagnosticsUiState, vm: DiagnosticsViewModel, onOpenConnection: () -> Unit, onOpenCar: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TopStrip(
             ui, onRead = vm::read, onClear = vm::requestClear,
@@ -90,20 +90,20 @@ private fun DiagnosticsContent(ui: DiagnosticsUiState, vm: DiagnosticsViewModel,
                     actionLabel = stringResource(R.string.btn_diag_read_again),
                     onAction = vm::read,
                 )
-                DiagnosticsPane.REPORT -> if (report != null && lists != null) ReportBody(ui, report, lists, vm)
+                DiagnosticsPane.REPORT -> if (report != null && lists != null) ReportBody(ui, report, lists, vm, onOpenCar)
             }
         }
     }
 }
 
 @Composable
-private fun ReportBody(ui: DiagnosticsUiState, report: DiagnosticReport, lists: CodeLists, vm: DiagnosticsViewModel) {
+private fun ReportBody(ui: DiagnosticsUiState, report: DiagnosticReport, lists: CodeLists, vm: DiagnosticsViewModel, onOpenCar: () -> Unit) {
     // A short screen scrolls the vehicle with the codes instead of pinning it under them, which would leave one row of codes.
     val isVehicleScrolling = LocalScreenProfile.current.isCompact
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             CodeListsColumn(
-                ui, lists, onSelect = vm::select, modifier = Modifier.weight(1f).fillMaxWidth(),
+                ui, lists, onSelect = vm::select, onOpenCar = onOpenCar, modifier = Modifier.weight(1f).fillMaxWidth(),
                 scrollingVehicle = report.vehicleInfo.takeIf { isVehicleScrolling },
             )
             if (!isVehicleScrolling) VehiclePanel(report.vehicleInfo)

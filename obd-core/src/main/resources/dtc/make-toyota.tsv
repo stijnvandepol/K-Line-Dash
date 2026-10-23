@@ -1,0 +1,20 @@
+# K-Line Dash: Toyota/Lexus manufacturer-specific trouble code meanings (all Toyota engines)
+# Format: CODE<TAB>description<TAB>note
+#   - description: Toyota meaning of a P1xxx code (P1xxx codes mean different things per brand).
+#   - note: short first checks that hold for Toyota in general; engine-specific notes live in engine-*.tsv.
+# Sources (see docs/research/2zz-ge-obd.md section 3):
+#   https://procarmanuals.com/toyota-engine-1zz-fe-2zz-fe-error-codes-list  (1ZZ-FE/2ZZ-GE flash codes and DTCs)
+#   https://toyotaspace.com/toyota-obd2-codes-list
+#   https://www.autotalk.com/toyota-obd-ii-codes-2104
+#   https://github.com/Wal33D/dtc-database/blob/main/data/source-data/toyota_codes.txt
+# Notes are general troubleshooting hints, not confirmed diagnoses.
+P1300	Igniter Circuit Malfunction No. 1	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows.
+P1305	Igniter Circuit Malfunction No. 2	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows.
+P1310	Igniter Circuit Malfunction No. 3	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows.
+P1315	Igniter Circuit Malfunction No. 4	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows.
+P1335	No Crankshaft Position Sensor Signal While Engine Is Running	Crank signal lost while running: check the crankshaft sensor connector and wiring, then the sensor.
+P1346	VVT Sensor/Camshaft Position Sensor Range/Performance (Bank 1)	Cam/VVT signal out of range: check the camshaft position sensor, its connector and wiring, and the oil level.
+P1349	VVT System Malfunction (Bank 1)	VVT-i fault. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen.
+P1600	ECM BATT Malfunction	Backup power to the ECU memory was interrupted; often seen after the battery was disconnected. Clear it and see if it returns; if so, check the battery terminals.
+P1605	Knock Control CPU Malfunction	Internal ECU fault (knock control processor). Clear it once; if it returns, have the ECU checked.
+P1656	OCV (Oil Control Valve) Circuit Malfunction (Bank 1)	Electrical fault in the VVT oil control valve circuit: check the OCV connector and wiring, then the valve.

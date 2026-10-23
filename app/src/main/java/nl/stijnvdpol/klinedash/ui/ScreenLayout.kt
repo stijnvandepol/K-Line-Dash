@@ -29,6 +29,12 @@ private const val WRAPPED_FIELD_COLUMNS = 3
  */
 private const val WARNINGS_STACKED_BELOW_DP = 960f
 
+/**
+ * SETUP > Car puts the red line (its stepper needs about 440 dp with the label) beside the list of
+ * makes from this section width; narrower, the list follows the stepper in one scrolling column.
+ */
+private const val CAR_STACKED_BELOW_DP = 900f
+
 /** A grid of name and value cells keeps two columns while its panel is at least this wide; narrower, each cell gets a row so no name is cut off. */
 private const val TWO_CELL_GRID_MIN_WIDTH_DP = 520f
 
@@ -53,6 +59,8 @@ private const val SESSION_ACTIONS_PINNED_BELOW_DP = 600f
 internal fun areSessionActionsPinned(profile: ScreenProfile): Boolean = profile.heightDp < SESSION_ACTIONS_PINNED_BELOW_DP
 
 internal fun isWarningsStacked(sectionWidthDp: Float): Boolean = sectionWidthDp < WARNINGS_STACKED_BELOW_DP
+
+internal fun isCarStacked(sectionWidthDp: Float): Boolean = sectionWidthDp < CAR_STACKED_BELOW_DP
 
 internal fun lapTableShowsAllColumns(tableWidthDp: Float): Boolean = tableWidthDp >= LAP_TABLE_ALL_COLUMNS_MIN_WIDTH_DP
 

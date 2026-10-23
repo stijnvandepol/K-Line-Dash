@@ -184,14 +184,29 @@ cannot cross (caution stays below danger). "Reset to defaults" as a text cell at
 
 ### Car (SETUP section)
 
-What the app cannot read from the car, in one scrolling column of 72 dp rows (so it needs no layout
-of its own on a small screen). First the **Red line (rpm)** stepper (250 rpm steps from 3 000 to
-10 000, the same stepper as Warnings) with a one-line hint in `caption`: it sets the scale of every
-tachometer. Then **Trouble codes** as two selectable rows with a `caption` line each: **Any car**
-(standard SAE meanings; a manufacturer-specific code reads "Manufacturer-specific code. Its meaning
-depends on the make.") and **Toyota 2ZZ-GE** (adds Toyota's meanings and the notes for this engine).
-Choosing the Toyota row also sets the red line to 8 000, but only while it is still the default
-6 500. The DIAG page follows the choice at once.
+What the app cannot read from the car, and the make that decides whose trouble code meanings DIAG
+shows. Two columns separated by a rule (the side by side rule in "What changes with the width" below):
+
+- **Left (440 dp):** the **Red line (rpm)** stepper (250 rpm steps from 3 000 to 10 000, the same
+  stepper as Warnings) with a one-line hint in `caption`: it sets the scale of every tachometer.
+  Under it, only while the effective make has researched engines, one switch row per engine with a
+  `caption` hint: **2ZZ-GE engine notes** for Toyota / Lexus ("Corolla T-Sport, Celica 1.8 VVTL-i").
+  Switching it on also sets the red line to 8 000, but only while it is still the default 6 500.
+- **Right, MAKE:** a header, then the list, which scrolls by itself: **Automatic** (its `caption`
+  says what the VIN gave: "VW Group, from the VIN WVW…", "Other make, from the VIN WP0…", or "No
+  VIN reported by this car yet. Standard meanings only."; only the first three VIN characters are
+  shown, the maker identifier), **Other make** (standard SAE meanings; a manufacturer-specific code
+  reads "Manufacturer-specific code. Its meaning depends on the make."), then the makes: VW Group
+  (brands in the `caption`), BMW / Mini, Mercedes-Benz / smart, Opel / Vauxhall, Ford, Renault /
+  Dacia, Peugeot / Citroën / DS, Fiat / Alfa Romeo / Lancia, Volvo, Toyota / Lexus, Honda / Acura,
+  Nissan / Infiniti, Mazda, Mitsubishi, Subaru, Suzuki, Hyundai / Kia. Selectable rows with the 4 dp
+  bar, like the adapter list.
+
+A make chosen by hand always wins; Automatic uses the make of the last VIN read from a car and stays
+generic without one. The DIAG page follows every change at once; while a manufacturer-specific code is
+listed and the make is not known it shows one 72 dp row above the code lists ("Set the make under Setup,
+Car to see what manufacturer codes mean." and a **Set make** text cell that opens this section). Where the section is narrower than
+900 dp (a 640 x 360 dp phone) the make list follows the red line in one scrolling column.
 
 ### Connection
 
@@ -505,6 +520,7 @@ The rules are pure functions in `ui/ScreenLayout.kt` (tested), in canvas dp:
 | Dashboard small fields | two rows of three if a field would be under 130 dp wide | one row of six |
 | Two-page text (wizard, About) | stacked | two halves (840) |
 | Warnings row | the steppers get their own line (section under 960) | one line |
+| Car section | red line and make list in one scrolling column (section under 900) | two columns, red line and engine notes 440 dp (45 % of the section, never under 400 dp) beside the make list |
 | Lap table in trip detail | five columns, no max rpm or full-throttle share (table under 680) | seven |
 | Diagnostics readiness and freeze frame | one cell per row (panel under 520) | two |
 | Side columns (adapter list, themes, pages, help topics, session, route) | take 32 to 50 % of the width, never under a minimum | the design width (400, 440, 320, 280, 480, 500 dp) |

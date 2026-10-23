@@ -52,11 +52,13 @@ internal fun CodeListsColumn(
     ui: DiagnosticsUiState,
     lists: CodeLists,
     onSelect: (Dtc) -> Unit,
+    onOpenCar: () -> Unit,
     modifier: Modifier = Modifier,
     scrollingVehicle: VehicleInfo? = null,
 ) {
     LazyColumn(modifier) {
         ui.notice?.let { notice -> item(key = "notice") { NoticeBanner(notice) } }
+        if (lists.showsMakeHint) item(key = "make-hint") { MakeHint(onOpenCar) }
         codeSection(R.string.diag_section_stored, "stored", lists.stored, ui.selected, onSelect)
         codeSection(R.string.diag_section_pending, "pending", lists.pending, null, null)
         codeSection(R.string.diag_section_permanent, "permanent", lists.permanent, null, null)
@@ -82,6 +84,19 @@ private fun LazyListScope.codeSection(
         CodeListState.Empty -> item(key = "$key:state") { StateRow(stringResource(R.string.diag_codes_none), KLineTheme.colors.ink) }
         CodeListState.Unsupported -> item(key = "$key:state") { StateRow(stringResource(R.string.diag_codes_unsupported), KLineTheme.colors.inkMuted) }
     }
+}
+
+/** One row above the lists: a code that only the maker defines is listed and the make is not known; the action opens SETUP > Car. */
+@Composable
+private fun MakeHint(onOpenCar: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = Spacing.touchMin).padding(start = Spacing.fieldPaddingHorizontal),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.diag_make_hint), style = KLineType.body, color = KLineTheme.colors.inkMuted, modifier = Modifier.weight(1f))
+        TextActionButton(stringResource(R.string.btn_diag_set_make), onOpenCar, Modifier.fillMaxHeight())
+    }
+    HorizontalRule()
 }
 
 /** A selectable row for stored codes ([onSelect] given), a plain one for the rest; both at least 72 dp. */

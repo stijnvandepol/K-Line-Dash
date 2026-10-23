@@ -116,6 +116,36 @@ class VehicleInfoReaderTest {
     }
 
     @Test
+    fun `reading only the vin sends one request and finds the vin`() = runTest {
+        val link = ScriptedLink(responder = answering(mapOf("0902" to data(*vinLines()))))
+
+        assertEquals(VinReading.Found(vin), VehicleInfoReader(link).readVin())
+        assertEquals(listOf("0902"), link.sent)
+    }
+
+    @Test
+    fun `no data, a question mark and an invalid vin all mean the car has no vin`() = runTest {
+        assertEquals(VinReading.Absent, VehicleInfoReader(ScriptedLink(responder = { ElmResult.NoData("NO DATA") })).readVin())
+        assertEquals(VinReading.Absent, VehicleInfoReader(ScriptedLink(responder = { ElmResult.Unknown("?") })).readVin())
+        val invalid = ScriptedLink(responder = answering(mapOf("0902" to data(*vinLines("SB1ZE22E10E12345O")))))
+        assertEquals(VinReading.Absent, VehicleInfoReader(invalid).readVin())
+    }
+
+    @Test
+    fun `a lost answer is retried once and then is not an answer`() = runTest {
+        val link = ScriptedLink(responder = { ElmResult.Timeout("") })
+
+        assertEquals(VinReading.Unanswered, VehicleInfoReader(link).readVin())
+        assertEquals(listOf("0902", "0902"), link.sent)
+    }
+
+    @Test
+    fun `a bus error or a can error is not an answer either`() = runTest {
+        assertEquals(VinReading.Unanswered, VehicleInfoReader(ScriptedLink(responder = { ElmResult.BusError("BUS ERROR") })).readVin())
+        assertEquals(VinReading.Unanswered, VehicleInfoReader(ScriptedLink(responder = { ElmResult.CanError("CAN ERROR") })).readVin())
+    }
+
+    @Test
     fun `link loss propagates`() = runTest {
         val link = ScriptedLink(responder = { throw IllegalStateException("not connected") })
 

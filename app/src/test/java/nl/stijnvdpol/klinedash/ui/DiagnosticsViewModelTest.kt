@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import nl.stijnvdpol.klinedash.core.car.CarMake
+import nl.stijnvdpol.klinedash.core.car.EngineNotes
 import nl.stijnvdpol.klinedash.core.diag.ClearOutcome
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticReport
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticsReader
@@ -18,7 +20,7 @@ import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.PollStats
 import nl.stijnvdpol.klinedash.core.obd.Reading
-import nl.stijnvdpol.klinedash.data.EngineProfile
+import nl.stijnvdpol.klinedash.data.CarIdentity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,7 +74,10 @@ class DiagnosticsViewModelTest {
     private val poller = FakePoller()
     private val pollerFlow = MutableStateFlow<ObdPoller?>(null)
     private val connected = MutableStateFlow(true)
-    private val profile = MutableStateFlow(EngineProfile.GENERIC)
+    private val generic = CarIdentity(make = null, engineNotes = null)
+    private val toyota = CarIdentity(CarMake.TOYOTA_LEXUS, null)
+    private val car = MutableStateFlow(generic)
+    private val recordedVins = ArrayList<String>()
     private lateinit var reader: FakeReader
 
     @Before
@@ -87,7 +92,8 @@ class DiagnosticsViewModelTest {
     private fun viewModel(): DiagnosticsViewModel {
         val vm = DiagnosticsViewModel(
             loadDescriptions = ::descriptionsFor,
-            engineProfile = profile,
+            car = car,
+            recordVin = { recordedVins += it },
             pollerFlow = pollerFlow,
             connectedFlow = connected,
             createReader = { reader },
@@ -97,9 +103,9 @@ class DiagnosticsViewModelTest {
         return vm
     }
 
-    /** The texts of a profile differ, so a test can tell which profile a row was resolved with. */
-    private fun descriptionsFor(engineProfile: EngineProfile) = object : DtcDescriptions {
-        override fun describe(dtc: Dtc) = DtcDescription("${engineProfile.name} text of ${dtc.code}", null)
+    /** The texts differ per make and engine notes, so a test can tell which car a row was resolved for. */
+    private fun descriptionsFor(make: CarMake?, engineNotes: EngineNotes?) = object : DtcDescriptions {
+        override fun describe(dtc: Dtc) = DtcDescription("${make?.name ?: "GENERIC"}${engineNotes?.let { "+${it.name}" }.orEmpty()} text of ${dtc.code}", null)
     }
 
     private fun DiagnosticsViewModel.storedDescriptions(): List<String?> =
@@ -177,28 +183,106 @@ class DiagnosticsViewModelTest {
     }
 
     @Test
-    fun `a report read under another profile is described with that profile`() {
-        profile.value = EngineProfile.TOYOTA_2ZZ_GE
+    fun `a report read for another make is described for that make`() {
+        car.value = toyota
         val vm = viewModel()
         vm.read()
-        assertEquals(listOf("TOYOTA_2ZZ_GE text of P0171", "TOYOTA_2ZZ_GE text of P1349"), vm.storedDescriptions())
+        assertEquals(listOf("TOYOTA_LEXUS text of P0171", "TOYOTA_LEXUS text of P1349"), vm.storedDescriptions())
     }
 
     @Test
-    fun `changing the profile re-describes the report on screen without reading again`() {
+    fun `engine notes reach the descriptions`() {
+        car.value = CarIdentity(CarMake.TOYOTA_LEXUS, EngineNotes.TOYOTA_2ZZ_GE)
         val vm = viewModel()
         vm.read()
-        profile.value = EngineProfile.TOYOTA_2ZZ_GE
-        assertEquals(listOf("TOYOTA_2ZZ_GE text of P0171", "TOYOTA_2ZZ_GE text of P1349"), vm.storedDescriptions())
+        assertEquals(listOf("TOYOTA_LEXUS+TOYOTA_2ZZ_GE text of P0171", "TOYOTA_LEXUS+TOYOTA_2ZZ_GE text of P1349"), vm.storedDescriptions())
+    }
+
+    @Test
+    fun `changing the car re-describes the report on screen without reading again`() {
+        val vm = viewModel()
+        vm.read()
+        car.value = toyota
+        assertEquals(listOf("TOYOTA_LEXUS text of P0171", "TOYOTA_LEXUS text of P1349"), vm.storedDescriptions())
         assertEquals(withCodes, vm.state.value.report)
         assertEquals(1, reader.readCalls)
     }
 
     @Test
-    fun `changing the profile without a report changes nothing`() {
+    fun `changing the car without a report changes nothing`() {
         val vm = viewModel()
-        profile.value = EngineProfile.TOYOTA_2ZZ_GE
+        car.value = toyota
         assertNull(vm.state.value.codeLists)
+    }
+
+    // --- the VIN and the make hint --------------------------------------------------------------
+
+    @Test
+    fun `the vin of a report is recorded, a report without one records nothing`() {
+        val vm = viewModel()
+        vm.read()
+        assertEquals(emptyList<String>(), recordedVins)
+
+        reader = FakeReader(listOf(sampleReport(stored = listOf(lean), vin = "SB1ZE22E10E123456")))
+        pollerFlow.value = FakePoller()
+        vm.read()
+        assertEquals(listOf("SB1ZE22E10E123456"), recordedVins)
+    }
+
+    @Test
+    fun `the vin is recorded before the texts are looked up, so the car it names gets its own meanings`() {
+        reader = FakeReader(listOf(sampleReport(stored = listOf(lean, vvt), vin = "SB1ZE22E10E123456")))
+        val vm = DiagnosticsViewModel(
+            loadDescriptions = ::descriptionsFor,
+            car = car,
+            recordVin = { car.value = toyota },
+            pollerFlow = pollerFlow,
+            connectedFlow = connected,
+            createReader = { reader },
+            clock = { nowMs },
+        )
+        pollerFlow.value = poller
+        vm.read()
+        assertEquals(listOf("TOYOTA_LEXUS text of P0171", "TOYOTA_LEXUS text of P1349"), vm.storedDescriptions())
+    }
+
+    @Test
+    fun `a manufacturer code with an unknown make asks for the make`() {
+        val vm = viewModel()
+        vm.read()
+        assertTrue(vm.state.value.codeLists?.showsMakeHint == true)
+    }
+
+    @Test
+    fun `no hint once the make is known, or when only standard codes are listed`() {
+        car.value = toyota
+        val vm = viewModel()
+        vm.read()
+        assertFalse(vm.state.value.codeLists?.showsMakeHint == true)
+
+        car.value = generic
+        assertTrue(vm.state.value.codeLists?.showsMakeHint == true)
+
+        reader = FakeReader(listOf(sampleReport(stored = listOf(lean), pending = listOf(Dtc("P0300")))))
+        pollerFlow.value = FakePoller()
+        vm.read()
+        assertFalse(vm.state.value.codeLists?.showsMakeHint == true)
+    }
+
+    @Test
+    fun `a manufacturer code among the pending codes also asks for the make`() {
+        reader = FakeReader(listOf(sampleReport(stored = listOf(lean), pending = listOf(vvt))))
+        val vm = viewModel()
+        vm.read()
+        assertTrue(vm.state.value.codeLists?.showsMakeHint == true)
+    }
+
+    @Test
+    fun `the hint follows a change of make on the report on screen`() {
+        val vm = viewModel()
+        vm.read()
+        car.value = toyota
+        assertFalse(vm.state.value.codeLists?.showsMakeHint == true)
     }
 
     @Test

@@ -83,6 +83,8 @@
     <string name="diag_section_vehicle">Vehicle</string>
     <string name="diag_vin">VIN</string>
     <string name="diag_ecu">ECU</string>
+    <string name="diag_make_hint">Set the make under Setup, Car to see what manufacturer codes mean.</string>
+    <string name="btn_diag_set_make">Set make</string>
     <string name="diag_not_reported">Not reported by this car</string>
     <string name="diag_not_connected">Not connected yet. Connect to the car under Setup, Connection, then read its fault codes.</string>
     <string name="diag_reading">Reading the car…</string>
@@ -126,11 +128,33 @@
     <!-- Setup: car -->
     <string name="car_redline">Red line (rpm)</string>
     <string name="car_redline_hint">Where your rev counter turns red. Sets the scale of every tachometer.</string>
-    <string name="car_codes_title">Trouble codes</string>
-    <string name="car_codes_generic">Any car</string>
-    <string name="car_codes_generic_hint">Standard meanings only. Codes that only the maker defines are marked as such.</string>
-    <string name="car_codes_toyota">Toyota 2ZZ-GE</string>
-    <string name="car_codes_toyota_hint">Corolla T-Sport, Celica 1.8 VVTL-i: Toyota meanings and notes.</string>
+    <string name="car_make_title">Make</string>
+    <string name="car_make_automatic">Automatic</string>
+    <string name="car_make_detected">%1$s, from the VIN %2$s…</string>
+    <string name="car_make_detected_other">Other make, from the VIN %1$s…</string>
+    <string name="car_make_not_detected">No VIN reported by this car yet. Standard meanings only.</string>
+    <string name="car_make_other">Other make</string>
+    <string name="car_make_other_hint">Standard meanings only. Codes that only the maker defines are marked as such.</string>
+    <string name="car_make_vw_group">VW Group</string>
+    <string name="car_make_vw_group_brands">VW, Audi, Seat, Cupra, Skoda</string>
+    <string name="car_make_bmw_mini">BMW / Mini</string>
+    <string name="car_make_mercedes_smart">Mercedes-Benz / smart</string>
+    <string name="car_make_opel_vauxhall">Opel / Vauxhall</string>
+    <string name="car_make_ford">Ford</string>
+    <string name="car_make_renault_dacia">Renault / Dacia</string>
+    <string name="car_make_psa">Peugeot / Citroën / DS</string>
+    <string name="car_make_fiat_alfa_lancia">Fiat / Alfa Romeo / Lancia</string>
+    <string name="car_make_volvo">Volvo</string>
+    <string name="car_make_toyota_lexus">Toyota / Lexus</string>
+    <string name="car_make_honda_acura">Honda / Acura</string>
+    <string name="car_make_nissan_infiniti">Nissan / Infiniti</string>
+    <string name="car_make_mazda">Mazda</string>
+    <string name="car_make_mitsubishi">Mitsubishi</string>
+    <string name="car_make_subaru">Subaru</string>
+    <string name="car_make_suzuki">Suzuki</string>
+    <string name="car_make_hyundai_kia">Hyundai / Kia</string>
+    <string name="car_engine_toyota_2zz_ge">2ZZ-GE engine notes</string>
+    <string name="car_engine_toyota_2zz_ge_hint">Corolla T-Sport, Celica 1.8 VVTL-i</string>
 
     <!-- Setup: warnings -->
     <string name="warnings_column_warning">Warning</string>

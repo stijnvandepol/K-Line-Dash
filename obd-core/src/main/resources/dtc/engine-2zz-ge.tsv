@@ -1,12 +1,11 @@
-# K-Line Dash: Toyota 2ZZ-GE (Corolla E12 T-Sport) trouble code descriptions and vehicle notes
-# Format: CODE<TAB>description<TAB>vehicle note
-#   - description empty: use the generic description from generic.tsv and only add the note.
-#   - description set: Toyota-specific meaning (P1xxx codes mean different things per brand).
+# K-Line Dash: Toyota 2ZZ-GE (Corolla E12 T-Sport, Celica 1.8 VVTL-i) troubleshooting notes
+# Format: CODE<TAB>description<TAB>note
+#   - description empty: keep the generic or Toyota meaning and only add the note.
+#   - A note here replaces the Toyota-wide note of make-toyota.tsv for the same code.
 # Sources (see docs/research/2zz-ge-obd.md section 3):
 #   https://procarmanuals.com/toyota-engine-1zz-fe-2zz-fe-error-codes-list  (1ZZ-FE/2ZZ-GE flash codes and DTCs)
 #   https://toyotaspace.com/toyota-obd2-codes-list
 #   https://www.autotalk.com/toyota-obd-ii-codes-2104
-#   https://github.com/Wal33D/dtc-database/blob/main/data/source-data/toyota_codes.txt
 #   Thermostat opening temperature: https://www.123spareparts.co.uk/car-parts/toyota/corolla-zze12-nde12-zde12/1-8-vvtl-i-ts-zze123-165-kw/thermostat/19252
 #   MAF with built-in intake air temperature sensor, narrow-band O2: https://support.haltech.com/portal/en/kb/articles/2zz-ge-engine
 # Notes are general troubleshooting hints for this engine, not confirmed diagnoses.
@@ -33,13 +32,13 @@ P0303		Coil-on-plug ignition: swap this coil and spark plug with another cylinde
 P0304		Coil-on-plug ignition: swap this coil and spark plug with another cylinder to see if the misfire follows.
 P0335		Check the crankshaft position sensor connector and wiring, then the sensor. Toyota flash code 12/13.
 P0420		Often an ageing catalytic converter, but check for exhaust leaks, misfires and a failing downstream O2 sensor first.
-P1300	Igniter Circuit Malfunction No. 1	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
-P1305	Igniter Circuit Malfunction No. 2	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
-P1310	Igniter Circuit Malfunction No. 3	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
-P1315	Igniter Circuit Malfunction No. 4	Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
-P1335	No Crankshaft Position Sensor Signal While Engine Is Running	Crank signal lost while running: check the crankshaft sensor connector and wiring, then the sensor. Toyota flash code 13; see also P0335.
-P1346	VVT Sensor/Camshaft Position Sensor Range/Performance (Bank 1)	Cam/VVT signal out of range: check the camshaft position sensor, its connector and wiring, and the oil level; a worn timing chain can also cause it. Toyota flash code 18.
-P1349	VVT System Malfunction (Bank 1)	VVT-i/VVTL-i fault. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen. Toyota flash code 59.
-P1600	ECM BATT Malfunction	Backup power to the ECU memory was interrupted; often seen after the battery was disconnected. Clear it and see if it returns; if so, check the battery terminals.
-P1605	Knock Control CPU Malfunction	Internal ECU fault (knock control processor). Clear it once; if it returns, have the ECU checked.
-P1656	OCV (Oil Control Valve) Circuit Malfunction (Bank 1)	Electrical fault in the VVT oil control valve circuit: check the OCV connector and wiring, then the valve. Toyota flash code 39.
+P1300		Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
+P1305		Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
+P1310		Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 15.
+P1315		Ignition coil/igniter circuit: check the coil connector and wiring; swap coils between cylinders to see if the fault follows. Toyota flash code 14.
+P1335		Crank signal lost while running: check the crankshaft sensor connector and wiring, then the sensor. Toyota flash code 13; see also P0335.
+P1346		Cam/VVT signal out of range: check the camshaft position sensor, its connector and wiring, and the oil level; a worn timing chain can also cause it. Toyota flash code 18.
+P1349		VVT-i/VVTL-i fault. Check the oil level and condition first; then the VVT oil control valve (OCV) and its filter screen. Toyota flash code 59.
+P1600		Backup power to the ECU memory was interrupted; often seen after the battery was disconnected. Clear it and see if it returns; if so, check the battery terminals.
+P1605		Internal ECU fault (knock control processor). Clear it once; if it returns, have the ECU checked.
+P1656		Electrical fault in the VVT oil control valve circuit: check the OCV connector and wiring, then the valve. Toyota flash code 39.

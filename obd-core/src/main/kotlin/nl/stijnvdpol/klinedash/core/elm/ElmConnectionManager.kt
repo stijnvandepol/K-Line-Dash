@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import nl.stijnvdpol.klinedash.core.car.CarMake
 import nl.stijnvdpol.klinedash.core.log.CommLog
 import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.core.log.RingCommLog
@@ -62,6 +63,10 @@ data class BackoffPolicy(
  * retried. A fresh transport comes from [transportFactory] for
  * every attempt.
  *
+ * [makeHint] is read at the start of every connection attempt (the user may change the make, or a
+ * VIN may reveal it, while the manager keeps reconnecting). It only orders the protocol ladder
+ * (see [fallbackOrder]); null = unknown make.
+ *
  * [execute] rethrows the [TransportException] that killed the link, so a poller can stop its
  * cycle and wait for [ConnectionState.Connected] again; until then it throws [IllegalStateException].
  */
@@ -73,6 +78,7 @@ class ElmConnectionManager(
     override val log: CommLog = RingCommLog(),
     private val backoff: BackoffPolicy = BackoffPolicy(),
     private val random: Random = Random.Default,
+    private val makeHint: () -> CarMake? = { null },
 ) : ElmLink {
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
@@ -166,7 +172,7 @@ class ElmConnectionManager(
                 _state.value = ConnectionState.Initializing("Starting")
                 val session = Elm327Session(transport, log)
                 val saved = loadSavedProtocol()
-                val info = session.initialize(saved) { step ->
+                val info = session.initialize(saved, makeHint()) { step ->
                     _state.value = ConnectionState.Initializing(step)
                 }
                 if (!info.usedSavedProtocol && info.protocolNumber != Elm327Session.AUTO_PROTOCOL) {

@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **SETUP > Car:** the make of the car replaces the trouble code profile. "Automatic" reads the VIN
+  from the car after connecting and picks the make family by itself (VW Group, BMW / Mini,
+  Mercedes-Benz / smart, Opel / Vauxhall, Ford, Renault / Dacia, Peugeot / Citroën / DS, Fiat / Alfa
+  Romeo / Lancia, Volvo, Toyota / Lexus, Honda / Acura, Nissan / Infiniti, Mazda, Mitsubishi,
+  Subaru, Suzuki, Hyundai / Kia); you can also choose the make yourself, or "Other make". A car
+  that reports no VIN stays on the standard meanings. DIAG says so when a manufacturer-specific
+  code is listed and the make is not known, and opens SETUP > Car.
+- **Manufacturer code meanings** for VW Group (150 codes) and Honda / Acura (52), each confirmed by
+  two independent sources and worded for the app; Toyota / Lexus keeps its table. For the other
+  makes a manufacturer-specific code names the workshop tool that reads it (ISTA, Xentry, Diagbox
+  and so on) instead of guessing a meaning.
+- **Connecting:** when the adapter's automatic search finds nothing, the app now also tries CAN
+  (11 and 29-bit, 500 and 250 kbaud) and J1850 (PWM, VPW) explicitly, in an order that suits the
+  make, and says which protocol it is trying.
+
+### Changed
+
+- The trouble code profile of 1.1.0 is carried over: "Toyota 2ZZ-GE" becomes the make
+  Toyota / Lexus with the new "2ZZ-GE engine notes" switch, "Any car" becomes Automatic.
+
 ## [1.1.0] - 2026-10-23
 
 K-Line Dash no longer assumes a Toyota Corolla T-Sport: the tachometers and trouble codes now fit

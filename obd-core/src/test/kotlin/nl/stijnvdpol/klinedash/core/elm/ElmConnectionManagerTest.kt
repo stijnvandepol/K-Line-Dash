@@ -12,6 +12,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import nl.stijnvdpol.klinedash.core.assertFails
 import nl.stijnvdpol.klinedash.core.assertIs
+import nl.stijnvdpol.klinedash.core.car.CarMake
+import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.core.sim.SimulatorConfig
 import nl.stijnvdpol.klinedash.core.sim.SimulatorTransport
 import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
@@ -343,6 +345,35 @@ class ElmConnectionManagerTest {
         assertIs<ConnectionState.Connected>(
             withTimeout(300_000) { manager.state.first { it is ConnectionState.Connected } },
         )
+    }
+
+    @Test
+    fun `make hint is read again on every connection attempt`() = runTest {
+        val config = SimulatorConfig().apply { initFails = true }
+        var make: CarMake? = null
+        var hintReads = 0
+        val manager = ElmConnectionManager(
+            { SimulatorTransport(config) }, "sim", FakeProtocolStore(), backgroundScope,
+            makeHint = { hintReads++; make },
+        )
+        manager.start()
+        withTimeout(120_000) { manager.state.first { it is ConnectionState.Reconnecting } }
+        assertEquals(1, hintReads)
+
+        // The user picks Renault; the car is a KWP fast-init car whose clone cannot auto-search.
+        make = CarMake.RENAULT_DACIA
+        config.initFails = false
+        config.autoDetectFails = true
+        config.carProtocol = "5"
+        val connected = assertIs<ConnectionState.Connected>(
+            withTimeout(300_000) { manager.state.first { it is ConnectionState.Connected } },
+        )
+
+        assertEquals("5", connected.info.protocolNumber)
+        assertTrue(hintReads >= 2)
+        val sent = manager.log.snapshot().filter { it.kind == LogKind.TX }.map { it.text }
+        val lastAttempt = sent.drop(sent.lastIndexOf("ATZ"))
+        assertEquals(listOf("ATSP5"), lastAttempt.filter { it.startsWith("ATSP") && it != "ATSP0" })
     }
 
     @Test

@@ -61,6 +61,17 @@ class ScreenLayoutTest {
     }
 
     @Test
+    fun `the car page stacks its red line and make list below 900 dp and puts them side by side above`() {
+        assertTrue(isCarStacked(899f))
+        assertFalse(isCarStacked(900f))
+        // What SETUP leaves for a section: the canvas minus the 240 dp menu, or minus the back strip.
+        assertTrue(isCarStacked(SmallPhone.widthDp - 73f))
+        assertFalse(isCarStacked(TypicalPhone.widthDp - 241f))
+        assertFalse(isCarStacked(SmallUnit.widthDp - 241f))
+        assertFalse(isCarStacked(ReferenceUnit.widthDp - 241f))
+    }
+
+    @Test
     fun `the session buttons are pinned on a phone and stay in the flow from a small head unit up`() {
         listOf(SmallPhone, TypicalPhone).forEach { assertTrue("$it", areSessionActionsPinned(it)) }
         listOf(SmallUnit, ReferenceUnit, WideUnit, Tablet).forEach { assertFalse("$it", areSessionActionsPinned(it)) }

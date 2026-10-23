@@ -24,11 +24,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -133,17 +135,23 @@ class ObdService : LifecycleService() {
         // keeps an unexpected exception in the link from taking the whole process down.
         val crashGuard = CoroutineExceptionHandler { _, e -> Log.e(TAG, "Uncaught error in link", e) }
         val linkScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + crashGuard)
+        // The make orders the protocol fallback; read at every attempt, so a make chosen or detected
+        // while the link retries counts on the next attempt. Null until the settings are read.
+        val make = appGraph.carSettingsRepository.settings.map { it.effectiveMake }
+            .stateIn(linkScope, SharingStarted.Eagerly, null)
         val link = ElmConnectionManager(
             transportFactory = transportFactory,
             adapterKey = adapterKey,
             protocolStore = appGraph.protocolStore,
             scope = linkScope,
+            makeHint = { make.value },
         )
         val poller = ObdPollScheduler(link, linkScope)
         ObdServiceState.publish(link, poller)
         link.start()
         // Waits for the link to be Connected; with nothing demanded it only detects the supported PIDs.
         poller.start()
+        linkScope.launch { appGraph.vinDetector.run(adapterKey, link, poller) }
         val alertMonitor = AlertMonitor(
             settings = appGraph.alertSettingsRepository.settings,
             rules = AlertEvaluator,

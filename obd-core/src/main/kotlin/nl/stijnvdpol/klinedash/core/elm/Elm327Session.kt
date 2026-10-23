@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.core.elm
 
 import kotlinx.coroutines.delay
+import nl.stijnvdpol.klinedash.core.car.CarMake
 import nl.stijnvdpol.klinedash.core.log.CommLog
 import nl.stijnvdpol.klinedash.core.log.LogKind
 import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
@@ -81,18 +82,24 @@ class Elm327Session(
      * Resets and configures the adapter, then makes sure the ECU answers on a protocol.
      *
      * With [savedProtocol] it first tries that protocol (skipping the slow ATSP0 search); if the
-     * ECU does not answer it falls back to auto-detection. [onStep] receives short progress texts.
+     * ECU does not answer it falls back to auto-detection, and when that fails too, to the explicit
+     * ladder of [fallbackOrder] ([makeHint] only changes its order; null = unknown make).
+     * [onStep] receives short progress texts.
      * If the adapter resets itself mid-init (clone brown-out) the whole sequence is restarted once.
      *
      * @throws EcuNotRespondingException when the adapter works but no protocol gets an answer.
      * @throws UnsupportedAdapterException when the adapter never answers ATZ (app-locked dongle).
      * @throws TransportException when the adapter stops answering or keeps resetting.
      */
-    suspend fun initialize(savedProtocol: String?, onStep: (String) -> Unit): AdapterInfo {
+    suspend fun initialize(
+        savedProtocol: String?,
+        makeHint: CarMake? = null,
+        onStep: (String) -> Unit,
+    ): AdapterInfo {
         var restarted = false
         while (true) {
             try {
-                return runInit(savedProtocol, onStep)
+                return runInit(savedProtocol, makeHint, onStep)
             } catch (e: AdapterResetException) {
                 if (restarted) {
                     throw TransportException(
@@ -108,7 +115,7 @@ class Elm327Session(
     /** Thrown inside init when an unexpected "ELM327" banner shows up; never leaves this class. */
     private class AdapterResetException : Exception("Adapter reset during init")
 
-    private suspend fun runInit(savedProtocol: String?, onStep: (String) -> Unit): AdapterInfo {
+    private suspend fun runInit(savedProtocol: String?, makeHint: CarMake?, onStep: (String) -> Unit): AdapterInfo {
         val unsupported = LinkedHashSet<String>()
 
         step(onStep, "Resetting adapter")
@@ -116,7 +123,7 @@ class Elm327Session(
         configureAdapter(onStep, unsupported)
         val identity = readAdapterIdentity(onStep, unsupported)
         val family = AdapterProfile.classify(identity.firmware, identity.stnId, unsupported)
-        val protocol = connectToEcu(savedProtocol, onStep, unsupported)
+        val protocol = connectToEcu(savedProtocol, makeHint, onStep, unsupported)
 
         val dp = send("ATDP")
         val reportedName = (dp as? ElmResult.Data)?.lines?.firstOrNull()
@@ -208,12 +215,14 @@ class Elm327Session(
     private class EcuProtocol(val number: String, val isSaved: Boolean)
 
     /**
-     * Saved protocol first, then ATSP0 auto-detection, then the explicit K-line ladder.
+     * Saved protocol first, then ATSP0 auto-detection, then the explicit ladder (K-line, CAN and
+     * J1850 rungs in the order [fallbackOrder] gives for [makeHint]).
      *
      * @throws EcuNotRespondingException when no protocol gets an answer to 0100.
      */
     private suspend fun connectToEcu(
         savedProtocol: String?,
+        makeHint: CarMake?,
         onStep: (String) -> Unit,
         unsupported: MutableSet<String>,
     ): EcuProtocol {
@@ -223,7 +232,7 @@ class Elm327Session(
             if (probe is ElmResult.Data) return EcuProtocol(savedProtocol, isSaved = true)
             log.record(LogKind.INFO, "Saved protocol $savedProtocol failed (${describe(probe)}), falling back to auto-detect")
             // ISO 9141-2 wants the bus idle for a while before the next 5-baud init.
-            delay(KLINE_REINIT_PAUSE_MS)
+            delay(K_LINE_REINIT_PAUSE_MS)
         }
 
         step(onStep, "Detecting protocol (ECU init takes a few seconds)")
@@ -231,13 +240,13 @@ class Elm327Session(
         var lastProbe = probeEcu(DETECT_PROBE_TIMEOUT_MS)
         if (lastProbe is ElmResult.Data) return EcuProtocol(readDetectedProtocol(), isSaved = false)
 
-        // Clone auto-search is unreliable on K-line, and some Toyota ECUs only answer a 5-baud
-        // init to address 0x13. Try the K-line protocols explicitly before giving up.
-        for (candidate in FALLBACK_PROTOCOLS) {
+        // Clone auto-search is unreliable, and some Toyota ECUs only answer a 5-baud init to
+        // address 0x13. Try the protocols explicitly before giving up.
+        for (candidate in fallbackOrder(makeHint)) {
             if (candidate == savedProtocol) continue
-            delay(KLINE_REINIT_PAUSE_MS)
+            delay(pauseBeforeRungMs(candidate))
             step(onStep, "Trying ${protocolLabel(candidate)}")
-            lastProbe = tryProtocol(candidate, unsupported, SAVED_PROBE_TIMEOUT_MS)
+            lastProbe = tryProtocol(candidate, unsupported, rungTimeoutMs(candidate))
             if (lastProbe is ElmResult.Data) return EcuProtocol(candidate, isSaved = false)
         }
 
@@ -297,14 +306,6 @@ class Elm327Session(
     private fun protocolCommands(protocol: String): List<String> =
         if (protocol == TOYOTA_PROFILE) TOYOTA_COMMANDS else listOf("ATSP$protocol")
 
-    private fun protocolLabel(protocol: String): String = when (protocol) {
-        "3" -> "ISO 9141-2"
-        "4" -> "KWP2000 (5-baud init)"
-        "5" -> "KWP2000 (fast init)"
-        TOYOTA_PROFILE -> "Toyota K-line profile"
-        else -> "protocol $protocol"
-    }
-
     /** 0100 with a long timeout (K-line init). Garbage and bus errors get one retry. */
     private suspend fun probeEcu(timeoutMs: Long): ElmResult {
         var result = send("0100", timeoutMs)
@@ -359,9 +360,6 @@ class Elm327Session(
 
         private val TOYOTA_COMMANDS = listOf("ATIB96", "ATIIA13", "ATSH8113F1", "ATSW00", "ATSPA4")
 
-        /** Tried in order when ATSP0 finds nothing: ISO 9141-2 first, it is the likeliest for a 2ZZ-GE. */
-        private val FALLBACK_PROTOCOLS = listOf("3", "5", "4", TOYOTA_PROFILE)
-
         private val SETUP_COMMANDS = listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATAT1")
         private const val ADAPTIVE_TIMING_2 = "ATAT2"
         private const val UNKNOWN_VERSION = "unknown"
@@ -373,7 +371,8 @@ class Elm327Session(
 
         /**
          * A saved protocol skips the search, so only the 5-baud init (a few seconds) has to fit.
-         * Also used per rung of the explicit fallback ladder. Not yet measured in the car.
+         * Not yet measured in the car. The rungs of the fallback ladder have their own timeouts
+         * (see [rungTimeoutMs]).
          */
         private const val SAVED_PROBE_TIMEOUT_MS = 10_000L
 
@@ -385,7 +384,6 @@ class Elm327Session(
         private const val DETECT_PROBE_TIMEOUT_MS = 25_000L
         private const val RESET_ATTEMPTS = 2
         private const val RETRY_PAUSE_MS = 300L
-        private const val KLINE_REINIT_PAUSE_MS = 1_500L
         private const val RESYNC_CHAR = " "
         private const val RESYNC_TIMEOUT_MS = 1_500L
         private const val MAX_LOGGED_COMMAND_LENGTH = 20

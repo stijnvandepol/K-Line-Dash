@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.AppGraph
+import nl.stijnvdpol.klinedash.core.car.CarMake
+import nl.stijnvdpol.klinedash.core.car.EngineNotes
 import nl.stijnvdpol.klinedash.core.diag.ClearOutcome
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticReport
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticsReader
@@ -24,7 +26,7 @@ import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
 import nl.stijnvdpol.klinedash.core.diag.ObdDiagnostics
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
-import nl.stijnvdpol.klinedash.data.EngineProfile
+import nl.stijnvdpol.klinedash.data.CarIdentity
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 
 private const val TAG = "DiagnosticsViewModel"
@@ -58,12 +60,15 @@ internal data class DiagnosticsUiState(
  * Owns the diagnostics reader of the current link and the clear-codes flow. A read happens once
  * when the page is first opened on a link and whenever the user asks; clearing is only reachable
  * through two confirmations, re-checks that the engine is off at the last moment and is sent once,
- * never retried. The trouble code texts follow the car's [engineProfile]: a change shows on the
- * report that is already on screen.
+ * never retried. The trouble code texts follow the [car]'s make and engine notes: a change shows on
+ * the report that is already on screen. Every report also tells the app which VIN the car has
+ * ([recordVin]), before the texts are looked up, so a car that differs from the one detected
+ * earlier gets its own meanings at once.
  */
 internal class DiagnosticsViewModel(
-    private val loadDescriptions: suspend (EngineProfile) -> DtcDescriptions,
-    private val engineProfile: Flow<EngineProfile>,
+    private val loadDescriptions: suspend (CarMake?, EngineNotes?) -> DtcDescriptions,
+    private val car: Flow<CarIdentity>,
+    private val recordVin: suspend (String) -> Unit,
     pollerFlow: StateFlow<ObdPoller?>,
     connectedFlow: Flow<Boolean>,
     private val createReader: (ObdPoller) -> DiagnosticsReader,
@@ -86,13 +91,13 @@ internal class DiagnosticsViewModel(
         viewModelScope.launch {
             connectedFlow.collect(::onConnectionChanged)
         }
-        viewModelScope.launch { engineProfile.collectLatest(::onProfileChanged) }
+        viewModelScope.launch { car.collectLatest(::onCarChanged) }
     }
 
-    /** The codes on screen get the texts of the new profile; nothing is read again. */
-    private suspend fun onProfileChanged(profile: EngineProfile) {
-        val descriptions = loadDescriptions(profile)
-        _state.update { current -> current.report?.let { current.copy(codeLists = codeLists(it, descriptions)) } ?: current }
+    /** The codes on screen get the texts of the new make and engine notes; nothing is read again. */
+    private suspend fun onCarChanged(car: CarIdentity) {
+        val descriptions = loadDescriptions(car.make, car.engineNotes)
+        _state.update { current -> current.report?.let { current.copy(codeLists = codeLists(it, descriptions, car.make)) } ?: current }
     }
 
     /**
@@ -145,7 +150,9 @@ internal class DiagnosticsViewModel(
     }
 
     private suspend fun showReport(report: DiagnosticReport, notice: ClearNotice? = null) {
-        val lists = codeLists(report, loadDescriptions(engineProfile.first()))
+        report.vehicleInfo.vin?.let { recordVin(it) }
+        val identity = car.first()
+        val lists = codeLists(report, loadDescriptions(identity.make, identity.engineNotes), identity.make)
         _state.update {
             it.copy(
                 busy = null,
@@ -203,7 +210,8 @@ internal class DiagnosticsViewModel(
     companion object {
         fun forGraph(graph: AppGraph) = DiagnosticsViewModel(
             loadDescriptions = graph::awaitDtcDescriptions,
-            engineProfile = graph.carSettingsRepository.settings.map { it.engineProfile }.distinctUntilChanged(),
+            car = graph.carSettingsRepository.settings.map { it.identity }.distinctUntilChanged(),
+            recordVin = graph.carSettingsRepository::recordVin,
             pollerFlow = ObdServiceState.poller,
             connectedFlow = ObdServiceState.connectionState.map { it is ConnectionState.Connected },
             createReader = { ObdDiagnostics(it) },

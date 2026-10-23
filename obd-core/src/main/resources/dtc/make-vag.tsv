@@ -1,0 +1,162 @@
+# K-Line Dash: VW Group (VW, Audi, Seat, Cupra, Skoda) manufacturer-specific trouble code meanings
+# Format: CODE<TAB>description<TAB>note
+#   - description: our own short wording of the VW Group meaning of a P1xxx code.
+#   - note: a short first check, only where sources widely agree; empty otherwise.
+# Curated selection, not an import. A code is listed only if at least two independent publications agree
+# on its meaning; codes where sources disagree were left out. Per-code sources: docs/research/dtc-sources-vag-honda.md
+# Sources (publications, not mirrors of each other):
+#   RT  Ross-Tech wiki, one page per fault code: https://wiki.ross-tech.com/wiki/index.php/Category:Fault_Codes
+#   VH  VAG number / hex / P-code list (mirrors of the same list count once): https://www.vag-hub.com/vw-audi-seat-skoda-dtc/
+#   TC  troublecodes.net, entries labelled Audi/Volkswagen: https://www.troublecodes.net/p1codes/
+#   CW  carwiki.de, one page per code: https://carwiki.de/obd-code-p1136-vw-audi (same pattern for other codes)
+# Meanings can vary by engine control unit generation; treat them as the usual meaning, not a diagnosis.
+P1020	Fuel pressure regulation: control range exceeded	
+P1025	Fuel pressure regulating valve (N276): mechanical fault	
+P1035	NOx sensor (G295): implausible signal	
+P1103	O2 sensor heater, bank 1 sensor 1: power too low	
+P1111	Lambda control, bank 1: mixture too lean	
+P1116	O2 sensor heater, bank 1 sensor 1: open circuit	
+P1117	O2 sensor heater, bank 1 sensor 2: short to ground	
+P1118	O2 sensor heater, bank 1 sensor 2: open circuit	
+P1128	Long-term fuel trim (under load), bank 1: too lean	Check for intake or vacuum leaks, the MAF sensor and fuel pressure first.
+P1130	Long-term fuel trim (under load), bank 2: too lean	Check for intake or vacuum leaks, the MAF sensor and fuel pressure first.
+P1136	Long-term fuel trim (idle), bank 1: too lean	Check for intake or vacuum leaks, the MAF sensor and fuel pressure first.
+P1137	Long-term fuel trim (idle), bank 1: too rich	
+P1139	Long-term fuel trim (idle), bank 2: too rich	
+P1141	Load calculation cross-check: implausible value	
+P1142	Load calculation cross-check: below the lower limit	
+P1143	Load calculation cross-check: above the upper limit	
+P1144	Mass air flow sensor (G70): open circuit or short to ground	
+P1145	Mass air flow sensor (G70): short to positive	
+P1151	Long-term fuel trim (air), bank 1, range 1: too lean	Check for intake or vacuum leaks, the MAF sensor and fuel pressure first.
+P1152	Long-term fuel trim (air), bank 1, range 2: too lean	Check for intake or vacuum leaks, the MAF sensor and fuel pressure first.
+P1155	Intake manifold pressure sensor (G71): short to positive	
+P1158	Intake manifold pressure sensor (G71): implausible signal	
+P1159	Air mass sensors, bank 1 and 2: signals do not match	
+P1161	Intake manifold temperature sensor (G72): open circuit or short to positive	
+P1163	Fuel temperature sensor (G81): open circuit or short to positive	
+P1171	Throttle actuator angle sensor 2 (G188): implausible signal	
+P1176	Lambda correction after catalyst, bank 1: control limit reached	
+P1200	Turbo bypass valve (N249): mechanical fault	
+P1213	Cylinder 1 injector (N30): short to positive	
+P1214	Cylinder 2 injector (N31): short to positive	
+P1215	Cylinder 3 injector (N32): short to positive	
+P1216	Cylinder 4 injector (N33): short to positive	
+P1217	Cylinder 5 injector (N83): short to positive	
+P1218	Cylinder 6 injector (N84): short to positive	
+P1219	Cylinder 7 injector (N85): short to positive	
+P1220	Cylinder 8 injector (N86): short to positive	
+P1237	Cylinder 1 injector (N30): open circuit	
+P1238	Cylinder 2 injector (N31): open circuit	
+P1239	Cylinder 3 injector (N32): open circuit	
+P1240	Cylinder 4 injector (N33): open circuit	
+P1241	Cylinder 5 injector (N83): open circuit	
+P1242	Cylinder 6 injector (N84): open circuit	
+P1243	Cylinder 7 injector (N85): open circuit	
+P1244	Cylinder 8 injector (N86): open circuit	
+P1250	Fuel level too low	
+P1255	Coolant temperature sensor (G62): short to ground	
+P1256	Coolant temperature sensor (G62): open circuit or short to positive	
+P1260	Pump injector valve, cylinder 1 (N240): implausible signal	
+P1261	Pump injector valve, cylinder 1 (N240): control range exceeded	
+P1263	Pump injector valve, cylinder 2 (N241): implausible signal	
+P1264	Pump injector valve, cylinder 2 (N241): control range exceeded	
+P1266	Pump injector valve, cylinder 3 (N242): implausible signal	
+P1267	Pump injector valve, cylinder 3 (N242): control range exceeded	
+P1269	Pump injector valve, cylinder 4 (N243): implausible signal	
+P1270	Pump injector valve, cylinder 4 (N243): control range exceeded	
+P1297	Pressure drop between turbocharger and throttle valve	
+P1337	Camshaft position sensor (G40), bank 1: short to ground	
+P1338	Camshaft position sensor (G40), bank 1: open circuit or short to positive	
+P1340	Camshaft sensor (G40) and crankshaft sensor (G28): signals do not correlate	
+P1347	Camshaft sensor 2 (G163) and crankshaft sensor (G28): signals do not correlate	
+P1348	Ignition coil output stage 1: open circuit	
+P1349	Ignition coil output stage 2: open circuit	
+P1355	Cylinder 1 ignition circuit: open circuit	
+P1358	Cylinder 2 ignition circuit: open circuit	
+P1361	Cylinder 3 ignition circuit: open circuit	
+P1364	Cylinder 4 ignition circuit: open circuit	
+P1370	Cylinder 6 ignition circuit: open circuit	
+P1388	Throttle control monitoring: control unit fault	
+P1391	Camshaft position sensor (G163), bank 2: short to ground	
+P1392	Camshaft position sensor (G163), bank 2: open circuit or short to positive	
+P1403	EGR system: control deviation	
+P1411	Secondary air system, bank 2: insufficient flow	
+P1420	Secondary air valve (N112): electrical fault	
+P1421	Secondary air valve (N112): short to ground	
+P1422	Secondary air valve (N112): short to positive	
+P1423	Secondary air system, bank 1: insufficient flow	
+P1424	Secondary air system, bank 1: leak detected	
+P1426	Charcoal canister purge valve (N80): open circuit	
+P1432	Secondary air valve (N112): open circuit	
+P1433	Secondary air pump relay (J299): open circuit	
+P1434	Secondary air pump relay (J299): short to positive	
+P1435	Secondary air pump relay (J299): short to ground	
+P1436	Secondary air pump relay (J299): electrical fault	
+P1443	EGR potentiometer (G212): signal too low	
+P1455	Exhaust gas temperature sensor 1 (G235): implausible signal	
+P1458	Exhaust gas temperature sensor 2 (G236): short to ground	
+P1473	EVAP leak detection pump: open circuit	
+P1475	EVAP leak detection pump: malfunction or no signal	
+P1476	EVAP leak detection pump: insufficient vacuum	
+P1503	Alternator load signal (terminal DF): implausible	
+P1507	Idle control: lower regulation limit reached	
+P1508	Idle control: upper regulation limit reached	
+P1517	ECU power supply relay (J271): electrical fault	
+P1519	Camshaft adjustment, bank 1: malfunction	
+P1522	Camshaft adjustment, bank 2: malfunction	
+P1523	Crash signal from airbag control unit: implausible	
+P1524	Fuel pump relay (J17): open circuit or short to ground	
+P1526	Camshaft timing valve (N205), bank 1: short to positive	
+P1527	Camshaft timing valve (N205), bank 1: short to ground	
+P1528	Camshaft timing valve (N205), bank 1: open circuit	
+P1534	Camshaft timing valve (N208), bank 2: short to positive	
+P1538	Fuel shut-off valve (N109): open circuit or short to ground	
+P1542	Throttle actuator angle sensor 1 (G187): implausible signal	
+P1543	Throttle actuator angle sensor 1 (G187): signal too low	
+P1545	Throttle control: malfunction	
+P1546	Boost pressure control valve (N75): short to positive	
+P1547	Boost pressure control valve (N75): short to ground	
+P1548	Boost pressure control valve (N75): open circuit	
+P1549	Boost pressure control valve (N75): open circuit or short to ground	
+P1550	Boost pressure control: deviation from target	
+P1555	Boost pressure: maximum exceeded	
+P1556	Boost pressure control: below target (negative deviation)	
+P1557	Boost pressure control: above target (positive deviation)	
+P1559	Throttle valve unit (J338): basic setting fault	
+P1562	Quantity adjuster (N146): upper limit reached	
+P1563	Quantity adjuster (N146): lower limit reached	
+P1569	Cruise control switch (E45): implausible signal	
+P1570	Engine start blocked by the immobilizer	
+P1579	Throttle valve unit (J338): adaptation not started	
+P1580	Throttle actuator, bank 1: malfunction	
+P1581	Throttle valve unit (J338): basic setting not performed	
+P1592	Barometric and boost pressure sensors: signals do not match	
+P1601	Terminal 30 supply relay (J317): implausible signal	
+P1602	Terminal 30 supply voltage too low	
+P1612	Engine control unit incorrectly coded	
+P1619	Glow plug relay (J52): open circuit or short to ground	
+P1624	Malfunction lamp (MIL) request signal active	
+P1625	Powertrain bus: implausible message from transmission control unit	
+P1631	Accelerator pedal sensor 1 (G79): signal too high	
+P1633	Accelerator pedal sensor 2 (G185): signal too low	
+P1634	Accelerator pedal sensor 2 (G185): signal too high	
+P1636	Powertrain bus: no message from airbag control unit	
+P1637	Powertrain bus: no message from central electrics control unit	
+P1639	Accelerator pedal sensors 1 and 2 (G79/G185): implausible signal	
+P1640	Engine control unit: internal fault (EEPROM)	
+P1649	Powertrain bus: no message from ABS control unit	
+P1650	Powertrain bus: no message from instrument cluster	
+P1660	Radiator fan control 1: short to ground	
+P1676	Throttle (EPC) warning lamp (K132): circuit fault	
+P1680	Reset-resistant limp-home mode active	
+P1681	Control unit programming not completed	
+P1696	Powertrain bus: implausible message from steering column control unit	
+P1746	Transmission solenoid power relay: electrical fault	
+P1841	Engine and transmission control units are incompatible	
+P1850	Powertrain bus: no message from engine control unit	
+P1853	Powertrain bus: implausible message from ABS control unit	
+P1857	Load signal: error message from engine control unit	
+P1914	Brake booster pressure sensor (G294): implausible signal	
+P1950	Radiator fan (V7): stiff or blocked	
+P1951	Radiator fan 2 (V177): stiff or blocked	

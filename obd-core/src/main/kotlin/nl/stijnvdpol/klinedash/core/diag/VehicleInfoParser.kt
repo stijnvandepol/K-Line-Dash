@@ -25,9 +25,12 @@ object VehicleInfoParser {
     /** 17 characters, digits and capitals except I, O and Q (ISO 3779). */
     private val VIN_FORMAT = Regex("[A-HJ-NPR-Z0-9]{17}")
 
+    /** True when [text] has the shape of a VIN: 17 characters from the allowed alphabet. */
+    fun isVin(text: String): Boolean = VIN_FORMAT.matches(text)
+
     /** The VIN in [data], or null when it is absent or not a valid VIN. */
     fun parseVin(data: ElmResult.Data): String? =
-        text(data, PID_VIN).filter { it.code in MIN_PRINTABLE..MAX_PRINTABLE }.takeIf { VIN_FORMAT.matches(it) }
+        text(data, PID_VIN).filter { it.code in MIN_PRINTABLE..MAX_PRINTABLE }.takeIf { isVin(it) }
 
     /** The ECU name in [data], trimmed, or null when absent or empty. */
     fun parseEcuName(data: ElmResult.Data): String? =

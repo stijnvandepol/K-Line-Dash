@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import nl.stijnvdpol.klinedash.core.car.CarMake
+import nl.stijnvdpol.klinedash.core.car.EngineNotes
 import nl.stijnvdpol.klinedash.core.diag.BundledDtcDescriptions
 import nl.stijnvdpol.klinedash.core.diag.Dtc
 import nl.stijnvdpol.klinedash.core.diag.DtcDescription
@@ -23,7 +25,7 @@ import nl.stijnvdpol.klinedash.core.elm.ProtocolStore
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.CarSettingsRepository
-import nl.stijnvdpol.klinedash.data.EngineProfile
+import nl.stijnvdpol.klinedash.data.CarIdentity
 import nl.stijnvdpol.klinedash.data.AppDatabase
 import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
 import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
@@ -49,11 +51,13 @@ import nl.stijnvdpol.klinedash.service.TripAnalysisRepository
 import nl.stijnvdpol.klinedash.service.TripExporter
 import nl.stijnvdpol.klinedash.service.TripLibrary
 import nl.stijnvdpol.klinedash.service.TripRecorder
+import nl.stijnvdpol.klinedash.service.VinDetector
 import nl.stijnvdpol.klinedash.service.listTripFiles
 import nl.stijnvdpol.klinedash.ui.theme.ThemeCatalogSource
 import nl.stijnvdpol.klinedash.ui.theme.ThemeLoader
 import nl.stijnvdpol.klinedash.core.export.TripFileSource
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "AppGraph"
 private const val TRIPS_DIR_NAME = "trips"
@@ -95,6 +99,9 @@ class AppGraph(val appContext: Context) {
     val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(database.settingsDao()) }
     val generalSettingsRepository: GeneralSettingsRepository by lazy { GeneralSettingsRepository(database.settingsDao()) }
     val carSettingsRepository: CarSettingsRepository by lazy { CarSettingsRepository(database.settingsDao()) }
+
+    /** Reads the VIN after connecting; process-wide because it remembers which adapters have answered. */
+    val vinDetector: VinDetector by lazy { VinDetector(carSettingsRepository) }
 
     /**
      * App-specific external storage: no permission needed, removed with the app. Null only when that
@@ -167,22 +174,24 @@ class AppGraph(val appContext: Context) {
         ExportController(TripFileSource { listTripFiles(tripsDir) }, applicationScope)
     }
 
-    /** One load per profile, started on first use and parsed off the main thread; every caller awaits the same load. */
-    private val dtcDescriptions: Map<EngineProfile, Deferred<DtcDescriptions>> by lazy {
-        EngineProfile.entries.associateWith { profile ->
+    private val dtcDescriptions = ConcurrentHashMap<CarIdentity, Deferred<DtcDescriptions>>()
+
+    /**
+     * The trouble code meanings that apply to a car of [make] (null for any other make) with
+     * [engineNotes]: the standard ones for everybody, plus the make's own. Each combination is loaded
+     * on first use, parsed off the main thread, and every caller awaits the same load.
+     */
+    suspend fun awaitDtcDescriptions(make: CarMake?, engineNotes: EngineNotes?): DtcDescriptions =
+        dtcDescriptions.computeIfAbsent(CarIdentity(make, engineNotes)) {
             applicationScope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
                 try {
-                    BundledDtcDescriptions.load(includeToyota2zz = profile == EngineProfile.TOYOTA_2ZZ_GE)
+                    BundledDtcDescriptions.load(make, engineNotes)
                 } catch (e: Exception) {
                     Log.e(TAG, "Could not load the bundled trouble code descriptions", e)
                     NoDtcDescriptions
                 }
             }
-        }
-    }
-
-    /** The trouble code meanings that apply to a car with [profile]: standard ones for everybody, plus the profile's own. */
-    suspend fun awaitDtcDescriptions(profile: EngineProfile): DtcDescriptions = dtcDescriptions.getValue(profile).await()
+        }.await()
 
     val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(database.settingsDao()) }
 

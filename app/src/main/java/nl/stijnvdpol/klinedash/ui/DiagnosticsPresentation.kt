@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import nl.stijnvdpol.klinedash.core.car.CarMake
 import nl.stijnvdpol.klinedash.core.diag.DiagnosticReport
 import nl.stijnvdpol.klinedash.core.diag.Dtc
 import nl.stijnvdpol.klinedash.core.diag.DtcDescriptions
@@ -83,13 +84,22 @@ internal fun codeListState(list: DtcList, descriptions: DtcDescriptions): CodeLi
     )
 }
 
-/** The three code lists of a report with their descriptions resolved. */
-internal data class CodeLists(val stored: CodeListState, val pending: CodeListState, val permanent: CodeListState)
+/**
+ * The three code lists of a report with their descriptions resolved. [showsMakeHint] is set when a
+ * code that only the maker defines is listed and the make is not known, so its meaning cannot be told.
+ */
+internal data class CodeLists(
+    val stored: CodeListState,
+    val pending: CodeListState,
+    val permanent: CodeListState,
+    val showsMakeHint: Boolean,
+)
 
-internal fun codeLists(report: DiagnosticReport, descriptions: DtcDescriptions) = CodeLists(
+internal fun codeLists(report: DiagnosticReport, descriptions: DtcDescriptions, make: CarMake?) = CodeLists(
     stored = codeListState(report.stored, descriptions),
     pending = codeListState(report.pending, descriptions),
     permanent = codeListState(report.permanent, descriptions),
+    showsMakeHint = make == null && (report.stored.codes + report.pending.codes + report.permanent.codes).any { it.isManufacturerSpecific },
 )
 
 /** The code whose freeze frame the page starts with: the trigger code if it is stored, else the first stored code. */

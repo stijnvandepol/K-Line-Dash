@@ -3,6 +3,8 @@
 package nl.stijnvdpol.klinedash
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -75,8 +77,16 @@ internal fun ComposeTestRule.waitUntilGone(matcher: SemanticsMatcher, timeoutMs:
 /** Taps the first node that matches, once it is on screen. */
 internal fun ComposeTestRule.tap(matcher: SemanticsMatcher, timeoutMs: Long = UI_TIMEOUT_MS) {
     waitFor(matcher, timeoutMs)
-    onAllNodes(matcher).onFirst().performClick()
+    val node = onAllNodes(matcher).onFirst()
+    // A click lands on the middle of the node, which in a scrolled list can lie outside the visible
+    // part (a make far down SETUP > Car): scroll it into view first, as a finger would. Nodes outside
+    // any scrolling container have nothing to scroll.
+    if (node.fetchSemanticsNode().hasScrollableAncestor()) node.performScrollTo()
+    node.performClick()
 }
+
+private fun SemanticsNode.hasScrollableAncestor(): Boolean =
+    generateSequence(parent) { it.parent }.any { SemanticsActions.ScrollBy in it.config }
 
 /** The description of the dashboard field for [signalName], for example "Engine speed: 830 rpm"; null while there is none. */
 internal fun ComposeTestRule.fieldDescription(signalName: String): String? =
