@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import nl.stijnvdpol.klinedash.core.car.CarMake
 import nl.stijnvdpol.klinedash.core.car.EngineNotes
 import nl.stijnvdpol.klinedash.core.car.carMakeFromVin
@@ -107,13 +109,17 @@ fun rpmScale(redlineRpm: Int): RpmScale {
  *
  * Release 1.1.0 stored a trouble code profile under "car.engineProfile": TOYOTA_2ZZ_GE becomes the
  * Toyota / Lexus make with the 2ZZ-GE notes, GENERIC becomes Automatic. That is carried over once,
- * before the settings are first read or changed (see [migrateEngineProfile]).
+ * before the settings are first read or changed (see [migrateEngineProfile]). With a
+ * [SharedSettingsDao] the app calls it as that DAO's `beforeFirstRead`, so even the one shared read
+ * of the table sees the migrated rows.
  */
 class CarSettingsRepository(
     private val dao: SettingsDao,
     decodeDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val store = TypedSettings(dao, ::decodeCarSettings, ::encodeCarSettings, decodeDispatcher)
+    private val migrationLock = Mutex()
+    private var isMigrated = false
 
     val settings: Flow<CarSettings> = flow {
         migrateEngineProfile()
@@ -136,14 +142,21 @@ class CarSettingsRepository(
     /**
      * Writes the notes first and the make last, so an interruption leaves rows that still mean the
      * same thing, and the 1.1.0 row goes at the end. A make the user has chosen since wins over the old profile.
+     * Runs once per instance; a call that comes while another one is migrating waits for it.
      */
-    private suspend fun migrateEngineProfile() {
-        val legacy = dao.get(LEGACY_ENGINE_PROFILE)?.value ?: return
-        if (legacy == LEGACY_TOYOTA_2ZZ_GE && dao.get(MAKE_CHOICE) == null) {
-            dao.upsert(SettingEntry(ENGINE_NOTES, EngineNotes.TOYOTA_2ZZ_GE.name))
-            dao.upsert(SettingEntry(MAKE_CHOICE, MakeChoice.Specific(CarMake.TOYOTA_LEXUS).storageName()))
+    internal suspend fun migrateEngineProfile() {
+        migrationLock.withLock {
+            if (isMigrated) return
+            val legacy = dao.get(LEGACY_ENGINE_PROFILE)?.value
+            if (legacy != null) {
+                if (legacy == LEGACY_TOYOTA_2ZZ_GE && dao.get(MAKE_CHOICE) == null) {
+                    dao.upsert(SettingEntry(ENGINE_NOTES, EngineNotes.TOYOTA_2ZZ_GE.name))
+                    dao.upsert(SettingEntry(MAKE_CHOICE, MakeChoice.Specific(CarMake.TOYOTA_LEXUS).storageName()))
+                }
+                dao.delete(LEGACY_ENGINE_PROFILE)
+            }
+            isMigrated = true
         }
-        dao.delete(LEGACY_ENGINE_PROFILE)
     }
 }
 

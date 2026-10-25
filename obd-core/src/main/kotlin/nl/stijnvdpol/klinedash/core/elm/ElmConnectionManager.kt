@@ -121,6 +121,13 @@ class ElmConnectionManager(
             ?: throw IllegalStateException("ELM link is not connected (state: ${_state.value})")
         try {
             val result = current.session.execute(command, timeoutMs)
+            if (ElmParser.isAdapterReset(command, result)) {
+                // It lost ATE0/ATS0 and the protocol; waiting for three timeouts would feed garbage meanwhile.
+                log.record(LogKind.ERROR, "The adapter reset itself (reply to \"$command\"), reconnecting")
+                if (link === current) link = null
+                current.lost.complete("The adapter reset itself")
+                return@withLock result
+            }
             // A hung clone keeps the socket open but never prompts again; only a reconnect
             // (fresh socket + ATZ) brings it back.
             if (result is ElmResult.Timeout) {

@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.service
 
+import android.os.SystemClock
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -67,6 +68,7 @@ class SimulatedCircuit(
 
 private const val SIMULATED_FIX_INTERVAL_MS = 200L
 private const val DEMAND_OWNER = "gps-sim"
+private const val TAG = "SimulatedLocation"
 private const val SPEED_MAX_AGE_MS = 3_000L
 private const val SIMULATED_ACCURACY_M = 3.0
 private const val SIMULATED_SATELLITES = 12
@@ -80,15 +82,18 @@ private const val START_OFFSET_M = -40.0
  * simulator drives. Only wired in when the simulator transport is selected (see [LocationHub]). The
  * speed signal is demanded from the poller while running. A missing or stale speed stands still.
  *
- * [clock] is the wall clock for fix times and the integration step; both are injected for tests.
+ * [clock] is the wall clock for the fix times and the age of the speed reading, [elapsed] the monotonic
+ * clock for the integration step and the freshness of the fixes (a stepped wall clock must not move
+ * the car); both are injected for tests.
  */
 class SimulatedLocationSource(
     private val poller: StateFlow<ObdPoller?>,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val elapsed: () -> Long = SystemClock::elapsedRealtime,
     private val circuit: SimulatedCircuit = SimulatedCircuit(),
 ) : LocationSource {
-    private val store = FixStore(clock)
+    private val store = FixStore(elapsed)
     private val _status = MutableStateFlow<GpsStatus>(GpsStatus.Idle)
     private var job: Job? = null
     private var demandedOn: ObdPoller? = null
@@ -126,23 +131,26 @@ class SimulatedLocationSource(
 
     private suspend fun drive() {
         var distanceM = START_OFFSET_M
-        var lastMs = clock()
+        var lastElapsedMs = elapsed()
         demandSpeed(poller.value)
         while (true) {
             delay(SIMULATED_FIX_INTERVAL_MS)
-            val nowMs = clock()
-            val speedMps = currentSpeedKmh(nowMs) / KMH_PER_MPS
-            distanceM += speedMps * (nowMs - lastMs) / MS_PER_SECOND
-            lastMs = nowMs
-            publish(circuit.pointAt(distanceM), speedMps, nowMs)
+            survivingErrors(TAG, "Driving the simulated circuit") {
+                val nowMs = clock()
+                val elapsedMs = elapsed()
+                val speedMps = currentSpeedKmh(nowMs) / KMH_PER_MPS
+                distanceM += speedMps * (elapsedMs - lastElapsedMs) / MS_PER_SECOND
+                lastElapsedMs = elapsedMs
+                publish(circuit.pointAt(distanceM), speedMps, nowMs, elapsedMs)
+            }
         }
     }
 
-    private fun publish(point: Pair<LatLon, Double>, speedMps: Double, nowMs: Long) {
+    private fun publish(point: Pair<LatLon, Double>, speedMps: Double, nowMs: Long, elapsedMs: Long) {
         val fix = GeoFix(
             nowMs, point.first.lat, point.first.lon, speedMps, point.second, SIMULATED_ACCURACY_M, SIMULATED_SATELLITES,
         )
-        store.onFix(fix, nowMs)
+        store.onFix(fix, elapsedMs)
         _status.value = GpsStatus.Fix(SIMULATED_ACCURACY_M, SIMULATED_SATELLITES, store.rateHz)
     }
 

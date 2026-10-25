@@ -30,10 +30,14 @@ import nl.stijnvdpol.klinedash.ui.pages.Peaks
  * It records from [readings] whether or not the dashboard is visible; the poller only updates the
  * signals somebody demands, so a hidden dashboard records nothing new.
  */
-internal class DashboardViewModel(layoutFlow: Flow<DashboardLayout>, readings: Flow<Map<String, Reading>>) : ViewModel() {
-    /** Null until the first read from the database (a few milliseconds). */
+internal class DashboardViewModel(
+    layoutFlow: Flow<DashboardLayout>,
+    readings: Flow<Map<String, Reading>>,
+    initialLayout: DashboardLayout? = null,
+) : ViewModel() {
+    /** [initialLayout] (the one the app read at launch, if that is done) until the first read from the database. */
     val layout: StateFlow<DashboardLayout?> =
-        layoutFlow.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        layoutFlow.stateIn(viewModelScope, SharingStarted.Eagerly, initialLayout)
 
     val history = GraphHistory()
 
@@ -71,6 +75,7 @@ internal class DashboardViewModel(layoutFlow: Flow<DashboardLayout>, readings: F
         fun forGraph(graph: AppGraph) = DashboardViewModel(
             graph.dashboardLayoutRepository.layout,
             pollerFlow(emptyMap()) { it.readings },
+            graph.dashboardLayout.value,
         )
     }
 }

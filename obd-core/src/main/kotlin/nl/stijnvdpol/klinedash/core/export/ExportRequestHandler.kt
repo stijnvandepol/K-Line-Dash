@@ -10,23 +10,32 @@ private const val SESSION_COOKIE = "session"
 private const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 private const val ZIP_PATH = "/download/all.zip"
 private const val ZIP_FILE_NAME = "trips.zip"
-private val DOWNLOAD_INDEX_PATH = Regex("^/download/([0-9]{1,6})$")
+private val DOWNLOAD_FILE_PATH = Regex("^/download/([0-9]{1,6})/([A-Za-z0-9._-]{1,$MAX_DOWNLOAD_NAME_LENGTH})$")
 
 /**
- * Routes one parsed request. Only listed files can be downloaded and only by their index in the
- * current sorted list; no part of the request ever becomes a file path.
+ * Routes one parsed request. Only listed files can be downloaded, by their index in the current
+ * sorted list together with the file's download name, so a link rendered before a trip was added
+ * or removed answers 404 instead of serving another file. No part of the request ever becomes a
+ * file path. Requests that do not come from this host's own pages are refused (403) first.
+ *
+ * Requests with a valid session, and successful logins, are reported to [activity]: they are what
+ * keeps the export from stopping itself.
  */
 internal class ExportRequestHandler(
     private val auth: ExportAuth,
     private val files: TripFileSource,
+    private val activity: ExportActivity,
 ) {
     fun handle(request: HttpRequest, out: OutputStream) {
         val writer = HttpResponseWriter(out)
+        if (!request.isFromOwnHost()) {
+            return writer.sendHtml(403, PageRenderer.messagePage("Refused", "This request was not made from the export page."))
+        }
         if (request.method != "GET" && request.method != "POST") {
             return methodNotAllowed(writer)
         }
         val path = request.path
-        val isDownload = path == ZIP_PATH || DOWNLOAD_INDEX_PATH.matches(path)
+        val isDownload = path == ZIP_PATH || DOWNLOAD_FILE_PATH.matches(path)
         when {
             path == "/" && request.method == "GET" -> showHome(request, writer)
             path == "/login" && request.method == "POST" -> login(request, writer)
@@ -47,7 +56,7 @@ internal class ExportRequestHandler(
 
     private fun showHome(request: HttpRequest, writer: HttpResponseWriter) {
         if (!hasSession(request)) return writer.sendHtml(200, PageRenderer.loginPage())
-        writer.sendHtml(200, PageRenderer.tripListPage(listOfferedFiles(files)))
+        activity.authorized { writer.sendHtml(200, PageRenderer.tripListPage(listOfferedFiles(files))) }
     }
 
     private fun login(request: HttpRequest, writer: HttpResponseWriter) {
@@ -57,10 +66,13 @@ internal class ExportRequestHandler(
             return writer.sendHtml(400, PageRenderer.loginPage("Enter the PIN shown on the head unit."))
         }
         when (val result = auth.login(pin)) {
-            is ExportAuth.LoginResult.Success -> writer.sendRedirect(
-                "/",
-                listOf("Set-Cookie" to "$SESSION_COOKIE=${result.token}; HttpOnly; SameSite=Strict; Path=/"),
-            )
+            is ExportAuth.LoginResult.Success -> {
+                activity.touch()
+                writer.sendRedirect(
+                    "/",
+                    listOf("Set-Cookie" to "$SESSION_COOKIE=${result.token}; HttpOnly; SameSite=Strict; Path=/"),
+                )
+            }
             is ExportAuth.LoginResult.WrongPin -> writer.sendHtml(
                 401,
                 PageRenderer.loginPage("Wrong PIN. Attempts left: ${result.attemptsLeft}."),
@@ -71,12 +83,20 @@ internal class ExportRequestHandler(
 
     private fun download(request: HttpRequest, path: String, writer: HttpResponseWriter, out: OutputStream) {
         if (!hasSession(request)) return writer.sendRedirect("/")
-        // Re-resolve on every download: the list may have changed since the page was rendered.
-        val offered = listOfferedFiles(files)
-        if (path == ZIP_PATH) return sendZip(offered, writer, out)
-        val file = DOWNLOAD_INDEX_PATH.matchEntire(path)?.groupValues?.get(1)?.toIntOrNull()?.let(offered::getOrNull)
-        if (file == null) return notFound(writer)
-        sendFile(file, writer, out)
+        activity.authorized {
+            // Re-resolve on every download: the list may have changed since the page was rendered.
+            val offered = listOfferedFiles(files)
+            if (path == ZIP_PATH) return@authorized sendZip(offered, writer, out)
+            val file = findLinkedFile(offered, path)
+            if (file == null) notFound(writer) else sendFile(file, writer, out)
+        }
+    }
+
+    /** The file a `/download/<index>/<name>` link points at, only while it is still that file. */
+    private fun findLinkedFile(offered: List<File>, path: String): File? {
+        val (index, name) = DOWNLOAD_FILE_PATH.matchEntire(path)?.destructured ?: return null
+        val file = index.toIntOrNull()?.let(offered::getOrNull) ?: return null
+        return file.takeIf { sanitizeDownloadName(it.name) == name }
     }
 
     private fun sendFile(file: File, writer: HttpResponseWriter, out: OutputStream) {

@@ -8,10 +8,10 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 private const val COPY_BUFFER_BYTES = 16 * 1024
-private const val MAX_DOWNLOAD_NAME_LENGTH = 100
+internal const val MAX_DOWNLOAD_NAME_LENGTH = 100
 private const val FALLBACK_DOWNLOAD_NAME = "trip.csv"
 
-/** The offered files in a stable order, so an index shown on the page means the same on download. */
+/** The offered files in a stable order; a download link carries the index and the name to detect a changed list. */
 internal fun listOfferedFiles(source: TripFileSource): List<File> =
     source.files()
         .filter { it.isFile && it.canRead() }

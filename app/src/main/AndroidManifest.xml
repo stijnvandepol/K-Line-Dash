@@ -19,6 +19,8 @@
 
     <!-- Wi-Fi adapters (WifiTransport) and the Wi-Fi trip export (TripExportServer): plain sockets only. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Normal permission: finds the Wi-Fi network to bind a Wi-Fi adapter's socket to (WifiNetworkSocket). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!--
         Normal permission, only declared so a connectedDevice foreground service may start on
         API 34+ even when the Bluetooth runtime permissions were denied (simulator / Wi-Fi mode).

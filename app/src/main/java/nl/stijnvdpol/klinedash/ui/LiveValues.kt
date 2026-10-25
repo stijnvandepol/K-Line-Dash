@@ -3,7 +3,7 @@ package nl.stijnvdpol.klinedash.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -48,9 +48,9 @@ internal fun rememberIsStale(reading: State<Reading?>, nowMs: State<Long>, signa
     }
 
 /**
- * The value [reading] glides to: a linear tween to each new reading in [sweepMs] (the measured time
- * between two readings, see [sweepDurationMs]), so a bar, arc or needle moves steadily instead of
- * jumping. No reading counts as 0. It starts at the current reading, so a page that comes back on
+ * The value [reading] glides to: a tween to each new reading in [sweepMs] (see [sweepDurationMs]),
+ * so a bar, arc or needle moves instead of jumping. It eases out: most of the way is covered at
+ * once and the last part slows down, so the needle shows a new value quickly. No reading counts as 0. It starts at the current reading, so a page that comes back on
  * screen does not sweep up from 0. Read `.value` in the draw phase only, so a frame of movement
  * recomposes nothing; a stale reading does not change, so the value stays where it was.
  */
@@ -59,7 +59,7 @@ internal fun rememberGlide(reading: State<Reading?>, sweepMs: State<Int>): Anima
     val glide = remember { Animatable(Snapshot.withoutReadObservation { reading.value?.value ?: 0.0 }.toFloat()) }
     LaunchedEffect(glide) {
         snapshotFlow { reading.value?.value ?: 0.0 }.collectLatest { target ->
-            glide.animateTo(target.toFloat(), tween(sweepMs.value, easing = LinearEasing))
+            glide.animateTo(target.toFloat(), tween(sweepMs.value, easing = LinearOutSlowInEasing))
         }
     }
     return glide

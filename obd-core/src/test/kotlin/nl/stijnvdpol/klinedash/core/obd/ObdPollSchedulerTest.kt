@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.core.obd
 
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.hours
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,7 +75,7 @@ class ObdPollSchedulerTest {
             { SimulatorTransport(sim, engine, clock) }, "sim", NoStore, testScope.backgroundScope,
             log = RingCommLog(clock = clock), random = Random(1),
         )
-        val poller = ObdPollScheduler(manager, testScope.backgroundScope, catalog, clock, pollerConfig)
+        val poller = ObdPollScheduler(manager, testScope.backgroundScope, catalog, clock, pollerConfig, monotonicClock = clock)
 
         /** Connects and forgets the init traffic, so the log only holds what the poller sends. */
         suspend fun connect() {
@@ -147,8 +148,13 @@ class ObdPollSchedulerTest {
         }
     }
 
-    private fun fakePoller(scope: TestScope, link: ElmLink, config: PollerConfig = PollerConfig()) =
-        ObdPollScheduler(link, scope.backgroundScope, catalog, { scope.testScheduler.currentTime }, config)
+    private fun fakePoller(
+        scope: TestScope,
+        link: ElmLink,
+        config: PollerConfig = PollerConfig(),
+        signals: List<Signal> = catalog,
+        wallClock: () -> Long = { scope.testScheduler.currentTime },
+    ) = ObdPollScheduler(link, scope.backgroundScope, signals, wallClock, config) { scope.testScheduler.currentTime }
 
     // ---------------------------------------------------------------- what is sent
 
@@ -269,7 +275,9 @@ class ObdPollSchedulerTest {
         val fast = setOf("010C", "010D")
         val sequence = rig.commands().collapsed()
         assertTrue("two slot commands in a row", sequence.zipWithNext().none { (a, b) -> a !in fast && b !in fast })
-        assertTrue(Math.abs(sequence.count { it == "010C" } - sequence.count { it == "010D" }) <= 1)
+        // No batching on K-line: RPM takes two places in a round, speed one.
+        val all = rig.commands()
+        assertTrue(Math.abs(all.count { it == "010C" } - 2 * all.count { it == "010D" }) <= 2)
 
         val coolantGaps = gapsOf(rig, "0105")
         assertTrue(coolantGaps.size > 10)
@@ -627,8 +635,105 @@ class ObdPollSchedulerTest {
         assertFalse("coolant" in stats.signalHz)
     }
 
+
+    // ---------------------------------------------------------------- clocks
+
+    /** The head unit's wall clock: virtual time plus an offset that GPS/NTP time arriving can step by hours. */
+    private fun TestScope.steppableWallClock(offsetMs: () -> Long): () -> Long = { testScheduler.currentTime + offsetMs() }
+
+    private fun pollsOf(link: FakeLink, command: String): Int = link.sent.count { it.removeSuffix("1") == command }
+
+    @Test
+    fun `a wall clock stepped back by hours does not stop the medium and slow commands`() = runTest {
+        var offsetMs = 0L
+        val link = FakeLink { ecuAnswer(it, acceptsSuffix = true) }
+        link.setState(ConnectionState.Connected(adapterInfo))
+        val poller = fakePoller(this, link, wallClock = steppableWallClock { offsetMs })
+        poller.start()
+        poller.demand("screen", setOf("speed", "coolant"))
+        advanceTimeBy(10_000)
+        runCurrent()
+        val coolantBefore = pollsOf(link, "0105")
+        assertTrue(coolantBefore >= 2)
+
+        offsetMs = -WALL_CLOCK_STEP_MS
+        advanceTimeBy(30_000)
+        runCurrent()
+
+        // 30 s at one coolant poll per ~3 s; on the stepped wall clock it would be overdue by -5 h.
+        assertTrue(pollsOf(link, "0105") - coolantBefore >= 8)
+        assertTrue(poller.readings.value.getValue("coolant").timestampMs < 0)
+    }
+
+    @Test
+    fun `engine off detection is not fooled by a wall clock step`() = runTest {
+        var offsetMs = 0L
+        val link = FakeLink { if (it.startsWith("010C")) ElmResult.NoData("NO DATA") else ecuAnswer(it, acceptsSuffix = true) }
+        link.setState(ConnectionState.Connected(adapterInfo))
+        val poller = fakePoller(this, link, wallClock = steppableWallClock { offsetMs })
+        poller.start()
+        poller.demand("screen", setOf("rpm"))
+        advanceTimeBy(PollerConfig().engineOffAfterMs / 2)
+        runCurrent()
+        assertEquals(PollMode.ACTIVE, poller.stats.value.mode)
+
+        offsetMs = WALL_CLOCK_STEP_MS
+        advanceTimeBy(PollerConfig().engineOffAfterMs / 4)
+        runCurrent()
+
+        assertEquals(PollMode.ACTIVE, poller.stats.value.mode)
+    }
+
+    // ---------------------------------------------------------------- unexpected failures
+
+    @Test
+    fun `an unexpected exception is logged and the poller starts over instead of dying`() = runTest {
+        var isBroken = true
+        val fragile = Signal("fragile", "0105", 0x05, "fragile", "fragile", "", 0.0, 100.0, 0, PollTier.FAST) { data ->
+            check(!isBroken) { "decoder bug" }
+            ObdReply.payload(data, 1, 0x05)?.let { it[0] - 40.0 }
+        }
+        val link = FakeLink { ecuAnswer(it, acceptsSuffix = true) }
+        link.setState(ConnectionState.Connected(adapterInfo))
+        val poller = fakePoller(this, link, signals = listOf(fragile))
+        poller.start()
+        poller.demand("screen", setOf("fragile"))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertTrue(link.log.snapshot().any { it.kind == LogKind.ERROR && "decoder bug" in it.text })
+        assertNull(poller.readings.value["fragile"])
+
+        isBroken = false
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        assertNotNull(poller.readings.value["fragile"])
+        assertEquals(PollMode.ACTIVE, poller.stats.value.mode)
+    }
+
+    @Test
+    fun `stop still ends a poller that failed unexpectedly`() = runTest {
+        val broken = Signal("broken", "0105", 0x05, "broken", "broken", "", 0.0, 100.0, 0, PollTier.FAST) { error("always") }
+        val link = FakeLink { ecuAnswer(it, acceptsSuffix = true) }
+        link.setState(ConnectionState.Connected(adapterInfo))
+        val poller = fakePoller(this, link, signals = listOf(broken))
+        poller.start()
+        poller.demand("screen", setOf("broken"))
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        poller.stop()
+        val sentSoFar = link.sent.size
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        assertEquals(sentSoFar, link.sent.size)
+    }
+
     private companion object {
         const val FAKE_LATENCY_MS = 100L
+        val WALL_CLOCK_STEP_MS = 5.hours.inWholeMilliseconds
         val DETECTION_COMMANDS = setOf("0100", "0120", "0140", "0160", "0180", "01A0", "01C0", "01E0")
     }
 }

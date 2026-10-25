@@ -64,6 +64,9 @@ object NoLocation : LocationSource {
  * Chooses between the device GPS and the simulated circuit. The simulation is used only when
  * [useSimulated] is true, which the app derives from "simulator transport selected" and the GPS
  * setting; with a real adapter the device GPS is always used.
+ *
+ * [start], [stop] and the move of running updates to the other source when [useSimulated] changes
+ * run on different threads (the service's, the application scope's) and exclude each other.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LocationHub(
@@ -74,7 +77,6 @@ class LocationHub(
 ) : LocationSource {
     private val current: LocationSource get() = if (useSimulated.value) simulated else device
 
-    @Volatile
     private var isWanted = false
 
     override val fix: StateFlow<GeoFix?> =
@@ -89,24 +91,27 @@ class LocationHub(
 
     init {
         // Switching the source while it runs moves the updates over, so no stale source keeps listening.
-        scope.launch {
-            useSimulated.collect {
-                if (!isWanted) return@collect
-                (if (it) device else simulated).stop()
-                current.start()
-            }
-        }
+        scope.launch { useSimulated.collect(::moveUpdatesTo) }
+    }
+
+    @Synchronized
+    private fun moveUpdatesTo(isSimulated: Boolean) {
+        if (!isWanted) return
+        (if (isSimulated) device else simulated).stop()
+        current.start()
     }
 
     override fun freshFix(maxAgeMs: Long): GeoFix? = current.freshFix(maxAgeMs)
 
     override fun canStart() = current.canStart()
 
+    @Synchronized
     override fun start() {
         isWanted = true
         current.start()
     }
 
+    @Synchronized
     override fun stop() {
         isWanted = false
         device.stop()

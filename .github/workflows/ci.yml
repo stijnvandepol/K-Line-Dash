@@ -27,11 +27,17 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
+      # Fails when gradle-wrapper.jar is not an official Gradle release: a pull request could
+      # otherwise swap it for code that runs on the build machine.
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
       # The wrapper is stored without the executable bit.
       - run: chmod +x ./gradlew
 
+      # The release build runs R8, which only the tag workflow did before: shrinking problems now
+      # show up on main. Without the signing secrets it is signed with the debug key.
       - name: Test, build and lint
-        run: ./gradlew :obd-core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
+        run: ./gradlew :obd-core:test :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lintDebug --console=plain
 
       - name: Upload reports
         if: failure()

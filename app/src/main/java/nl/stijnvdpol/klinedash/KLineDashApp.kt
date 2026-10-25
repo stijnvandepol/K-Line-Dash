@@ -21,9 +21,13 @@ class KLineDashApp : Application() {
         Thread.setDefaultUncaughtExceptionHandler(
             graph.crashLog.asUncaughtExceptionHandler(Thread.getDefaultUncaughtExceptionHandler()),
         )
-        // A trip cut off by a power loss (ACC off) still has no end time: repair it from its file.
+        // The settings and themes the first frame needs are read now, in parallel and off the main thread.
+        val settingsRead = graph.warmUp()
+        // A trip cut off by a power loss (ACC off) still has no end time: repair it from its file,
+        // once the settings are read, so it does not compete with them for the first database open.
         val failureLog = CoroutineExceptionHandler { _, e -> Log.e(TAG, "Recovering unfinished trips failed", e) }
         graph.applicationScope.launch(Dispatchers.IO + failureLog) {
+            settingsRead.join()
             graph.tripRecorder.recoverUnfinished()
         }
     }

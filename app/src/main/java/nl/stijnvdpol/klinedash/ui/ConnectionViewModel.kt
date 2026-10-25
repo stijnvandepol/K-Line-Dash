@@ -41,9 +41,8 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     private val context = graph.appContext
     private val repository = graph.settingsRepository
 
-    /** Null until the first read from the database. */
-    val settings: StateFlow<ConnectionSettings?> = repository.connectionSettings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** Null until the first read from the database, which the app starts at launch. */
+    val settings: StateFlow<ConnectionSettings?> = graph.connectionSettings
 
     val connectionState: StateFlow<ConnectionState> = ObdServiceState.connectionState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConnectionState.Idle)

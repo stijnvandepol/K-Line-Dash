@@ -7,9 +7,12 @@ import java.io.IOException
 import java.io.OutputStreamWriter
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.core.exportformat.GpxWriter
 import nl.stijnvdpol.klinedash.core.exportformat.PcCsvWriter
@@ -44,6 +47,10 @@ sealed interface ExportResult {
  * changed track gives different laps. All text is UTF-8; the two CSVs start with a byte order mark
  * (Excel on Windows needs it), the VBO and GPX do not (VBO readers expect plain text, XML does not
  * want one); the VBO has CR+LF line ends as the format requires.
+ *
+ * Exports of the same trip run one after the other: they write the same temporary files, and two
+ * at once (the user taps twice, a screen and the Wi-Fi export ask together) would move each
+ * other's half-written file away.
  */
 class TripExporter internal constructor(
     private val tripsDir: File,
@@ -56,11 +63,16 @@ class TripExporter internal constructor(
     constructor(tripsDir: File, tripDao: TripDao, analysis: TripAnalysisRepository, recordingState: StateFlow<RecordingState>) :
         this(tripsDir, tripDao, analysis, recordingState, System::currentTimeMillis, Dispatchers.IO)
 
+    private val tripLocks = ConcurrentHashMap<Long, Mutex>()
+
     /** Writes [formats] (default: all) for trip [tripId]; formats without data are reported in [ExportResult.Done.skipped]. */
-    suspend fun exportTrip(tripId: Long, formats: Set<ExportFormat> = ExportFormat.entries.toSet()): ExportResult {
+    suspend fun exportTrip(tripId: Long, formats: Set<ExportFormat> = ExportFormat.entries.toSet()): ExportResult =
+        tripLocks.computeIfAbsent(tripId) { Mutex() }.withLock { exportLocked(tripId, formats) }
+
+    private suspend fun exportLocked(tripId: Long, formats: Set<ExportFormat>): ExportResult {
         val trip = tripDao.get(tripId) ?: return ExportResult.TripNotFound
         if ((recordingState.value as? RecordingState.Recording)?.fileName == trip.fileName) return ExportResult.IsRecording
-        val source = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile }
+        val source = withContext(ioDispatcher) { resolveExistingTripFile(tripsDir, trip.fileName) }
             ?: return ExportResult.Failed("The trip file is missing.")
         val detail = when (val result = analysis.analyze(tripId)) {
             is AnalysisResult.Done -> result.detail

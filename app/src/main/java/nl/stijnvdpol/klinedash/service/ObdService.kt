@@ -14,7 +14,6 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -85,12 +84,19 @@ class ObdService : LifecycleService() {
         lastText = getString(R.string.state_idle)
         if (!enterForeground(buildNotification(lastText))) {
             // E.g. started from the background on API 31+ after a sticky restart: give up quietly.
+            // The platform wants startForeground within seconds of startForegroundService and some
+            // versions report stopping before it as "did not then call startForeground". That cannot
+            // be avoided here: startForeground itself was refused, so there is nothing to call
+            // first, and staying alive without it ends the same way a few seconds later.
             stopSelf()
             return
         }
+        // Uncaught exceptions of the loops below go to the crash log and end only that loop, not the
+        // process (and with it the running trip).
+        val crashGuard = appGraph.crashLog.asCoroutineExceptionHandler(TAG)
         // Default dispatcher: the loop writes files once a second. It finishes the running trip when cancelled.
-        recorderJob = lifecycleScope.launch(Dispatchers.Default) { appGraph.tripRecorder.run() }
-        linkJob = lifecycleScope.launch {
+        recorderJob = lifecycleScope.launch(Dispatchers.Default + crashGuard) { appGraph.tripRecorder.run() }
+        linkJob = lifecycleScope.launch(crashGuard) {
             // Only a different adapter rebuilds the link: toggling autoConnect, the stored device name
             // (written as a separate row right after the address) or another kind's fields must not
             // drop a running connection or abort one that is being set up.
@@ -101,9 +107,9 @@ class ObdService : LifecycleService() {
                 .collectLatest { if (it != null) runLink(it) }
         }
         wakeSignals = WakeSignalReceivers(this, ::onWakeSignal)
-        lifecycleScope.launch { appGraph.startupSettingsRepository.settings.collect(::applyStartupSettings) }
-        lifecycleScope.launch { superviseLocation() }
-        lifecycleScope.launch(Dispatchers.Default) { appGraph.lapSessions.keepSectorsOrdered() }
+        lifecycleScope.launch(crashGuard) { appGraph.startupSettingsRepository.settings.collect(::applyStartupSettings) }
+        lifecycleScope.launch(crashGuard) { superviseLocation() }
+        lifecycleScope.launch(Dispatchers.Default + crashGuard) { appGraph.lapSessions.keepSectorsOrdered() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -133,7 +139,7 @@ class ObdService : LifecycleService() {
         val (transportFactory, adapterKey) = TransportFactory.create(this, settings)
         // Own scope on Default: socket I/O and parsing must not run on the main thread. The handler
         // keeps an unexpected exception in the link from taking the whole process down.
-        val crashGuard = CoroutineExceptionHandler { _, e -> Log.e(TAG, "Uncaught error in link", e) }
+        val crashGuard = appGraph.crashLog.asCoroutineExceptionHandler(TAG)
         val linkScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + crashGuard)
         // The make orders the protocol fallback; read at every attempt, so a make chosen or detected
         // while the link retries counts on the next attempt. Null until the settings are read.
@@ -169,8 +175,11 @@ class ObdService : LifecycleService() {
         } finally {
             withContext(NonCancellable) {
                 ObdServiceState.unpublish(link)
-                poller.stop()
+                // The link first: stopping it closes the transport, which is what unblocks a poller
+                // stuck in a socket write to a dead peer (a blocking write ignores cancellation, so
+                // joining the poller first could wait forever and leave the transport open).
                 link.stop()
+                poller.stop()
                 linkScope.cancel()
             }
         }
@@ -256,17 +265,19 @@ class ObdService : LifecycleService() {
             ObdServiceState.isAppVisible, ObdServiceState.locationPermissionChanges, isRecording, appGraph.useSimulatedGps,
         ) { isVisible, _, recording, _ -> isVisible to recording }
             .collectLatest { (isVisible, recording) ->
-                location.refresh()
-                // The hub may have moved running updates over to the device GPS (simulator switched off).
-                if (isVisible && location.isRunning && location.usesDeviceGps) addLocationForegroundType()
-                when (decideGpsAction(isVisible, location.canStart(), location.isRunning, recording)) {
-                    GpsAction.START -> startLocation(location)
-                    GpsAction.STOP -> location.stop()
-                    GpsAction.STOP_AFTER_GRACE -> {
-                        delay(HIDDEN_GPS_GRACE_MS)
-                        location.stop()
+                survivingErrors(TAG, "Updating the location source") {
+                    location.refresh()
+                    // The hub may have moved running updates over to the device GPS (simulator switched off).
+                    if (isVisible && location.isRunning && location.usesDeviceGps) addLocationForegroundType()
+                    when (decideGpsAction(isVisible, location.canStart(), location.isRunning, recording)) {
+                        GpsAction.START -> startLocation(location)
+                        GpsAction.STOP -> location.stop()
+                        GpsAction.STOP_AFTER_GRACE -> {
+                            delay(HIDDEN_GPS_GRACE_MS)
+                            location.stop()
+                        }
+                        GpsAction.NONE -> Unit
                     }
-                    GpsAction.NONE -> Unit
                 }
             }
     }

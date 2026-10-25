@@ -102,6 +102,8 @@ private fun SensorTable(
     val columns = sensorColumnCount(LocalScreenProfile.current)
     val rowCount = ceil(signals.size / columns.toFloat()).toInt()
     Column(Modifier.fillMaxSize()) {
+        LinkSummary(stats)
+        HorizontalRule()
         TableRow(columns) { TableHeader() }
         HorizontalRule()
         LazyColumn(Modifier.fillMaxSize()) {
@@ -133,6 +135,31 @@ private fun TableRow(columns: Int, cell: @Composable RowScope.(column: Int) -> U
         }
     }
 }
+
+/**
+ * How fast the link is: requests per second and the mean time one takes. The time per request is
+ * what limits every rate in the table (about 0.5 s on a K-line car), so it is the number to compare
+ * between adapters.
+ */
+@Composable
+private fun LinkSummary(stats: State<PollStats>) {
+    val text by remember(stats) { derivedStateOf { linkSummaryText(stats.value) } }
+    Row(
+        Modifier.fillMaxWidth().height(Spacing.listRowMin).padding(horizontal = Spacing.fieldPaddingHorizontal),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.sensors_link_label).uppercase(), style = KLineType.fieldLabel, color = KLineTheme.colors.inkMuted)
+        Spacer(Modifier.width(ColumnGap))
+        Text(
+            text?.let { (rate, roundTrip) -> stringResource(R.string.sensors_link_summary, rate, roundTrip) } ?: MISSING_VALUE,
+            style = KLineType.body,
+        )
+    }
+}
+
+/** Requests per second and the mean milliseconds per request, formatted; null until a request was answered. */
+internal fun linkSummaryText(stats: PollStats): Pair<String, String>? =
+    stats.meanRoundTripMs.takeIf { it > 0 }?.let { formatNumber(stats.requestsPerSecond, 1) to formatNumber(it, 0) }
 
 @Composable
 private fun RowScope.TableHeader() {

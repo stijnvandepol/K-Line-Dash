@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import nl.stijnvdpol.klinedash.core.alert.Alert
@@ -113,5 +114,47 @@ class AlertMonitorTest {
         }
         // 1 s of changes every 10 ms: at most 4 per second plus the first one.
         assertTrue("evaluations: ${rules.evaluations}", rules.evaluations <= 6)
+    }
+
+    /** Remembers the input of every evaluation. */
+    private class RecordingRules : AlertRules {
+        val inputs = ArrayList<AlertInput>()
+        override fun requiredSignals(settings: AlertSettings) = setOf("coolant")
+        override fun evaluate(input: AlertInput, settings: AlertSettings, previous: AlertState): AlertState {
+            inputs += input
+            return AlertState()
+        }
+    }
+
+    @Test
+    fun theRulesMeasureTimeOnTheMonotonicClockWhateverTheWallClockDoes() = runTest {
+        var wallStepMs = 0L
+        val wallNowMs = { 1_792_677_787_000L + wallStepMs + currentTime }
+        val rules = RecordingRules()
+        val monitor = AlertMonitor(
+            MutableStateFlow(AlertSettings()), rules, { }, { }, clock = wallNowMs, elapsed = { currentTime },
+        )
+        backgroundScope.launch { monitor.run(poller, connection) }
+        poller.readings.value = mapOf("coolant" to Reading("coolant", 90.0, wallNowMs() - 400))
+        advanceTimeBy(1_100)
+        val beforeStep = rules.inputs.last()
+        assertTrue("the rules' now is the monotonic time: ${beforeStep.nowMs}", currentTime - beforeStep.nowMs in 0L..1_000L)
+
+        wallStepMs = -7 * 3_600_000L // the unit's clock is set back by hours
+        poller.readings.value = mapOf("coolant" to Reading("coolant", 91.0, wallNowMs() - 400))
+        advanceTimeBy(1_100)
+        val after = rules.inputs.last()
+        assertTrue("time did not jump with the wall clock: ${after.nowMs}", after.nowMs - beforeStep.nowMs in 1L..3_000L)
+        val ageMs = after.nowMs - checkNotNull(after.readings["coolant"]).timestampMs
+        assertTrue("a reading taken 400 ms before the step is not hours old: $ageMs", ageMs in 400L..2_000L)
+    }
+
+    @Test
+    fun readingsMovedOntoTheMonotonicClockKeepTheirAge() {
+        val readings = mapOf("rpm" to Reading("rpm", 900.0, 99_000L), "speed" to Reading("speed", 10.0, 100_000L))
+        val moved = readings.onMonotonicClock(wallNowMs = 100_000L, elapsedNowMs = 5_000L)
+        assertEquals(4_000L, moved.getValue("rpm").timestampMs)
+        assertEquals(5_000L, moved.getValue("speed").timestampMs)
+        assertEquals(900.0, moved.getValue("rpm").value, 0.0)
     }
 }

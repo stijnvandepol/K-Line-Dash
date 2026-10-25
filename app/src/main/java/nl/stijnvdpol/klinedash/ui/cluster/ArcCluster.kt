@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -176,18 +177,18 @@ private fun DrawScope.drawArcSegment(segments: ArcSegments, index: Int, color: C
     )
 }
 
-/** The lit lights and segments for the glided rpm: all there is to redraw while the engine speed moves. */
-private class ArcLit(size: Size, private val colors: KLineColors, private val shiftRpm: Int, margin: Float, private val rpmScale: RpmScale) {
+/** The lit lights and segments for the glided rpm: all there is to redraw when a light or a segment comes on or goes out. */
+private class ArcLit(size: Size, private val colors: KLineColors, margin: Float, private val rpmScale: RpmScale) {
     private val layout = ArcLayout(size.width, size.height)
     private val strip = LightStrip(size.width, layout, margin)
     private val segments = ArcSegments(layout, layout.radius * STROKE_SHARE, arcTach(rpmScale.maxRpm), segmentCount(rpmScale))
     private val lightSize = Size(strip.lightWidth, strip.height)
 
-    fun draw(scope: DrawScope, rpm: Float, isStale: Boolean) = with(scope) {
-        for (i in 0 until shiftLightCount(rpm.toDouble(), shiftRpm)) {
+    fun draw(scope: DrawScope, lights: Int, litSegments: Int, isStale: Boolean) = with(scope) {
+        for (i in 0 until lights) {
             drawRect(colors.lightColour(i), Offset(strip.left(i), strip.top), lightSize)
         }
-        for (i in 0 until litSegmentCount(rpm.toDouble(), segments.count)) {
+        for (i in 0 until litSegments) {
             val color = if (isStale) colors.inkFaint else colors.zoneColour(rpmZone(i * SEGMENT_RPM, rpmScale))
             drawArcSegment(segments, i, color, 1f)
         }
@@ -209,6 +210,9 @@ internal fun ArcCluster(live: LiveState, shiftRpm: Int, modifier: Modifier = Mod
     val measurer = rememberTextMeasurer()
     val rpmScale = LocalRpmScale.current
     val captions = fieldLabel(speed.signal) to fieldLabel(rpm.signal)
+    // The lit part changes when a light or a segment does, not with every frame of the glide.
+    val lights = remember(rpm, shiftRpm) { derivedStateOf { shiftLightCount(rpm.drawnValue().toDouble(), shiftRpm) } }
+    val litSegments = remember(rpm, rpmScale) { derivedStateOf { litSegmentCount(rpm.drawnValue().toDouble(), segmentCount(rpmScale)) } }
     BoxWithConstraints(modifier.clipToBounds()) {
         val density = LocalDensity.current
         val layout = remember(constraints.maxWidth, constraints.maxHeight) { ArcLayout(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()) }
@@ -225,9 +229,10 @@ internal fun ArcCluster(live: LiveState, shiftRpm: Int, modifier: Modifier = Mod
         Spacer(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer()
                 .drawWithCache {
-                    val painter = ArcLit(size, colors, shiftRpm, margin, rpmScale)
-                    onDrawBehind { painter.draw(this, rpm.drawnValue(), rpm.stale.value) }
+                    val painter = ArcLit(size, colors, margin, rpmScale)
+                    onDrawBehind { painter.draw(this, lights.value, litSegments.value, rpm.stale.value) }
                 },
         )
         ArcReadout(speed, layout, SPEED_SIZE_SHARE, SPEED_BASELINE_SHARE, SPEED_SAMPLE)

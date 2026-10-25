@@ -28,7 +28,8 @@ internal enum class AutoRecordAction { NONE, START, STOP }
 
 /**
  * The automatic start/stop rule as a small state machine; it does no I/O and has no clock, so it
- * can be tested exactly. Called once per sample tick.
+ * can be tested exactly. Called once per sample tick with a monotonic time (SystemClock.elapsedRealtime),
+ * because a head unit without a clock chip steps its wall clock at boot and the grace period is an interval.
  *
  * - Nothing recording, auto-record on, engine running: [AutoRecordAction.START].
  * - An automatic recording is stopped once the engine has been off (or the link gone) for
@@ -43,7 +44,7 @@ internal class AutoRecordPolicy(private val graceMs: Long = AUTO_STOP_GRACE_MS) 
     private var isStartSuppressed = false
 
     fun decide(
-        nowMs: Long,
+        elapsedMs: Long,
         isEngineRunning: Boolean,
         isAutoRecordEnabled: Boolean,
         recording: RecordingOrigin?,
@@ -52,12 +53,12 @@ internal class AutoRecordPolicy(private val graceMs: Long = AUTO_STOP_GRACE_MS) 
             engineOffSinceMs = null
         } else {
             isStartSuppressed = false
-            if (engineOffSinceMs == null) engineOffSinceMs = nowMs
+            if (engineOffSinceMs == null) engineOffSinceMs = elapsedMs
         }
         return when (recording) {
             null -> if (isAutoRecordEnabled && isEngineRunning && !isStartSuppressed) AutoRecordAction.START else AutoRecordAction.NONE
             RecordingOrigin.MANUAL -> AutoRecordAction.NONE
-            RecordingOrigin.AUTO -> if (isGraceOver(nowMs)) AutoRecordAction.STOP else AutoRecordAction.NONE
+            RecordingOrigin.AUTO -> if (isGraceOver(elapsedMs)) AutoRecordAction.STOP else AutoRecordAction.NONE
         }
     }
 
@@ -66,9 +67,9 @@ internal class AutoRecordPolicy(private val graceMs: Long = AUTO_STOP_GRACE_MS) 
         isStartSuppressed = true
     }
 
-    private fun isGraceOver(nowMs: Long): Boolean {
+    private fun isGraceOver(elapsedMs: Long): Boolean {
         val offSince = engineOffSinceMs ?: return false
-        return nowMs - offSince >= graceMs
+        return elapsedMs - offSince >= graceMs
     }
 }
 
@@ -87,19 +88,19 @@ internal const val MOTION_KEEP_SPEED_KMH = 2.0
  * [MOTION_KEEP_SPEED_KMH]. Between those it keeps its answer, so a slow corner does not end the
  * trip; the 2 minute grace of [AutoRecordPolicy] covers standing still. An unknown speed (no fresh
  * fix) means not moving. It is the "engine is running" input of [AutoRecordPolicy] for such trips.
- * No clock and no I/O: the caller passes the time.
+ * No clock and no I/O: the caller passes a monotonic time.
  */
 internal class MotionDetector {
     private var fastSinceMs: Long? = null
     private var isMoving = false
 
-    fun update(nowMs: Long, speedKmh: Double?): Boolean {
+    fun update(elapsedMs: Long, speedKmh: Double?): Boolean {
         when {
             speedKmh == null -> reset()
             isMoving -> if (speedKmh < MOTION_KEEP_SPEED_KMH) reset()
             speedKmh > MOTION_START_SPEED_KMH -> {
-                val since = fastSinceMs ?: nowMs.also { fastSinceMs = it }
-                if (nowMs - since >= MOTION_START_AFTER_MS) isMoving = true
+                val since = fastSinceMs ?: elapsedMs.also { fastSinceMs = it }
+                if (elapsedMs - since >= MOTION_START_AFTER_MS) isMoving = true
             }
             else -> fastSinceMs = null
         }

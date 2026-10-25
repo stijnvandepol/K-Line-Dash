@@ -77,6 +77,9 @@ class HttpTripExportServerTest {
 
     private fun sortedByName() = tripFiles.sortedBy { it.name }
 
+    /** The link the page renders for the file at [index] of the sorted list. */
+    private fun downloadPath(index: Int, file: File) = "/download/$index/${sanitizeDownloadName(file.name)}"
+
     @Test
     fun `root without cookie shows the PIN form`() {
         val response = startServer().get("/")
@@ -118,8 +121,9 @@ class HttpTripExportServerTest {
         assertTrue(page.text.contains(hostileEncoded))
         assertFalse(page.text.contains(hostileName))
         assertTrue(page.text.contains("/download/all.zip"))
-        assertTrue(page.text.contains("/download/0") && page.text.contains("/download/2"))
-        assertFalse(page.text.contains("/download/3"))
+        assertTrue(page.text.contains("/download/0/_script_.csv") || page.text.contains("/download/0/__trip.csv"))
+        assertTrue(page.text.contains("/download/1/a-trip.csv") && page.text.contains("/download/2/b-trip.csv"))
+        assertFalse(page.text.contains("/download/3/"))
         // Sorted by name: the punctuation-first name < "a-trip.csv" < "b-trip.csv".
         assertTrue(page.text.indexOf(hostileEncoded) < page.text.indexOf("a-trip.csv"))
         assertTrue(page.text.indexOf("a-trip.csv") < page.text.indexOf("b-trip.csv"))
@@ -136,7 +140,7 @@ class HttpTripExportServerTest {
         val client = startServer()
         val cookie = client.login(pin)
         sortedByName().forEachIndexed { index, file ->
-            val response = client.get("/download/$index", cookie)
+            val response = client.get(downloadPath(index, file), cookie)
             assertEquals(200, response.status)
             assertArrayEquals(file.readBytes(), response.body)
             assertEquals(file.length().toString(), response.header("content-length"))
@@ -148,7 +152,7 @@ class HttpTripExportServerTest {
         val scriptIndex = sortedByName().indexOfFirst { it.name == hostileName }
         assertEquals(
             "attachment; filename=\"$hostileSanitised\"",
-            client.get("/download/$scriptIndex", cookie).header("content-disposition"),
+            client.get(downloadPath(scriptIndex, sortedByName()[scriptIndex]), cookie).header("content-disposition"),
         )
     }
 
@@ -161,7 +165,7 @@ class HttpTripExportServerTest {
         val running = server!!
         java.net.Socket(java.net.InetAddress.getLoopbackAddress(), running.start()).use { stalled ->
             stalled.getOutputStream().apply {
-                write("GET /download/0 HTTP/1.1\r\nHost: localhost\r\nCookie: $cookie\r\n\r\n".toByteArray())
+                write("GET ${downloadPath(0, big)} HTTP/1.1\r\nHost: ${client.host}\r\nCookie: $cookie\r\n\r\n".toByteArray())
                 flush()
             }
             awaitTrue("download started") { running.activeConnectionCount == 1 }
@@ -195,20 +199,20 @@ class HttpTripExportServerTest {
     @Test
     fun `download without a session redirects to the PIN page`() {
         val client = startServer()
-        listOf("/download/0", "/download/all.zip").forEach { path ->
+        listOf("/download/0/a-trip.csv", "/download/all.zip").forEach { path ->
             val response = client.get(path)
             assertEquals(303, response.status)
             assertEquals("/", response.header("location"))
             assertEquals(0, response.body.size)
         }
-        assertEquals(303, client.get("/download/0", "session=" + "0".repeat(32)).status)
+        assertEquals(303, client.get("/download/0/a-trip.csv", "session=" + "0".repeat(32)).status)
     }
 
     @Test
     fun `out of range index is 404`() {
         val client = startServer()
         val cookie = client.login(pin)
-        listOf("/download/3", "/download/99999", "/download/999999999999").forEach {
+        listOf("/download/3/a-trip.csv", "/download/99999/a-trip.csv", "/download/999999999999/a-trip.csv").forEach {
             assertEquals(it, 404, client.get(it, cookie).status)
         }
     }
@@ -226,7 +230,11 @@ class HttpTripExportServerTest {
             "/download/${secret.name}",
             "/download/${secret.absolutePath.replace('\\', '/')}",
             "/download/-1",
+            "/download/0",
             "/download/0/extra",
+            "/download/0/..%2fsecret.txt",
+            "/download/0/../secret.txt",
+            "/download/1/${secret.name}",
             "/../secret.txt",
         ).forEach {
             val response = client.get(it, cookie)
@@ -257,19 +265,36 @@ class HttpTripExportServerTest {
         val files = tripFiles.toMutableList()
         val client = startServer(source = TripFileSource { files.toList() })
         val cookie = client.login(pin)
-        assertEquals(200, client.get("/download/2", cookie).status)
+        val last = sortedByName()[2]
+        assertEquals(200, client.get(downloadPath(2, last), cookie).status)
         files.removeAt(0)
-        assertEquals(404, client.get("/download/2", cookie).status)
+        assertEquals(404, client.get(downloadPath(2, last), cookie).status)
         files += temp.newFile("0-new.csv").apply { writeText("new") }
-        val newIndex = files.sortedBy { it.name }.indexOfFirst { it.name == "0-new.csv" }
-        assertEquals("new", client.get("/download/$newIndex", cookie).text)
+        val newFile = files.single { it.name == "0-new.csv" }
+        val newIndex = files.sortedBy { it.name }.indexOf(newFile)
+        assertEquals("new", client.get(downloadPath(newIndex, newFile), cookie).text)
+    }
+
+    @Test
+    fun `a link rendered before a trip was added never serves another file`() {
+        val files = tripFiles.toMutableList()
+        val client = startServer(source = TripFileSource { files.toList() })
+        val cookie = client.login(pin)
+        val linkedBefore = downloadPath(1, sortedByName()[1])
+
+        // The new trip sorts first, so the old index 1 now points at a different file.
+        files += temp.newFile("0-new.csv").apply { writeText("new") }
+
+        val response = client.get(linkedBefore, cookie)
+        assertEquals(404, response.status)
+        assertFalse(response.text.contains("new"))
     }
 
     @Test
     fun `methods other than GET and POST are 405`() {
         val client = startServer()
         listOf("PUT", "DELETE", "HEAD", "OPTIONS", "PATCH").forEach {
-            val response = client.send("$it / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            val response = client.send("$it / HTTP/1.1\r\nHost: ${client.host}\r\n\r\n")
             assertEquals(it, 405, response.status)
             assertEquals("GET, POST", response.header("allow"))
         }
@@ -307,7 +332,7 @@ class HttpTripExportServerTest {
     }
 
     @Test
-    fun `idle timeout stops the server and a request postpones it`() {
+    fun `idle timeout stops the server and a login or a request with a session postpones it`() {
         val created = HttpTripExportServer(
             ExportServerConfig(port = 0, pin = pin, idleTimeoutMs = 1_000L),
             TripFileSource { tripFiles },
@@ -320,18 +345,129 @@ class HttpTripExportServerTest {
         created.checkIdle()
         assertTrue(created.isRunning)
 
-        assertEquals(200, client.get("/").status)
+        val cookie = client.login(pin)
+        assertEquals(200, client.get("/", cookie).status)
         // The client sees the response end when the socket closes; the worker only then finishes
-        // its bookkeeping (last request time, active count). Advancing the clock before that would
-        // race it.
+        // its bookkeeping (last use, active count). Advancing the clock before that would race it.
         awaitTrue("request finished on the server") { created.activeConnectionCount == 0 }
         now += 900
         created.checkIdle()
-        assertTrue("a request must reset the idle timer", created.isRunning)
+        assertTrue("a request with a session must reset the idle timer", created.isRunning)
 
         now += 200
         created.checkIdle()
         assertFalse(created.isRunning)
+    }
+
+    @Test
+    fun `connecting and anonymous requests do not keep the export alive`() {
+        val created = HttpTripExportServer(
+            ExportServerConfig(port = 0, pin = pin, idleTimeoutMs = 1_000L),
+            TripFileSource { tripFiles },
+            clock = { now },
+        )
+        server = created
+        val client = RawHttpClient(created.start())
+
+        now += 900
+        assertEquals(200, client.get("/").status)
+        assertEquals(401, client.postLogin("0000").status)
+        assertEquals(303, client.get("/download/all.zip").status)
+        Socket(InetAddress.getLoopbackAddress(), client.host.substringAfter(':').toInt()).use {
+            awaitTrue("silent connection accepted") { created.activeConnectionCount == 1 }
+            now += 200
+            created.checkIdle()
+            assertFalse("only a login or a session counts as use", created.isRunning)
+        }
+    }
+
+    @Test
+    fun `a download in progress keeps the export alive and counts as use when it ends`() {
+        val big = temp.newFile("big.csv").apply { writeBytes(ByteArray(64 * 1024 * 1024)) }
+        val created = HttpTripExportServer(
+            ExportServerConfig(port = 0, pin = pin, idleTimeoutMs = 1_000L),
+            TripFileSource { listOf(big) },
+            clock = { now },
+        )
+        server = created
+        val client = RawHttpClient(created.start())
+        val cookie = client.login(pin)
+        Socket(InetAddress.getLoopbackAddress(), client.host.substringAfter(':').toInt()).use { slow ->
+            slow.getOutputStream().apply {
+                write("GET ${downloadPath(0, big)} HTTP/1.1\r\nHost: ${client.host}\r\nCookie: $cookie\r\n\r\n".toByteArray())
+                flush()
+            }
+            awaitTrue("download started") { created.activeConnectionCount == 1 }
+            Thread.sleep(STALL_SETTLE_MS)
+
+            now += 5_000
+            created.checkIdle()
+            assertTrue("a running download is not idle", created.isRunning)
+        }
+    }
+
+    @Test
+    fun `a bug while serving is answered with 500 and neither kills the thread nor the server`() {
+        val uncaught = java.util.concurrent.CopyOnWriteArrayList<Throwable>()
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, error -> uncaught += error }
+        try {
+            var isBroken = true
+            val reported = java.util.concurrent.CopyOnWriteArrayList<Throwable>()
+            val created = HttpTripExportServer(
+                ExportServerConfig(port = 0, pin = pin),
+                TripFileSource { if (isBroken) error("source bug") else tripFiles },
+                clock = { now },
+                onInternalError = { reported += it },
+            )
+            server = created
+            val client = RawHttpClient(created.start())
+            val cookie = client.login(pin)
+
+            val failed = client.get("/", cookie)
+            assertEquals(500, failed.status)
+            assertFalse(failed.text.contains("source bug"))
+            awaitTrue("worker finished") { created.activeConnectionCount == 0 }
+
+            assertEquals(listOf("source bug"), reported.map { it.message })
+            assertTrue("the bug must not reach the thread's uncaught handler: $uncaught", uncaught.isEmpty())
+            isBroken = false
+            assertEquals(200, client.get("/", cookie).status)
+            assertTrue(created.isRunning)
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        }
+    }
+
+    @Test
+    fun `a Host that is not an IP address is refused so a rebinding page cannot reach the export`() {
+        val client = startServer()
+        val cookie = client.login(pin)
+        listOf("attacker.example", "attacker.example:8080", "localhost", "1.2.3.4.example", "999.1.1.1", "[evil]", "").forEach {
+            assertEquals(it, 403, client.get("/", cookie, "Host: $it\r\n").status)
+        }
+        assertEquals(403, client.postLogin(pin, extraHeaders = "Host: attacker.example\r\n").status)
+        listOf("192.168.0.20", "192.168.0.20:8080", "[::1]:8080", "[fe80::1]").forEach {
+            assertEquals(it, 200, client.get("/", cookie, "Host: $it\r\n").status)
+        }
+    }
+
+    @Test
+    fun `a cross site login post is refused and never counts as a PIN attempt`() {
+        val client = startServer(maxPinAttempts = 1)
+        listOf("http://attacker.example", "null", "https://${client.host}", "http://127.0.0.1:1").forEach {
+            assertEquals(it, 403, client.postLogin(pin, extraHeaders = "Origin: $it\r\n").status)
+        }
+        val sameOrigin = client.postLogin(pin, extraHeaders = "Origin: http://${client.host}\r\n")
+        assertEquals(303, sameOrigin.status)
+        assertNotNull(sameOrigin.header("set-cookie"))
+    }
+
+    @Test
+    fun `a request without an Origin header is allowed`() {
+        val client = startServer()
+        assertEquals(200, client.get("/").status)
+        assertEquals(303, client.postLogin(pin).status)
     }
 
     @Test

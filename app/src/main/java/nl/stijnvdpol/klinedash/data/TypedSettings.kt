@@ -2,11 +2,17 @@ package nl.stijnvdpol.klinedash.data
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -48,6 +54,30 @@ class TypedSettings<T>(
             }
         }
     }
+}
+
+/**
+ * The settings table behind one shared query: every [TypedSettings] built on this DAO listens to the
+ * same [observeAll] instead of running its own `SELECT * FROM settings` (a dozen repositories would
+ * otherwise read and re-read the table at startup). The query starts right away, in [scope], and the
+ * latest rows are replayed to a late collector, so a repository that starts collecting after the
+ * table was read gets its value without another query. Everything but [observeAll] goes straight
+ * to [dao].
+ *
+ * [beforeFirstRead] runs once before the first read, for a migration of old rows that no reader may
+ * see in the old form. If it throws, the shared flow ends and the exception goes to [scope]'s handler.
+ */
+class SharedSettingsDao(
+    private val dao: SettingsDao,
+    scope: CoroutineScope,
+    beforeFirstRead: suspend () -> Unit = {},
+) : SettingsDao by dao {
+    private val rows: SharedFlow<List<SettingEntry>> = flow {
+        beforeFirstRead()
+        emitAll(dao.observeAll())
+    }.shareIn(scope, SharingStarted.Eagerly, replay = 1)
+
+    override fun observeAll(): Flow<List<SettingEntry>> = rows
 }
 
 private const val TAG = "TypedSettings"

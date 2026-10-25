@@ -4,6 +4,7 @@ import java.io.FilterOutputStream
 import java.io.OutputStream
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * True for an IPv4 address that only exists on a local network: the private ranges 10/8, 172.16/12
@@ -35,6 +36,36 @@ internal class AcceptBackoff(
     fun reset() {
         nextMs = initialMs
     }
+}
+
+/**
+ * What keeps the export alive. Only authorised use counts: a successful login, or a request that
+ * carries a valid session ([authorized] covers it from start to finish, so a long download is not
+ * cut off for being idle). A device that merely connects, or asks for pages without logging in,
+ * must not be able to hold the export open for ever.
+ */
+internal class ExportActivity(private val clock: () -> Long) {
+    @Volatile private var lastUseMs: Long = clock()
+    private val authorizedInFlight = AtomicInteger(0)
+
+    /** Counts the moment as use (a successful login). */
+    fun touch() {
+        lastUseMs = clock()
+    }
+
+    /** Runs [block] as authorised use: the export is busy while it runs and was last used when it ends. */
+    fun <T> authorized(block: () -> T): T {
+        authorizedInFlight.incrementAndGet()
+        try {
+            return block()
+        } finally {
+            lastUseMs = clock()
+            authorizedInFlight.decrementAndGet()
+        }
+    }
+
+    fun isIdleFor(timeoutMs: Long): Boolean =
+        authorizedInFlight.get() == 0 && clock() - lastUseMs >= timeoutMs
 }
 
 /**

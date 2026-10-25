@@ -4,8 +4,7 @@ import android.database.SQLException
 import android.util.Log
 import java.io.File
 import java.io.IOException
-import java.io.RandomAccessFile
-import java.io.StringReader
+import java.io.Reader
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import nl.stijnvdpol.klinedash.core.trip.TripStats
@@ -17,28 +16,26 @@ import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.updateSummary
 
 private const val TAG = "TripRecovery"
-private const val LINE_END = "\n"
-private val LINE_FEED = LINE_END.single().code
 
 /** A trip rebuilt from its CSV: the statistics and whether any row has a position. */
 internal class RecoveredTrip(val stats: TripStats, val hasGps: Boolean)
 
 /**
- * Rebuilds the statistics of a trip from its CSV [lines] (header first). Used for trips that were
- * never finished because the head unit lost power (ACC off) while recording.
+ * Rebuilds the statistics of a trip from its CSV, read from [reader] row by row (an unfinished trip
+ * can be large, and this runs under the recorder lock). Used for trips that were never finished
+ * because the head unit lost power (ACC off) while recording.
  *
- * [endsWithNewline] says whether the file's last byte is a line feed: the writer ends every row
- * with one, so a file that does not was cut in the middle of a row and that row is dropped, because
- * its last number may be truncated ([readTripCsv] does that). The rows go through the same
- * [TripStatsAccumulator] as a live trip, so distance (GPS where fixes exist) and maxima agree.
+ * A file whose last byte is not a line feed was cut in the middle of a row, because the writer ends
+ * every row with one; that row is dropped, its last number may be truncated ([readTripCsv] does
+ * that). The rows go through the same [TripStatsAccumulator] as a live trip, so distance (GPS where
+ * fixes exist) and maxima agree.
  *
  * Returns null when there is no header or no complete row: nothing worth keeping.
  */
-internal fun recoverTrip(lines: List<String>, endsWithNewline: Boolean): RecoveredTrip? {
-    val text = lines.joinToString(separator = LINE_END, postfix = if (endsWithNewline && lines.isNotEmpty()) LINE_END else "")
+internal fun recoverTrip(reader: Reader): RecoveredTrip? {
     val accumulator = TripStatsAccumulator()
     var hasGps = false
-    for (sample in readTripCsv(StringReader(text)).samples) {
+    for (sample in readTripCsv(reader).samples) {
         accumulator.add(sample)
         if (sample.gps != null) hasGps = true
     }
@@ -46,13 +43,24 @@ internal fun recoverTrip(lines: List<String>, endsWithNewline: Boolean): Recover
 }
 
 /** The trip row totals of [recoverTrip]. */
-internal fun recoverTripSummary(lines: List<String>, endsWithNewline: Boolean): TripSummary? =
-    recoverTrip(lines, endsWithNewline)?.stats?.toTripSummary()
+internal fun recoverTripSummary(reader: Reader): TripSummary? = recoverTrip(reader)?.stats?.toTripSummary()
 
-private fun File.endsWithNewline(): Boolean = RandomAccessFile(this, "r").use { file ->
-    if (file.length() == 0L) return false
-    file.seek(file.length() - 1)
-    file.read() == LINE_FEED
+/** The lap session is over: hands [trackId] to [release]; a failing write is logged, the trip is over either way. */
+internal suspend fun releaseActiveTrack(trackId: Long, release: suspend (trackId: Long) -> Unit) {
+    try {
+        release(trackId)
+    } catch (e: SQLException) {
+        Log.e(TAG, "Could not release the active track $trackId", e)
+    }
+}
+
+/** The row is finished already; if [refresh] fails the list only lacks the lap count until the track changes. */
+internal suspend fun refreshLapSummary(tripId: Long, refresh: suspend (tripId: Long) -> Unit) {
+    try {
+        refresh(tripId)
+    } catch (e: SQLException) {
+        Log.e(TAG, "Could not refresh the lap summary of trip $tripId", e)
+    }
 }
 
 /**
@@ -80,13 +88,13 @@ internal class TripRecovery(
 
     private suspend fun recoverOne(trip: Trip) {
         recoverTripRow(trip)
-        trip.trackId?.let { releaseActiveTrack(it) }
+        trip.trackId?.let { releaseActiveTrack(it, releaseTrack) }
     }
 
     private suspend fun recoverTripRow(trip: Trip) {
-        val file = resolveTripFile(tripsDir, trip.fileName)
+        val file = withContext(ioDispatcher) { resolveExistingTripFile(tripsDir, trip.fileName) }
         val recovered = try {
-            file?.takeIf { it.isFile }?.let { withContext(ioDispatcher) { readTrip(it) } }
+            file?.let { withContext(ioDispatcher) { readTrip(it) } }
         } catch (e: IOException) {
             // Unreadable now does not mean worthless: keep the row and file, retry on the next start.
             Log.e(TAG, "Could not read trip ${trip.id} (${trip.fileName}) for recovery", e)
@@ -109,26 +117,8 @@ internal class TripRecovery(
             maxCoolantC = stats.maxCoolantC,
         )
         tripDao.updateSummary(trip.id, tripSummaryCache(stats, laps = null, hasGps = recovered.hasGps))
-        if (trip.trackId != null) refreshLapSummary(trip.id)
+        if (trip.trackId != null) refreshLapSummary(trip.id, refreshSummary)
     }
 
-    /** The row is finished already; without the laps the list only lacks the lap count until the track changes. */
-    private suspend fun refreshLapSummary(tripId: Long) {
-        try {
-            refreshSummary(tripId)
-        } catch (e: SQLException) {
-            Log.e(TAG, "Could not refresh the lap summary of recovered trip $tripId", e)
-        }
-    }
-
-    private suspend fun releaseActiveTrack(trackId: Long) {
-        try {
-            releaseTrack(trackId)
-        } catch (e: SQLException) {
-            Log.e(TAG, "Could not release the active track $trackId of a recovered trip", e)
-        }
-    }
-
-    private fun readTrip(file: File): RecoveredTrip? =
-        recoverTrip(file.readLines(Charsets.UTF_8), file.endsWithNewline())
+    private fun readTrip(file: File): RecoveredTrip? = file.bufferedReader(Charsets.UTF_8).use(::recoverTrip)
 }

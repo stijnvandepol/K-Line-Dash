@@ -7,6 +7,62 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-25
+
+An optimisation round after a full audit: faster live data on K-line cars, a lighter dashboard, a
+faster start, and fixes for head units whose clock jumps at boot.
+
+### Changed
+
+- **Live data on K-line and J1850 cars** (no multi-PID requests): RPM is polled twice per round,
+  so at 0.5 s per request it updates every second instead of every two. Speed stays at every two
+  seconds; throttle comes every third rotating slot (about every 6 s) and coolant, intake air, load
+  and timing at least every 18 s (was 11 s). CAN cars are unchanged: those values go out in one
+  request already.
+- **The RPM bar and needles** reach a new reading within 350 ms (ease-out) instead of gliding over
+  the whole interval, so on a slow link they no longer trail a full reading behind.
+- **Dashboard drawing:** moving bars, needles and arcs are drawn in layers of their own, so a frame
+  of movement no longer redraws the whole page. The RPM bar and the digital arc only redraw when a
+  segment turns on or off: about 70 % less CPU for those dashboards. The status chip no longer
+  recomposes on every request.
+- **Start-up:** the settings are read once, in one database query shared by all settings, and the
+  settings and theme files are loaded in parallel while the app starts, so the first screen no longer
+  waits for a series of reads one after another.
+- The first 0100 of a connection is no longer asked twice (about 0.5 s faster to live data on K-line).
+- SENSORS shows the link speed: requests per second and the mean time per request.
+
+### Fixed
+
+- **Head units without a battery-backed clock:** polling, trip recording, automatic stop, warnings
+  and the Wi-Fi export now measure time on a monotonic clock. A clock that steps when GPS or network
+  time arrives no longer stops slow values from being polled for hours, leaves a trip file without
+  its header (so a power cut lost the trip), or ends an automatic trip early.
+- With the ignition off (or no ECU behind the adapter) the app no longer retries every second; after
+  five failed requests it checks every 5 to 10 s and resumes by itself when the car answers.
+- One bad reply right after connecting no longer switches off the faster response-count request
+  for the whole connection; only two in a row do.
+- An adapter that resets itself while driving is reconnected at once instead of after three
+  timeouts, and the first request after a pause on a K-line bus gets time for the bus to wake up.
+- An unexpected error in the poller, the trip recorder or location handling is logged and costs
+  one sample, no longer the live data, the running trip or the whole app.
+- Stopping the connection no longer hangs when the adapter's Bluetooth or Wi-Fi peer has died.
+- A misbehaving adapter that streams data without ever finishing a reply is disconnected and
+  reconnected instead of slowly filling the memory.
+- Wi-Fi adapters on a phone with mobile data: the connection now goes over the adapter's Wi-Fi
+  network instead of mobile data.
+- Recovering an unfinished trip after a power cut reads the file row by row instead of three
+  copies in memory; exporting the same trip twice at once no longer fails; the boot receiver can no
+  longer hang; raw commands from the Debug screen no longer interleave with live polling.
+- **Wi-Fi export:** an internal error no longer stops the app; other devices that only connect can
+  no longer keep it running or tie up its connections; requests must name the export by IP address
+  and come from its own page (no DNS rebinding or cross-site logins); a download link can no longer
+  hand out another trip when a trip was added in the meantime.
+
+### Security
+
+- CI checks that the Gradle wrapper is an official release, the Gradle download is checked against
+  its SHA-256, and CI also builds the minified release build.
+
 ## [1.2.0] - 2026-10-25
 
 K-Line Dash learns the make of the car: trouble code meanings and the connection now fit German,
@@ -108,7 +164,8 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/stijnvandepol/K-Line-Dash/releases/tag/v1.0.0

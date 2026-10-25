@@ -50,14 +50,17 @@ internal fun gpsStatusOf(
 /**
  * The median interval of the last [WINDOW] fixes as a rate. The median ignores the odd late fix;
  * gaps above [MAX_INTERVAL_MS] (tunnel, restart) are not intervals and are skipped.
+ *
+ * Thread-safe: fixes are added on the main thread, the rate is read from background threads.
  */
 internal class FixRateMeter {
     private val intervals = ArrayDeque<Long>()
     private var lastMs: Long? = null
 
     /** Number of intervals currently held, at most [WINDOW]. */
-    val sampleCount: Int get() = intervals.size
+    val sampleCount: Int @Synchronized get() = intervals.size
 
+    @Synchronized
     fun add(elapsedMs: Long) {
         val previous = lastMs
         lastMs = elapsedMs
@@ -68,12 +71,13 @@ internal class FixRateMeter {
 
     /** Fixes per second, or null until [MIN_SAMPLES] intervals were seen. */
     val rateHz: Double?
-        get() {
+        @Synchronized get() {
             if (intervals.size < MIN_SAMPLES) return null
             val median = intervals.sorted()[intervals.size / 2]
             return MS_PER_SECOND / median
         }
 
+    @Synchronized
     fun reset() {
         intervals.clear()
         lastMs = null

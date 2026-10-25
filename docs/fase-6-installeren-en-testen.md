@@ -241,10 +241,10 @@ De emulator "headunit" (1280 x 720) en de simulator zijn genoeg voor bijna alles
 11. **Wi-Fi-export.** Tik op TRIPS **Start Wi-Fi export** en noteer de PIN. Op de pc:
     ```bash
     adb forward tcp:8080 tcp:8080
-    curl -c jar.txt -d "pin=1234" http://localhost:8080/login
-    curl -b jar.txt http://localhost:8080/
+    curl -c jar.txt -d "pin=1234" http://127.0.0.1:8080/login
+    curl -b jar.txt http://127.0.0.1:8080/
     ```
-    (vervang 1234 door de PIN). De lijst moet de vier PC-bestanden van de rit tonen en `/download/<nummer>` geeft
+    (vervang 1234 door de PIN). De lijst moet de vier PC-bestanden van de rit tonen en `/download/<nummer>/<bestandsnaam>` (de links op de pagina) geeft
     ze. De `.laps.csv` heeft de kolommen `lap,valid,start_iso,lap_time (s),delta_best (s),distance (km), ...,
     sector_1 (s), sector_2 (s)`.
 12. **Verwijderen.** Tik in het ritdetail **DELETE**, lees de vraag, tik **CANCEL**; doe het nog eens en bevestig:

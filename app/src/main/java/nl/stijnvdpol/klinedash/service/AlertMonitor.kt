@@ -2,6 +2,7 @@ package nl.stijnvdpol.klinedash.service
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -23,6 +24,7 @@ import nl.stijnvdpol.klinedash.core.alert.AlertSeverity
 import nl.stijnvdpol.klinedash.core.alert.AlertState
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
+import nl.stijnvdpol.klinedash.core.obd.Reading
 
 private const val TAG = "AlertMonitor"
 private const val DEMAND_OWNER = "alerts"
@@ -94,6 +96,12 @@ class ToneGeneratorPlayer(private val stream: Int = AudioManager.STREAM_ALARM) :
  * on every change of readings, connection or settings (at most 4 per second, plus a 1 s tick for
  * time-based rules), hands the active alerts to [publish] and plays one tone for the alerts that
  * were newly raised and have sound enabled. The visual warning is the UI's job.
+ *
+ * Time: the rules measure the age of readings and debounce times with the single clock in
+ * [AlertInput.nowMs]. Readings are stamped with the wall [clock], which a head unit without a clock
+ * chip steps at boot, so the rules get the monotonic [elapsed] clock and the readings re-stamped onto
+ * it with the age they have now (see [onMonotonicClock]). [Alert.sinceMs] is therefore a monotonic
+ * time: only good for comparing alerts with each other, not for display.
  */
 class AlertMonitor(
     private val settings: Flow<AlertSettings>,
@@ -101,6 +109,7 @@ class AlertMonitor(
     private val tonePlayer: AlertTonePlayer,
     private val publish: (List<Alert>) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val elapsed: () -> Long = SystemClock::elapsedRealtime,
 ) {
     /** Runs until cancelled; the demand is released and the published alerts are cleared afterwards. */
     suspend fun run(poller: ObdPoller, connection: StateFlow<ConnectionState>): Unit = coroutineScope {
@@ -119,7 +128,9 @@ class AlertMonitor(
         var state = AlertState()
         // conflate(): while the collector pauses between evaluations only the latest inputs are kept.
         combine(poller.readings, connection, settings, ticker()) { readings, conn, currentSettings, _ ->
-            Snapshot(AlertInput(readings, conn is ConnectionState.Connected, clock()), currentSettings, conn is ConnectionState.Idle)
+            val elapsedNowMs = elapsed()
+            val input = AlertInput(readings.onMonotonicClock(clock(), elapsedNowMs), conn is ConnectionState.Connected, elapsedNowMs)
+            Snapshot(input, currentSettings, conn is ConnectionState.Idle)
         }.conflate().collect { snapshot ->
             // Idle means the user disconnected (or never connected): not a lost link, so nothing to
             // warn about, and the next connection starts with fresh baselines.
@@ -146,3 +157,11 @@ class AlertMonitor(
         launch { tonePlayer.play(severity) }
     }
 }
+
+/**
+ * [this] with every timestamp moved from the wall clock ([wallNowMs]) onto the monotonic clock
+ * ([elapsedNowMs]): each reading keeps the age it has at this moment. A later step of the wall clock
+ * then cannot change an age or a debounce time that is measured from now on.
+ */
+internal fun Map<String, Reading>.onMonotonicClock(wallNowMs: Long, elapsedNowMs: Long): Map<String, Reading> =
+    mapValues { (_, reading) -> reading.copy(timestampMs = elapsedNowMs - (wallNowMs - reading.timestampMs)) }

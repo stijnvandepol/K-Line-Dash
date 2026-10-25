@@ -26,7 +26,10 @@ data class Alert(
     val kind: AlertKind,
     val severity: AlertSeverity,
     val value: Double?,
-    /** When the condition started (System.currentTimeMillis()). */
+    /**
+     * When the condition started, on the evaluator's clock (monotonic in the app). Only for ordering
+     * and for telling one occurrence from the next; not a time to show.
+     */
     val sinceMs: Long,
 )
 

@@ -110,6 +110,18 @@ object ElmParser {
      */
     fun looksLikeReset(raw: String): Boolean = raw.contains("ELM327", ignoreCase = true)
 
+    /**
+     * True if [result], the reply to [command], shows that the adapter reset itself while it was
+     * running (low voltage, loose contact): it has lost ATE0/ATS0, the protocol and the rest of its
+     * configuration, so the connection has to be initialised again. The banner (a clone sends it
+     * unasked, or instead of the answer) and "LV RESET" say so. Never for ATZ, ATWS and ATI, whose
+     * answer is the banner, and never for a timeout, whose partial text is not an answer.
+     */
+    fun isAdapterReset(command: String, result: ElmResult): Boolean {
+        if (result is ElmResult.Timeout || compact(command) in BANNER_EXPECTED) return false
+        return looksLikeReset(result.raw) || LOW_VOLTAGE_RESET in result.raw.uppercase()
+    }
+
     /** Parses one ATRV line such as "12.4V", "12.4 V", "12,4V" or "13.9"; null for "?" or garbage. */
     fun parseVoltage(text: String): Double? {
         val m = VOLTAGE.matchEntire(text.trim { it <= ' ' }) ?: return null
@@ -133,6 +145,8 @@ object ElmParser {
         return if (t.startsWith(AUTO_PREFIX, ignoreCase = true)) t.substring(AUTO_PREFIX.length).trim() else t
     }
 
+    private val BANNER_EXPECTED = setOf("ATZ", "ATWS", "ATI")
+    private const val LOW_VOLTAGE_RESET = "LV RESET"
     private const val BUS_INIT_PREFIX_LENGTH = 8 // "BUS INIT"
     private const val BUS_INIT_OK = "OK"
     private const val AUTO_PREFIX = "AUTO,"

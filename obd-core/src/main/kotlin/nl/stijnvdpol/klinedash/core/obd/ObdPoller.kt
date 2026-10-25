@@ -60,4 +60,10 @@ data class PollStats(
     val signalHz: Map<String, Double> = emptyMap(),
     /** Signal ids that were demanded but the ECU does not support (or kept answering NO DATA). */
     val unsupported: Set<String> = emptySet(),
+    /**
+     * Mean time from sending a request to its reply over the last few seconds, in milliseconds
+     * (monotonic clock, requests that timed out left out); 0 when nothing was answered. The cost
+     * of every request, and so what limits the rates above: about 500 ms on the K-line car.
+     */
+    val meanRoundTripMs: Double = 0.0,
 )

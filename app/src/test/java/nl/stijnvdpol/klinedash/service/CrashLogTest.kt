@@ -1,6 +1,13 @@
 package nl.stijnvdpol.klinedash.service
 
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -142,5 +149,18 @@ class CrashLogTest {
     fun handlerWithoutAPreviousHandlerDoesNotThrow() {
         log.asUncaughtExceptionHandler(null).uncaughtException(Thread("main"), Exception("fatal"))
         assertEquals(1, log.all().size)
+    }
+
+    @Test
+    fun anExceptionNobodyCaughtInACoroutineIsRecordedAndOnlyThatCoroutineEnds() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + log.asCoroutineExceptionHandler("test"))
+        val failing = scope.launch { throw IllegalStateException("bug in a loop") }
+        failing.join()
+        val sibling = scope.launch { }
+        joinAll(sibling)
+
+        assertEquals(listOf("java.lang.IllegalStateException: bug in a loop"), log.all().map { it.summary })
+        assertTrue("the scope is still usable", scope.coroutineContext[kotlinx.coroutines.Job]?.isActive == true)
+        scope.cancel()
     }
 }

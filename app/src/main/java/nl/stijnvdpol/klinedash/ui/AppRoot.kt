@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.activity.compose.ReportDrawn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,13 +28,15 @@ import nl.stijnvdpol.klinedash.ui.wizard.SetupWizard
  * The whole app: the first-run setup while it has not been finished or skipped (and when SETUP >
  * Help runs it again), otherwise the five pages with the warning overlay and the bottom bar. Nothing
  * is drawn until the general and car settings are read, so neither the setup nor the dashboard
- * flashes by, and no tachometer is drawn on the default scale first.
+ * flashes by, and no tachometer is drawn on the default scale first. Both are read ahead from
+ * KLineDashApp.onCreate (see AppGraph.warmUp), so they are normally there in the first composition.
+ * The setup wizard reports the app as fully drawn here; the dashboard does it in [DashboardScreen].
  */
 @Composable
 fun AppRoot() {
     val graph = LocalContext.current.appGraph
-    val general by graph.generalSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
-    val car by graph.carSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
+    val general by graph.generalSettings.collectAsStateWithLifecycle()
+    val car by graph.carSettings.collectAsStateWithLifecycle()
     val permissions = rememberPermissionRequests()
     var isRerunningSetup by remember { mutableStateOf(false) }
     var screen by remember { mutableStateOf(Screen.Dashboard) }
@@ -48,6 +51,7 @@ fun AppRoot() {
             LocalRpmScale provides rpmScale(loadedCar.redlineRpm),
         ) {
             if (!loaded.setupCompleted || isRerunningSetup) {
+                ReportDrawn()
                 SetupWizard(permissions, onFinished = {
                     isRerunningSetup = false
                     screen = Screen.Dashboard

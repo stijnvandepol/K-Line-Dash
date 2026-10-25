@@ -143,7 +143,7 @@ class ObdPollSchedulerBatchingTest {
     }
 
     private fun TestScope.poll(link: ScriptedLink, seconds: Long = 10): ObdPollScheduler {
-        val poller = ObdPollScheduler(link, backgroundScope, Signals.all, { testScheduler.currentTime })
+        val poller = ObdPollScheduler(link, backgroundScope, Signals.all, { testScheduler.currentTime }, monotonicClock = { testScheduler.currentTime })
         poller.start()
         poller.demand("screen", setOf("rpm", "speed", "throttle"))
         advanceTimeBy(seconds * 1_000)
@@ -184,7 +184,7 @@ class ObdPollSchedulerBatchingTest {
     fun `no data for the batch and the singles is the ecu being silent and not the batch's fault`() = runTest {
         var silent = false
         val link = ScriptedLink(canInfo) { if (silent) ElmResult.NoData("NO DATA") else fullAnswer(it) }
-        val poller = ObdPollScheduler(link, backgroundScope, Signals.all, { testScheduler.currentTime })
+        val poller = ObdPollScheduler(link, backgroundScope, Signals.all, { testScheduler.currentTime }, monotonicClock = { testScheduler.currentTime })
         poller.start()
         poller.demand("screen", setOf("rpm", "speed"))
         advanceTimeBy(1_000)
@@ -269,7 +269,7 @@ class ObdPollSchedulerBatchingTest {
             { SimulatorTransport(sim, EngineModel(sim, Random(7)), clock) }, "sim", NoStore, testScope.backgroundScope,
             log = RingCommLog(clock = clock), random = Random(1),
         )
-        val poller = ObdPollScheduler(manager, testScope.backgroundScope, Signals.all, clock)
+        val poller = ObdPollScheduler(manager, testScope.backgroundScope, Signals.all, clock, monotonicClock = clock)
         private val scope = testScope
 
         suspend fun run(seconds: Long = 10) {
@@ -280,6 +280,14 @@ class ObdPollSchedulerBatchingTest {
             poller.demand("screen", setOf("rpm", "speed", "throttle"))
             scope.advanceTimeBy(seconds * 1_000)
             scope.runCurrent()
+        }
+
+        /**
+         * Without batching RPM is sent twice per round (see planRound), so it keeps up with a batched
+         * car; the other two FAST signals are what batching speeds up.
+         */
+        fun slowestFastSignalHz(): Double = poller.stats.value.signalHz.let { hz ->
+            listOf("rpm", "speed", "throttle").minOf { hz.getValue(it) }
         }
 
         fun requests(): List<String> = manager.log.snapshot().filter { it.kind == LogKind.TX }
@@ -304,11 +312,11 @@ class ObdPollSchedulerBatchingTest {
     fun `batching makes the simulated can car update faster`() = runTest {
         val batched = SimRig(this, canCar())
         batched.run()
-        val batchedHz = batched.poller.stats.value.signalHz.getValue("rpm")
+        val batchedHz = batched.slowestFastSignalHz()
 
         val singles = SimRig(this, canCar { longRequestQuirk = LongRequestQuirk.REJECTS })
         singles.run()
-        val singleHz = singles.poller.stats.value.signalHz.getValue("rpm")
+        val singleHz = singles.slowestFastSignalHz()
 
         assertTrue("batched $batchedHz Hz vs single $singleHz Hz", batchedHz > singleHz * 1.2)
     }

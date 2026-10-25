@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -108,6 +109,18 @@ fun rememberNowMs(): State<Long> = produceState(System.currentTimeMillis()) {
     while (true) {
         delay(CLOCK_TICK_MS)
         value = System.currentTimeMillis()
+    }
+}
+
+/**
+ * [SystemClock.elapsedRealtime] ticking once a second, for the time something has been going on: a
+ * head unit without a clock chip steps its wall clock, which would make such a counter jump.
+ */
+@Composable
+fun rememberElapsedMs(): State<Long> = produceState(SystemClock.elapsedRealtime()) {
+    while (true) {
+        delay(CLOCK_TICK_MS)
+        value = SystemClock.elapsedRealtime()
     }
 }
 

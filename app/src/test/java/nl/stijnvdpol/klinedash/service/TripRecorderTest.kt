@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import nl.stijnvdpol.klinedash.core.obd.ObdPoller
 import nl.stijnvdpol.klinedash.core.obd.Reading
+import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.TripSettings
 import org.junit.Assert.assertEquals
@@ -23,6 +24,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+
+private const val HOUR_MS = 3_600_000L
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TripRecorderTest {
@@ -35,18 +38,22 @@ class TripRecorderTest {
     private val pollerFlow = MutableStateFlow<ObdPoller?>(poller)
     private val settings = MutableStateFlow(TripSettings(autoRecord = true))
 
+    /** How far the unit's wall clock has been stepped (no clock chip: GPS or NTP time arrives late); the monotonic clock is unaffected. */
+    private var wallStepMs = 0L
+
     private fun TestScope.newRecorder(tripDao: TripDao = dao) = TripRecorder(
         tripsDir = File(folder.root, "trips"),
         tripDao = tripDao,
         settings = settings,
         poller = pollerFlow,
-        clock = { baseMs + currentTime },
+        clock = { baseMs + currentTime + wallStepMs },
+        elapsed = { currentTime },
         zone = ZoneOffset.UTC,
         ioDispatcher = StandardTestDispatcher(testScheduler),
     )
 
     private fun TestScope.engineRunning() {
-        val now = baseMs + currentTime
+        val now = baseMs + currentTime + wallStepMs
         poller.readings.value = mapOf(
             "rpm" to Reading("rpm", 900.0, now),
             "speed" to Reading("speed", 36.0, now),
@@ -173,6 +180,58 @@ class TripRecorderTest {
         assertEquals(RecordingState.Idle, recorder.state.value)
         assertTrue(dao.rows.value.single().endMs != null)
         assertNull("the demand is released with the loop", poller.demands["trip"])
+    }
+
+    @Test
+    fun aWallClockSteppedBackByHoursStillWritesTheHeaderAndTheTripIsNotLost() = runTest {
+        val recorder = newRecorder()
+        backgroundScope.launch { recorder.run() }
+        engineRunning()
+        advanceTimeBy(3_000)
+        val fileName = (recorder.state.value as RecordingState.Recording).fileName
+        wallStepMs = -3 * HOUR_MS
+        repeat(25) {
+            engineRunning()
+            advanceTimeBy(1_000)
+        }
+        val text = File(folder.root, "trips/$fileName").readText(Charsets.UTF_8)
+        assertTrue("the header and rows are on disk after the settle time", text.removePrefix("\uFEFF").startsWith("time_iso,") && text.lines().size > 5)
+    }
+
+    @Test
+    fun aWallClockSteppedForwardDoesNotCutTheGracePeriodShort() = runTest {
+        val recorder = newRecorder()
+        backgroundScope.launch { recorder.run() }
+        engineRunning()
+        advanceTimeBy(3_000)
+        advanceTimeBy(15_000) // the rpm reading goes stale: the engine counts as off
+        wallStepMs = 5 * HOUR_MS
+        advanceTimeBy(AUTO_STOP_GRACE_MS - 30_000)
+        assertTrue("still within the two minutes", recorder.state.value is RecordingState.Recording)
+        advanceTimeBy(45_000)
+        assertEquals(RecordingState.Idle, recorder.state.value)
+    }
+
+    /** Fails the first [failures] inserts with a bug-like exception, then works. */
+    private class BuggyTripDao(private val rows: FakeTripDao, var failures: Int) : TripDao by rows {
+        override suspend fun insert(trip: Trip): Long {
+            if (failures-- > 0) throw IllegalStateException("bug in the insert")
+            return rows.insert(trip)
+        }
+    }
+
+    @Test
+    fun anUnexpectedExceptionInATickDoesNotEndTheSamplingLoop() = runTest {
+        val buggy = BuggyTripDao(dao, failures = 2)
+        val recorder = newRecorder(buggy)
+        val loop = backgroundScope.launch { recorder.run() }
+        engineRunning()
+        advanceTimeBy(1_500)
+        assertTrue("the loop survived the failed starts", loop.isActive)
+        assertEquals(RecordingState.Idle, recorder.state.value)
+
+        advanceTimeBy(3_000)
+        assertTrue("and records once the bug is over", recorder.state.value is RecordingState.Recording)
     }
 
     /** The trip table of [rows] on storage that turns full: writing the end of a trip then fails. */

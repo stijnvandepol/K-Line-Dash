@@ -13,15 +13,19 @@ class RawResponse(val status: Int, val headers: Map<String, String>, val body: B
 /** Minimal client so tests control every byte of the request, including malformed ones. */
 class RawHttpClient(private val port: Int) {
 
-    fun get(path: String, cookie: String? = null): RawResponse =
-        send("GET $path HTTP/1.1\r\nHost: localhost\r\n" + cookieLine(cookie) + "\r\n")
+    /** What a browser sends as Host for this server: its IP address and port. */
+    val host: String = "127.0.0.1:$port"
 
-    fun postLogin(pin: String, cookie: String? = null): RawResponse {
+    /** [extraHeaders] are complete header lines, each ending in CRLF; they may replace Host. */
+    fun get(path: String, cookie: String? = null, extraHeaders: String = ""): RawResponse =
+        send("GET $path HTTP/1.1\r\n" + hostLine(extraHeaders) + extraHeaders + cookieLine(cookie) + "\r\n")
+
+    fun postLogin(pin: String, cookie: String? = null, extraHeaders: String = ""): RawResponse {
         val body = "pin=$pin"
         return send(
-            "POST /login HTTP/1.1\r\nHost: localhost\r\n" +
+            "POST /login HTTP/1.1\r\n" + hostLine(extraHeaders) +
                 "Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ${body.length}\r\n" +
-                cookieLine(cookie) + "\r\n" + body,
+                extraHeaders + cookieLine(cookie) + "\r\n" + body,
         )
     }
 
@@ -43,6 +47,8 @@ class RawHttpClient(private val port: Int) {
         check(response.status == 303) { "login failed with ${response.status}" }
         return response.header("set-cookie")!!.substringBefore(';')
     }
+
+    private fun hostLine(extraHeaders: String) = if (extraHeaders.startsWith("Host:")) "" else "Host: $host\r\n"
 
     private fun cookieLine(cookie: String?) = if (cookie == null) "" else "Cookie: $cookie\r\n"
 

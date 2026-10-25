@@ -26,6 +26,61 @@ class PollPlanTest {
         assertEquals(listOf(fast, slow), planRound(listOf(fast, medium, slow), mapOf("M" to 44_000L, "S" to 0L), 45_000))
     }
 
+    private val fastRpm = planCommand("R", PollCommand.EVERY_ROUND)
+    private val fastSpeed = planCommand("S1", PollCommand.EVERY_ROUND)
+    private val fastThrottle = planCommand("T", PollCommand.EVERY_ROUND)
+    private val coolantCommand = planCommand("C", 3_000)
+
+    private fun names(plan: List<PollCommand>) = plan.map { it.command }
+
+    @Test
+    fun `without batching rpm takes two places in the round and the other fast commands share the slot`() {
+        val commands = listOf(fastRpm, fastSpeed, fastThrottle)
+
+        // Nothing else wants the slot: throttle takes it every round.
+        assertEquals(listOf("R", "S1", "R", "T"), names(planRound(commands, emptyMap(), 0, repeatedCommand = "R")))
+    }
+
+    @Test
+    fun `a due medium command and the demoted fast command take the slot in turns`() {
+        val commands = listOf(fastRpm, fastSpeed, fastThrottle, coolantCommand)
+        // Never sent: the demoted command goes first, ahead of the rotating ones.
+        assertEquals("T", planRound(commands, emptyMap(), 0, "R").last().command)
+        // Throttle had the last slot and coolant is due: coolant now.
+        assertEquals("C", planRound(commands, mapOf("T" to 10_000L, "C" to 5_000L), 10_500, "R").last().command)
+        // Coolant had the last slot: throttle again.
+        assertEquals("T", planRound(commands, mapOf("T" to 7_000L, "C" to 10_000L), 14_000, "R").last().command)
+        // Coolant is not due yet, so throttle keeps the slot.
+        assertEquals("T", planRound(commands, mapOf("T" to 10_000L, "C" to 10_500L), 11_000, "R").last().command)
+    }
+
+    @Test
+    fun `several demoted fast commands take the slot oldest first`() {
+        val second = planCommand("T2", PollCommand.EVERY_ROUND)
+        val commands = listOf(fastRpm, fastSpeed, fastThrottle, second)
+
+        assertEquals("T2", planRound(commands, mapOf("T" to 9_000L, "T2" to 5_000L), 10_000, "R").last().command)
+        assertEquals("T", planRound(commands, mapOf("T" to 4_000L, "T2" to 5_000L), 10_000, "R").last().command)
+    }
+
+    @Test
+    fun `rpm is repeated only when it is a fast command and something else is fast too`() {
+        val detector = planCommand("R", 5_000)
+        val withoutFastRpm = listOf(fastSpeed, fastThrottle, detector)
+        assertEquals(listOf("S1", "T"), names(planRound(withoutFastRpm, mapOf("R" to 0L), 1_000, "R")))
+        assertEquals(listOf("R"), names(planRound(listOf(fastRpm), emptyMap(), 0, "R")))
+        assertEquals(listOf("R", "C"), names(planRound(listOf(fastRpm, coolantCommand), emptyMap(), 0, "R")))
+        // rpm and one other: no demoted command, the slot stays the rotating command's.
+        assertEquals(listOf("R", "S1", "R", "C"), names(planRound(listOf(fastRpm, fastSpeed, coolantCommand), emptyMap(), 0, "R")))
+        assertEquals(listOf("R", "S1", "R"), names(planRound(listOf(fastRpm, fastSpeed), emptyMap(), 0, "R")))
+    }
+
+    @Test
+    fun `without a repeated command the round is every fast command once`() {
+        val commands = listOf(fastRpm, fastSpeed, fastThrottle, coolantCommand)
+        assertEquals(listOf("R", "S1", "T", "C"), names(planRound(commands, emptyMap(), 0)))
+    }
+
     @Test
     fun `a command that was never sent is the most overdue`() {
         val medium = planCommand("M", 3_000)

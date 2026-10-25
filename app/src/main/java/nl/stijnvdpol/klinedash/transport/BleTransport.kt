@@ -10,6 +10,7 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
@@ -20,6 +21,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import nl.stijnvdpol.klinedash.core.transport.LOCKED_ADAPTER_MESSAGE
 import nl.stijnvdpol.klinedash.core.transport.PromptBuffer
+import nl.stijnvdpol.klinedash.core.transport.PromptOverflowException
 import nl.stijnvdpol.klinedash.core.transport.Transport
 import nl.stijnvdpol.klinedash.core.transport.TransportException
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
@@ -36,7 +38,11 @@ import nl.stijnvdpol.klinedash.core.transport.UnsupportedAdapterException
  * Flow control: Android allows exactly one GATT operation at a time, so every operation waits for
  * its callback (see [GattCallback] and BleGattSteps.kt), and writes are serialised by [opMutex].
  * Writes are split into (MTU - 3)-byte chunks. Replies arrive as notifications of at most MTU-3
- * bytes and are reassembled through [PromptBuffer], exactly like the stream transports.
+ * bytes and are reassembled through [PromptBuffer], exactly like the stream transports, and so is
+ * the queue of finished replies: [RESPONSE_QUEUE_CAPACITY] of them, the oldest dropped beyond that
+ * (one request has one reply, however many notifications it takes, and the session discards stale
+ * ones before every command). A [PromptOverflowException] from the buffer ends the session like a
+ * lost link.
  *
  * Callbacks run on a Binder thread, never on the caller's coroutine, so all state they touch is
  * either volatile or guarded by [lock].
@@ -92,7 +98,7 @@ class BleTransport(
             val device = adapter.getRemoteDevice(address)
             deviceName = device.nameOrNull()
 
-            val ch = Channel<String>(Channel.UNLIMITED)
+            val ch = Channel<String>(RESPONSE_QUEUE_CAPACITY, BufferOverflow.DROP_OLDEST)
             val handler = GattCallback(ch, events)
             synchronized(lock) {
                 promptBuffer.clear()
@@ -322,7 +328,14 @@ class BleTransport(
         override fun onNotification(callback: GattCallback, value: ByteArray) {
             synchronized(lock) {
                 if (active !== callback) return
-                for (response in promptBuffer.feed(value)) callback.responses.trySend(response)
+                try {
+                    for (response in promptBuffer.feed(value)) callback.responses.trySend(response)
+                } catch (e: PromptOverflowException) {
+                    // Not an ELM327, or a broken one: the connection manager sees the transport is no longer connected and reconnects.
+                    Log.w(TAG, "BLE adapter overflowed the response buffer: ${e.message}")
+                    connected = false
+                    callback.responses.close(e)
+                }
             }
         }
     }
@@ -331,6 +344,9 @@ class BleTransport(
         const val TAG = "KLineDash"
 
         const val DEFAULT_CHUNK = 20
+
+        /** The same bound as the stream transports of obd-core (StreamTransport.RESPONSE_QUEUE_CAPACITY, internal there). */
+        const val RESPONSE_QUEUE_CAPACITY = 64
         const val CONNECT_TIMEOUT_MS = 15_000L
         const val POST_CONNECT_DELAY_MS = 250L
 

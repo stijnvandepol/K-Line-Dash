@@ -41,7 +41,9 @@ private const val SATELLITES_EXTRA = "satellites"
  * lap timing and reported as [GpsStatus.NoPermission]. It does not request permissions: the UI does
  * and then calls [refresh].
  *
- * Calls and callbacks run on the main thread; [fix] and [status] may be read from anywhere. While
+ * Fixes arrive on the main thread (the listener is registered with the main looper). [start] and
+ * [stop] may be called from any thread (they are serialised, so two starts cannot leave a second
+ * refresh job behind), as may [refresh]; [fix] and [status] may be read from anywhere. While
  * running, [status] is re-evaluated every second so a fix that stops arriving turns into
  * [GpsStatus.Searching] by itself.
  *
@@ -94,6 +96,7 @@ class LocationTracker(
 
     override fun canStart(): Boolean = hasFinePermission() && manager != null
 
+    @Synchronized
     override fun start() {
         if (isRunning || !canStart()) return refresh()
         val locationManager = checkNotNull(manager)
@@ -111,7 +114,7 @@ class LocationTracker(
         refreshJob = scope.launch {
             while (isActive) {
                 delay(STATUS_REFRESH_MS)
-                refresh()
+                survivingErrors(TAG, "Refreshing the GPS status") { refresh() }
             }
         }
         refresh()
@@ -126,6 +129,7 @@ class LocationTracker(
         }
     }
 
+    @Synchronized
     override fun stop() {
         if (!isRunning) return
         isRunning = false

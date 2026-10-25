@@ -38,7 +38,9 @@ private const val FLUSH_EVERY_SAMPLES = 10
  *
  * The CSV header has to be fixed before the first row, but the signals a trip contains are only
  * known once the poller has answered for each of them (slow signals take about 15 s). So the first
- * [settleMs] of samples are kept in memory, then the header is written with every signal that had a
+ * [settleMs] of samples (measured on the monotonic clock [elapsed], SystemClock.elapsedRealtime in
+ * the app: a head unit without a clock chip steps its wall clock at boot, which would either never
+ * settle or settle at once) are kept in memory, then the header is written with every signal that had a
  * fresh reading plus [SUMMARY_SIGNAL_IDS], and the kept samples follow. Signals that first show up
  * after that are not added to this trip. Until then the file is still empty;
  * recovery handles that.
@@ -54,7 +56,7 @@ private const val FLUSH_EVERY_SAMPLES = 10
  */
 internal class TripSession(
     val file: File,
-    private val startMs: Long,
+    private val elapsed: () -> Long,
     private val catalog: List<Signal> = Signals.all,
     private val settleMs: Long = COLUMNS_SETTLE_MS,
     private val flushEverySamples: Int = FLUSH_EVERY_SAMPLES,
@@ -68,6 +70,7 @@ internal class TripSession(
     private val csv = CsvTripWriter(writer, freshnessMs, includeGps = true)
     private val live = LiveTripAnalysis()
     private val preRoll = ArrayList<Sample>()
+    private val startedAtMs = elapsed()
     private var isHeaderWritten = false
     private var samplesSinceFlush = 0
 
@@ -106,7 +109,7 @@ internal class TripSession(
             return
         }
         preRoll += Sample(nowMs, readings, gps)
-        if (nowMs - startMs >= settleMs) writeHeaderAndPreRoll()
+        if (elapsed() - startedAtMs >= settleMs) writeHeaderAndPreRoll()
     }
 
     /** What the screens show now. */

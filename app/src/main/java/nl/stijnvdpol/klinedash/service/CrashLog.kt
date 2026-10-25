@@ -5,6 +5,7 @@ import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
+import kotlinx.coroutines.CoroutineExceptionHandler
 import nl.stijnvdpol.klinedash.BuildConfig
 
 private const val TAG = "CrashLog"
@@ -100,6 +101,16 @@ class CrashLog(
             }
             previous?.uncaughtException(thread, error)
         }
+
+    /**
+     * For the scopes of long-running work (service, application): an exception no coroutine caught is
+     * logged under [tag] and recorded here, and only the coroutine it escaped from ends, not the
+     * process. Installed on the root launch (or the scope), as a handler on a child is ignored.
+     */
+    fun asCoroutineExceptionHandler(tag: String): CoroutineExceptionHandler = CoroutineExceptionHandler { _, error ->
+        Log.e(tag, "Uncaught error in a coroutine, the app carries on without it", error)
+        asUncaughtExceptionHandler(previous = null).uncaughtException(Thread.currentThread(), error)
+    }
 
     /** Newest first: the zero-padded time in the name makes name order equal time order. */
     private fun reportFiles(): List<File> =

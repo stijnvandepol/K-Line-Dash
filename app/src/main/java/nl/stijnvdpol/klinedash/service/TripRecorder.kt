@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.service
 
 import android.database.SQLException
+import android.os.SystemClock
 import android.util.Log
 import java.io.File
 import java.io.IOException
@@ -71,7 +72,10 @@ sealed interface StartResult {
  * Each row gets the latest fix only if it arrived within [FIX_MAX_AGE_MS]; otherwise the GPS cells
  * are empty, so a trip started before the first fix or in a tunnel still records. The row time is
  * the wall clock; when the unit's clock is behind GPS time the row's `gps_age` is clamped to 0, which
- * only costs the lap times a few tens of milliseconds of tick jitter.
+ * only costs the lap times a few tens of milliseconds of tick jitter. Everything that measures an
+ * interval (the settle time of the CSV header, the automatic stop's grace, the motion detector) runs
+ * on the monotonic [elapsed] clock instead: a head unit without a clock chip steps its wall clock at
+ * boot, by hours, and the wall clock is only for what is shown and recorded.
  *
  * A trip can run without an adapter link when a GPS fix exists (phone use): the OBD columns are then
  * empty. With [TripSettings.autoStartWhenMoving] such a trip also starts by itself (see [MotionDetector]).
@@ -106,6 +110,7 @@ class TripRecorder internal constructor(
     private val settings: Flow<TripSettings>,
     private val poller: StateFlow<ObdPoller?>,
     private val clock: () -> Long,
+    private val elapsed: () -> Long,
     private val zone: ZoneId,
     private val ioDispatcher: CoroutineDispatcher,
     private val location: LocationSource = NoLocation,
@@ -123,7 +128,8 @@ class TripRecorder internal constructor(
         refreshSummary: suspend (tripId: Long) -> Unit,
         releaseTrack: suspend (trackId: Long) -> Unit,
     ) : this(
-        tripsDir, tripDao, settings, poller, System::currentTimeMillis, ZoneId.systemDefault(), Dispatchers.IO,
+        tripsDir, tripDao, settings, poller, System::currentTimeMillis, SystemClock::elapsedRealtime, ZoneId.systemDefault(),
+        Dispatchers.IO,
         location, activeTrack, refreshSummary, releaseTrack,
     )
 
@@ -184,15 +190,23 @@ class TripRecorder internal constructor(
 
     /**
      * The sampling loop; never returns. On cancellation (service stopped) the running trip is
-     * finished first, so a normal shutdown leaves no unfinished row.
+     * finished first, so a normal shutdown leaves no unfinished row. An unexpected exception in a
+     * tick or in following the settings or the active track is logged and the loop goes on, so a
+     * bug there costs a sample or a setting update, not the trip.
      */
     suspend fun run() = coroutineScope {
         val currentSettings = MutableStateFlow(settings.first())
-        launch { settings.collect { currentSettings.value = it } }
-        launch { activeTrack.collect { track -> lock.withLock { applyTrackLocked(track) } } }
+        launch { survivingErrors(TAG, "Following the trip settings") { settings.collect { currentSettings.value = it } } }
+        launch {
+            survivingErrors(TAG, "Following the active track") {
+                activeTrack.collect { track ->
+                    survivingErrors(TAG, "Applying the active track") { lock.withLock { applyTrackLocked(track) } }
+                }
+            }
+        }
         try {
             while (true) {
-                tick(currentSettings.value)
+                survivingErrors(TAG, "Taking a trip sample") { tick(currentSettings.value) }
                 delay(sampleIntervalMs((location.status.value as? GpsStatus.Fix)?.rateHz))
             }
         } finally {
@@ -212,12 +226,13 @@ class TripRecorder internal constructor(
         val currentPoller = poller.value
         val readings = currentPoller?.readings?.value.orEmpty()
         val nowMs = clock()
+        val elapsedMs = elapsed()
         val gps = location.freshFix(FIX_MAX_AGE_MS)
         updateDemand(currentPoller, isAutoRecordEnabled)
         val isEngineRunning = currentPoller != null && isEngineRunning(readings, nowMs)
         val gpsSpeedKmh = gps?.speedMps?.times(KMH_PER_MPS)?.takeIf { options.autoStartWhenMoving }
-        val isDriving = motion.update(nowMs, gpsSpeedKmh) || isEngineRunning
-        when (policy.decide(nowMs, isDriving, isAutoRecordEnabled, active?.origin)) {
+        val isDriving = motion.update(elapsedMs, gpsSpeedKmh) || isEngineRunning
+        when (policy.decide(elapsedMs, isDriving, isAutoRecordEnabled, active?.origin)) {
             AutoRecordAction.START -> if (startLocked(RecordingOrigin.AUTO) is StartResult.Failed) {
                 policy.suppressStartUntilEngineStops()
             }
@@ -267,7 +282,7 @@ class TripRecorder internal constructor(
         if (!tripsDir.isDirectory && !tripsDir.mkdirs()) throw IOException("Cannot create $tripsDir")
         for (index in 1..MAX_FILE_NAME_ATTEMPTS) {
             val file = File(tripsDir, tripFileName(startMs, zone, index))
-            if (file.createNewFile()) return TripSession(file, startMs)
+            if (file.createNewFile()) return TripSession(file, elapsed)
         }
         throw IOException("No free trip file name for $startMs")
     }
@@ -279,9 +294,10 @@ class TripRecorder internal constructor(
                 distanceKm = 0.0, maxRpm = null, maxSpeedKmh = null, maxCoolantC = null, trackId = trackId,
             ),
         )
-    } catch (e: SQLException) {
-        // No row means nothing would ever finish or list this file: do not leave it behind.
-        withContext(ioDispatcher) {
+    } catch (e: Exception) {
+        // No row means nothing would ever finish or list this file: do not leave it behind. Any
+        // exception counts, also a bug or a cancellation, or the file would stay open for good.
+        withContext(NonCancellable + ioDispatcher) {
             session.close()
             session.file.delete()
         }
@@ -355,7 +371,7 @@ class TripRecorder internal constructor(
                 Log.e(TAG, "Could not store the end of trip ${finished.tripId}, left for recovery", e)
                 _lastError.value = "The end of the trip could not be saved. Check the free storage of the head unit."
             }
-            finished.session.trackId?.let { releaseActiveTrack(it) }
+            finished.session.trackId?.let { releaseFinishedTrack(it) }
         }
     }
 
@@ -376,26 +392,13 @@ class TripRecorder internal constructor(
             maxCoolantC = summary.maxCoolantC,
         )
         tripDao.updateSummary(finished.tripId, finished.session.cache())
-        if (finished.session.trackId != null) refreshLapSummary(finished.tripId)
+        if (finished.session.trackId != null) refreshLapSummary(finished.tripId, refreshSummary)
     }
 
     /** The lap session is over: the next trip is not timed on [trackId] unless the user chooses it again. */
-    private suspend fun releaseActiveTrack(trackId: Long) {
+    private suspend fun releaseFinishedTrack(trackId: Long) {
         // The settings flow tells the recorder the same a moment later; the next trip must not wait for that.
         if (latestTrack?.id == trackId) latestTrack = null
-        try {
-            releaseTrack(trackId)
-        } catch (e: SQLException) {
-            Log.e(TAG, "Could not release the active track $trackId", e)
-        }
-    }
-
-    /** The live cache is already stored; if the recomputation fails it stays, and the detail screen recomputes anyway. */
-    private suspend fun refreshLapSummary(tripId: Long) {
-        try {
-            refreshSummary(tripId)
-        } catch (e: SQLException) {
-            Log.e(TAG, "Could not refresh the lap summary of trip $tripId", e)
-        }
+        releaseActiveTrack(trackId, releaseTrack)
     }
 }

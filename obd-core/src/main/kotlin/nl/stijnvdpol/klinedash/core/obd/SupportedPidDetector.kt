@@ -27,16 +27,19 @@ object SupportedPidDetector {
      * Runs the 0100 -> 0120 -> ... chain through [execute] (sends a command, returns its parsed
      * reply; timeouts are its business).
      *
+     * [firstBlockReply] is an answer to 0100 that was already obtained (the connect probes the ECU
+     * with it); it replaces sending that request, which on K-line costs half a second.
+     *
      * A failure on 0100 throws [SupportedPidDetectionException]: without it nothing is known and
      * an empty set would look like "ECU supports nothing". A failure on a later block ends the
      * chain and keeps what was found so far.
      */
-    suspend fun detect(execute: suspend (String) -> ElmResult): Set<Int> {
+    suspend fun detect(execute: suspend (String) -> ElmResult, firstBlockReply: ElmResult? = null): Set<Int> {
         val supported = HashSet<Int>()
         var base = 0
         while (base <= LAST_BLOCK_BASE) {
             val command = ObdHex.request(MODE_CURRENT_DATA, base)
-            val result = execute(command)
+            val result = if (base == 0 && firstBlockReply != null) firstBlockReply else execute(command)
             val merged = mergeBitmaps(result, base)
             if (merged == null) {
                 if (base == 0) {

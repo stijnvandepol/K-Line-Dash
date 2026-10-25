@@ -154,15 +154,16 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
     fun send(rawCommand: String) {
         val command = rawCommand.trim().uppercase(Locale.ROOT)
         if (command.isEmpty() || _sending.value) return
-        val link = ObdServiceState.link.value
-        if (link == null) {
+        val poller = ObdServiceState.poller.value
+        if (poller == null) {
             _reply.value = notConnectedReply(command)
             return
         }
         viewModelScope.launch {
             _sending.value = true
             _reply.value = try {
-                link.execute(command).toReply(command)
+                // Through the poller's hand-over, like the diagnostics read: a raw command must not land between the requests of a poll batch.
+                poller.withPollingPaused { it.execute(command) }.toReply(command)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: IllegalStateException) {

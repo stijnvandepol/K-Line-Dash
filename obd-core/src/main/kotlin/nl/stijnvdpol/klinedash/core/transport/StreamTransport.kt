@@ -7,6 +7,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -23,8 +24,11 @@ import java.io.OutputStream
  * (Bluetooth Classic RFCOMM, Wi-Fi TCP).
  *
  * A dedicated reader coroutine on [Dispatchers.IO] pulls bytes off the stream, frames them
- * with [PromptBuffer] and queues each completed response in an unbounded channel, so
- * [readUntilPrompt] is just a timed receive and late replies are never lost between commands.
+ * with [PromptBuffer] and queues each completed response in a channel, so [readUntilPrompt] is
+ * just a timed receive and late replies are not lost between commands. The channel holds
+ * [RESPONSE_QUEUE_CAPACITY] responses and drops the oldest beyond that: one request has one
+ * response (a multi-line reply is still a single queued string), and the session discards stale
+ * ones before every command, so only a device that floods prompts can ever fill it.
  *
  * IMPORTANT: `InputStream.read` is blocking and NOT cancellable. Cancelling the reader coroutine
  * does nothing until the read returns; what actually unblocks it is closing the underlying
@@ -87,7 +91,7 @@ abstract class StreamTransport : Transport {
                 throw TransportException(e.message ?: "Connecting to the adapter failed", e)
             }
 
-            val ch = Channel<String>(Channel.UNLIMITED)
+            val ch = Channel<String>(RESPONSE_QUEUE_CAPACITY, BufferOverflow.DROP_OLDEST)
             val readerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             synchronized(lock) {
                 promptBuffer.clear()
@@ -205,7 +209,8 @@ abstract class StreamTransport : Transport {
             val wasConnected = connected
             connected = false
             if (wasConnected) {
-                ch.close(TransportException("The connection to the adapter dropped", cause))
+                // An overflow already says what happened, in words fit for the log.
+                ch.close(cause as? PromptOverflowException ?: TransportException("The connection to the adapter dropped", cause))
             }
             wasConnected
         }
@@ -213,7 +218,8 @@ abstract class StreamTransport : Transport {
         if (first) closeUnderlyingGuarded()
     }
 
-    private companion object {
-        const val READ_BUFFER_SIZE = 1024
+    companion object {
+        private const val READ_BUFFER_SIZE = 1024
+        internal const val RESPONSE_QUEUE_CAPACITY = 64
     }
 }

@@ -49,4 +49,18 @@ class TripFilesTest {
         assertNull("the trips folder itself", resolveTripFile(dir, "."))
         assertNotNull("a name that merely starts with dots", resolveTripFile(dir, "..trip.csv"))
     }
+
+    @Test
+    fun anExistingTripFileResolvesAndAMissingOrBadOneDoesNot() {
+        val dir = java.nio.file.Files.createTempDirectory("trips").toFile()
+        try {
+            val file = File(dir, "a.csv").also { it.writeText("x") }
+            assertEquals(file, resolveExistingTripFile(dir, "a.csv"))
+            assertNull("missing", resolveExistingTripFile(dir, "b.csv"))
+            assertNull("a folder is not a trip file", resolveExistingTripFile(dir.parentFile, dir.name))
+            assertNull("outside the folder", resolveExistingTripFile(dir, "../a.csv"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

@@ -50,6 +50,27 @@ class Elm327SessionTest {
     }
 
     @Test
+    fun `the answer to the probing 0100 is handed on with the adapter info`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        val info = rig.session.initialize(null) {}
+
+        val reply = info.supportedPidsReply
+        assertTrue("0100 reply kept: $reply", reply != null && reply.lines.first().startsWith("4100"))
+        assertEquals(1, rig.sent().count { it == "0100" })
+    }
+
+    @Test
+    fun `the saved protocol probe is handed on too`() = runTest {
+        val rig = Rig()
+        rig.sim.connect()
+        val info = rig.session.initialize("3") {}
+
+        assertTrue(info.usedSavedProtocol)
+        assertTrue(info.supportedPidsReply!!.lines.first().startsWith("4100"))
+    }
+
+    @Test
     fun `engine off gives the lower battery voltage`() = runTest {
         val rig = Rig()
         rig.sim.setEngineRunning(false)

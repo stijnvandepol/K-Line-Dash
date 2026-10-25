@@ -18,6 +18,7 @@ import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
 import nl.stijnvdpol.klinedash.core.log.LogKind
+import nl.stijnvdpol.klinedash.core.time.monotonicMillis
 import nl.stijnvdpol.klinedash.core.transport.TransportException
 
 /** Timing and thresholds of [ObdPollScheduler]. All durations in milliseconds. */
@@ -36,25 +37,45 @@ data class PollerConfig(
     val statsWindowMs: Long = 5_000,
     /** Timeout per request handed to [ElmLink.execute]. */
     val requestTimeoutMs: Long = 2_000,
+    /**
+     * Timeout for the first request on a K-line connection after [busIdleAfterMs] without traffic:
+     * the bus has gone to sleep (ISO 9141-2 after about 5 s; at once on the Toyota profile, which
+     * turns the adapter's keep-alive off) and the request has to start with a 5-baud init of 2-3.5 s.
+     */
+    val wakeUpTimeoutMs: Long = 6_000,
+    /** A K-line bus with no request for this long is taken to be asleep; below the 5 s of ISO 9141-2. */
+    val busIdleAfterMs: Long = 4_000,
+    /** This many requests in a row failing on the bus itself (init, CAN or bus error) mean the ECU is not there. */
+    val noEcuAfterErrors: Int = 5,
+    /** With the ECU missing, the probes of [PollMode.ENGINE_OFF] back off from [engineOffCheckIntervalMs] up to this. */
+    val noEcuCheckMaxIntervalMs: Long = 10_000,
 )
 
 /**
  * Tiered poller. On the target K-line car one request takes about 0.5 s (docs/research/esp32-obd2-lessons.md),
  * so a round is: every FAST command once, then one slot for the most overdue MEDIUM/SLOW command
- * ([planRound]). On CAN the commands of a round are merged into multi-PID requests ([packBatches]).
+ * ([planRound]); where requests cannot be batched RPM goes out twice per round instead. On CAN the
+ * commands of a round are merged into multi-PID requests ([packBatches]).
  * What is learnt about the adapter and the ECU lives in a [PollConnection] and is forgotten with it.
+ *
+ * Two clocks: every interval, age and deadline (when a command is due, the engine-off evidence, the
+ * rate windows) runs on [monotonicClock], because a head unit without an RTC steps its wall clock
+ * when GPS or NTP time arrives, and a step of hours would freeze or flood the schedule. [wallClock]
+ * only stamps [Reading.timestampMs], the time that is shown and recorded.
  *
  * Failure model: when the link dies ([IllegalStateException] / [TransportException] from
  * [ElmLink.execute], or the state leaving Connected) the poller drops to [PollMode.WAITING], forgets
- * the supported PIDs and starts over on the next connection. Anything else escaping a request is a bug
- * and propagates into [scope].
+ * the supported PIDs and starts over on the next connection. Anything else escaping a request is a bug;
+ * it is logged and the poller starts over the same way after a short pause, so one bad reply cannot
+ * silently stop the polling while the UI still says Connected.
  */
 class ObdPollScheduler(
     private val link: ElmLink,
     private val scope: CoroutineScope,
     private val catalog: List<Signal> = Signals.all,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val wallClock: () -> Long = System::currentTimeMillis,
     private val config: PollerConfig = PollerConfig(),
+    private val monotonicClock: () -> Long = ::monotonicMillis,
 ) : ObdPoller {
 
     private val _readings = MutableStateFlow<Map<String, Reading>>(emptyMap())
@@ -76,6 +97,9 @@ class ObdPollScheduler(
     private val linkMutex = Mutex()
     private val lifecycleLock = Any()
     private var job: Job? = null
+
+    /** When the last request of this link finished (monotonic); null on a fresh link. Guarded by [linkMutex]. */
+    private var lastTrafficMs: Long? = null
 
     private class LinkLost(reason: String) : Exception(reason)
 
@@ -118,6 +142,11 @@ class ObdPollScheduler(
                 }
             } catch (e: LinkLost) {
                 link.log.record(LogKind.INFO, "Poller: link lost (${e.message}), waiting for reconnect")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                link.log.record(LogKind.ERROR, "Poller: unexpected ${e::class.simpleName}: ${e.message}, starting over")
+                delay(UNEXPECTED_ERROR_PAUSE_MS)
             }
             resetToWaiting()
             // The manager clears its link a moment before it reports the new state; without a pause a
@@ -134,24 +163,29 @@ class ObdPollScheduler(
     private fun resetToWaiting() {
         _supportedPids.value = null
         _stats.value = PollStats()
+        lastTrafficMs = null
     }
 
     private suspend fun pollConnection(): Nothing {
-        val supported = detectSupportedPids()
+        val info = (link.state.value as? ConnectionState.Connected)?.info
+        val supported = detectSupportedPids(info?.supportedPidsReply)
         _supportedPids.value = supported
-        val isCan = (link.state.value as? ConnectionState.Connected)?.info?.isCan == true
-        val connection = PollConnection(supported, isCan, clock(), config)
+        val isCan = info?.isCan == true
+        val connection = PollConnection(supported, isCan, monotonicClock(), config)
         publishStats(connection)
         while (true) pollOnce(connection)
     }
 
-    private suspend fun detectSupportedPids(): Set<Int> {
+    /** [probeReply] is the connect's own answer to 0100, used once so the first block is not asked for twice. */
+    private suspend fun detectSupportedPids(probeReply: ElmResult.Data?): Set<Int> {
+        var firstBlockReply = probeReply
         while (true) {
             try {
-                return SupportedPidDetector.detect(::transmit)
+                return SupportedPidDetector.detect({ transmit(it) }, firstBlockReply)
             } catch (e: SupportedPidDetectionException) {
                 // Typically ignition off with a live adapter: keep the link, ask again later.
                 link.log.record(LogKind.ERROR, "Poller: ${e.message}")
+                firstBlockReply = null
                 delay(DETECT_RETRY_DELAY_MS)
             }
         }
@@ -163,14 +197,15 @@ class ObdPollScheduler(
         if (commands.isEmpty()) {
             publishStats(connection)
             waitForDemandChange(snapshot, timeoutMs = null)
-            connection.restartEngineEvidence(clock())
+            connection.restartEngineEvidence(monotonicClock())
             return
         }
         if (connection.mode == PollMode.ENGINE_OFF) return pollEngineOff(connection, commands)
-        val plan = batchPlan(connection, planRound(commands, connection.lastAttemptMs, clock()))
+        val repeated = rpmSignal?.command?.takeIf { connection.batching.isOff }
+        val plan = batchPlan(connection, planRound(commands, connection.lastAttemptMs, monotonicClock(), repeated))
         if (plan.isEmpty()) {
             publishStats(connection)
-            waitForDemandChange(snapshot, nextDueInMs(commands, connection.lastAttemptMs, clock()))
+            waitForDemandChange(snapshot, nextDueInMs(commands, connection.lastAttemptMs, monotonicClock()))
             return
         }
         for (command in plan) {
@@ -179,15 +214,20 @@ class ObdPollScheduler(
         }
     }
 
-    /** With the engine off only the RPM command runs, at the check interval, until the engine starts. */
+    /**
+     * With the engine off only the RPM command runs, at the check interval, until the engine starts.
+     * The same goes for a missing ECU, with growing pauses ([PollConnection.engineOffCheckDelayMs]).
+     */
     private suspend fun pollEngineOff(connection: PollConnection, commands: List<PollCommand>) {
         val rpmCommand = commands.firstOrNull { it.command == rpmSignal?.command }
         if (rpmCommand == null) {
             connection.resumeActive()
+            // Without RPM nothing can see the engine start, but a missing ECU must not be hammered either.
+            if (connection.isEcuMissing) delay(connection.engineOffCheckDelayMs())
             return
         }
         poll(connection, rpmCommand)
-        if (connection.mode == PollMode.ENGINE_OFF) delay(config.engineOffCheckIntervalMs)
+        if (connection.mode == PollMode.ENGINE_OFF) delay(connection.engineOffCheckDelayMs())
     }
 
     /**
@@ -256,8 +296,8 @@ class ObdPollScheduler(
      */
     private suspend fun pollBatch(connection: PollConnection, batch: PollCommand): ElmResult? {
         val result = request(connection, batch.command)
-        val now = clock()
-        connection.window.recordRequest(now)
+        val now = now()
+        connection.window.recordRequest(now.monotonicMs)
         val requested = batch.members.mapNotNull { it.pid }.associateWith { pidDataLengths.getValue(it) }
         val blocks = (result as? ElmResult.Data)?.let { MultiPidResponse.split(it, requested) }.orEmpty()
         if (batch.members.any { member -> member.pid !in blocks }) {
@@ -273,23 +313,24 @@ class ObdPollScheduler(
         return null
     }
 
-    private fun applyBatch(connection: PollConnection, batch: PollCommand, blocks: Map<Int, IntArray>, nowMs: Long) {
+    private fun applyBatch(connection: PollConnection, batch: PollCommand, blocks: Map<Int, IntArray>, now: PollTime) {
+        connection.recordEcuAnswered()
         val decoded = batch.members.flatMap { member ->
-            connection.lastAttemptMs[member.command] = nowMs
+            connection.lastAttemptMs[member.command] = now.monotonicMs
             connection.clearNoData(member.command)
             val bytes = member.pid?.let { blocks[it] } ?: return@flatMap emptyList()
             member.signals.mapNotNull { signal ->
-                signal.decodePayload?.invoke(bytes)?.let { Reading(signal.id, it, nowMs) }
+                signal.decodePayload?.invoke(bytes)?.let { Reading(signal.id, it, now.wallMs) }
             }
         }
-        publishReadings(connection, decoded, nowMs)
+        publishReadings(connection, decoded, now.monotonicMs)
     }
 
     private suspend fun exchange(connection: PollConnection, command: PollCommand): ElmResult {
         val result = request(connection, command.command)
-        val now = clock()
-        connection.lastAttemptMs[command.command] = now
-        connection.window.recordRequest(now)
+        val now = now()
+        connection.lastAttemptMs[command.command] = now.monotonicMs
+        connection.window.recordRequest(now.monotonicMs)
         applyResult(connection, command, result, now)
         return result
     }
@@ -311,11 +352,19 @@ class ObdPollScheduler(
 
     /** Sends [command] with the response-count digit while the adapter takes it, see [ResponseCountSuffix]. */
     private suspend fun request(connection: PollConnection, command: String): ElmResult =
-        connection.suffix.send(command, ::transmit)
+        connection.suffix.send(command) { sent ->
+            transmit(sent) { durationMs -> connection.window.recordRoundTrip(monotonicClock(), durationMs) }
+        }
 
-    private suspend fun transmit(command: String): ElmResult = linkMutex.withLock {
+    /** Runs [command] on the link; [onAnswered] gets the round-trip time of every reply that is not a timeout. */
+    private suspend fun transmit(command: String, onAnswered: (Long) -> Unit = {}): ElmResult = linkMutex.withLock {
+        val startMs = monotonicClock()
         try {
-            link.execute(command, config.requestTimeoutMs)
+            link.execute(command, requestTimeoutMs(startMs)).also { result ->
+                val endMs = monotonicClock()
+                lastTrafficMs = endMs
+                if (result !is ElmResult.Timeout) onAnswered(endMs - startMs)
+            }
         } catch (e: CancellationException) {
             throw e // a subclass of IllegalStateException, so it has to be caught first
         } catch (e: IllegalStateException) {
@@ -325,27 +374,42 @@ class ObdPollScheduler(
         }
     }
 
-    private fun applyResult(connection: PollConnection, command: PollCommand, result: ElmResult, nowMs: Long) {
-        if (result is ElmResult.NoData) {
-            applyNoData(connection, command, nowMs)
-            return
+    /** The first request after a pause on a K-line bus that has gone to sleep starts with a slow 5-baud init. */
+    private fun requestTimeoutMs(nowMs: Long): Long {
+        val isKLine = (link.state.value as? ConnectionState.Connected)?.info?.isKLine == true
+        val lastMs = lastTrafficMs ?: return config.requestTimeoutMs
+        val isBusAsleep = isKLine && nowMs - lastMs > config.busIdleAfterMs
+        return if (isBusAsleep) config.wakeUpTimeoutMs else config.requestTimeoutMs
+    }
+
+    private fun applyResult(connection: PollConnection, command: PollCommand, result: ElmResult, now: PollTime) {
+        when (result) {
+            is ElmResult.NoData -> {
+                connection.recordEcuAnswered()
+                applyNoData(connection, command, now.monotonicMs)
+                return
+            }
+            is ElmResult.Data -> connection.recordEcuAnswered()
+            is ElmResult.InitError, is ElmResult.CanError, is ElmResult.BusError -> connection.recordNoEcu()
+            else -> Unit
         }
         connection.clearNoData(command.command)
-        if (result is ElmResult.Data) applyData(connection, command, result, nowMs)
+        if (result is ElmResult.Data) applyData(connection, command, result, now)
     }
 
-    private fun applyData(connection: PollConnection, command: PollCommand, data: ElmResult.Data, nowMs: Long) {
+    private fun applyData(connection: PollConnection, command: PollCommand, data: ElmResult.Data, now: PollTime) {
         val decoded = command.signals.mapNotNull { signal ->
-            signal.decode(data)?.let { Reading(signal.id, it, nowMs) }
+            signal.decode(data)?.let { Reading(signal.id, it, now.wallMs) }
         }
-        publishReadings(connection, decoded, nowMs)
+        publishReadings(connection, decoded, now.monotonicMs)
     }
 
-    private fun publishReadings(connection: PollConnection, decoded: List<Reading>, nowMs: Long) {
+    /** [monotonicNowMs] times the rate windows and the engine evidence; the readings carry their wall-clock stamp. */
+    private fun publishReadings(connection: PollConnection, decoded: List<Reading>, monotonicNowMs: Long) {
         if (decoded.isEmpty()) return
         _readings.update { it + decoded.associateBy { reading -> reading.signalId } }
-        decoded.forEach { connection.window.recordSignal(it.signalId, nowMs) }
-        decoded.firstOrNull { it.signalId == SignalIds.RPM }?.let { connection.trackEngine(it.value, nowMs) }
+        decoded.forEach { connection.window.recordSignal(it.signalId, monotonicNowMs) }
+        decoded.firstOrNull { it.signalId == SignalIds.RPM }?.let { connection.trackEngine(it.value, monotonicNowMs) }
     }
 
     private fun applyNoData(connection: PollConnection, command: PollCommand, nowMs: Long) {
@@ -358,7 +422,7 @@ class ObdPollScheduler(
     }
 
     private fun publishStats(connection: PollConnection) {
-        val now = clock()
+        val now = monotonicClock()
         val demandedIds = demands.value.values.flatten().toSet()
         val unsupported = catalog.filter {
             it.id in demandedIds && (!it.isSupportedBy(connection.supported) || it.command in connection.deadCommands)
@@ -368,10 +432,17 @@ class ObdPollScheduler(
             requestsPerSecond = connection.window.requestsPerSecond(now),
             signalHz = connection.window.signalHz(now),
             unsupported = unsupported,
+            meanRoundTripMs = connection.window.meanRoundTripMs(now),
         )
     }
 
+    /** One instant on both clocks: the monotonic one for intervals, the wall one for stamping readings. */
+    private class PollTime(val monotonicMs: Long, val wallMs: Long)
+
+    private fun now() = PollTime(monotonicClock(), wallClock())
+
     private companion object {
+        const val UNEXPECTED_ERROR_PAUSE_MS = 1_000L
         const val LINK_LOST_PAUSE_MS = 500L
         const val DETECT_RETRY_DELAY_MS = 5_000L
         const val FAILED_REQUEST_PAUSE_MS = 50L

@@ -12,7 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -51,9 +53,8 @@ internal const val SCALE_STEP_RPM = 1_000
 private const val SEGMENTS_PER_SCALE_STEP = SCALE_STEP_RPM / SEGMENT_RPM
 private const val UNLIT_ZONE_ALPHA = 0.25f
 private const val MS_PER_SECOND = 1_000.0
-private const val DEFAULT_SWEEP_MS = 500
 private const val MIN_SWEEP_MS = 100
-private const val MAX_SWEEP_MS = 1_000
+private const val MAX_SWEEP_MS = 350
 
 private val SegmentGap = 2.dp
 private val ScaleGap = 4.dp
@@ -80,11 +81,14 @@ internal fun litSegmentCount(rpm: Double, segments: Int): Int = ceil(rpm / SEGME
 
 /**
  * How long the bar takes to travel to a new reading: the measured interval between rpm readings,
- * so it arrives just as the next one does and the motion never stops. [updatesPerSecond] is null or 0
- * until the poller has measured something.
+ * so on a fast link it arrives just as the next one does and the motion never stops, but never
+ * longer than [MAX_SWEEP_MS]. On a slow K-line link (one rpm reading a second or less) a glide over
+ * the whole interval would show each value only when the next one is already due; this way the
+ * bar is there within a third of a second and waits. [updatesPerSecond] is null or 0 until the
+ * poller has measured something.
  */
 internal fun sweepDurationMs(updatesPerSecond: Double?): Int {
-    val intervalMs = updatesPerSecond?.takeIf { it > 0 }?.let { MS_PER_SECOND / it } ?: DEFAULT_SWEEP_MS.toDouble()
+    val intervalMs = updatesPerSecond?.takeIf { it > 0 }?.let { MS_PER_SECOND / it } ?: MAX_SWEEP_MS.toDouble()
     return intervalMs.toInt().coerceIn(MIN_SWEEP_MS, MAX_SWEEP_MS)
 }
 
@@ -117,10 +121,11 @@ internal class ShiftLight(val shiftRpm: Int) {
 
 /**
  * The segmented RPM bar with its scale. The unlit bar and the scale are drawn once into their own
- * layer; the lit segments are an [Animatable] that travels to each new reading in about the time
- * between two readings and is read in the draw phase only, so a frame of movement redraws at most
- * one rectangle per 200 rpm of the scale (30 to 55) and recomposes nothing. The scale and the zones
- * are those of the car ([LocalRpmScale]).
+ * layer; the lit segments, in a layer of their own, are an [Animatable] that travels to each new
+ * reading in about the time between two readings. Only the number of lit segments (and the flash)
+ * is read in the draw phase, so the bar redraws when a segment lights or goes out, one rectangle
+ * per 200 rpm of the scale (30 to 55), and recomposes nothing. The scale and the zones are those
+ * of the car ([LocalRpmScale]).
  */
 @Composable
 internal fun RpmBar(
@@ -141,6 +146,9 @@ internal fun RpmBar(
     val barHeight = metrics.barHeight
     val rpmScale = LocalRpmScale.current
     val segments = segmentCount(rpmScale)
+    // The lit part changes with the segment count and the flash, not with every frame of the glide.
+    val litCount = remember(lit, segments) { derivedStateOf { litSegmentCount(lit.value.toDouble(), segments) } }
+    val isFlashing = remember(shiftLight) { derivedStateOf { shiftLight?.isLit == true } }
     Box(
         modifier
             .padding(
@@ -179,20 +187,22 @@ internal fun RpmBar(
                     }
                 },
         )
+        // Own layer too: a changing segment redraws only the lit part, not the page around the bar.
         Spacer(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer()
                 .drawWithCache {
                     val geometry = SegmentGeometry(size.width, SegmentGap.toPx().roundToInt().coerceAtLeast(1).toFloat(), segments)
                     val barPx = barHeight.toPx()
                     onDrawBehind {
                         // Flashing: every segment in danger, so the whole bar blinks, not just its lit part.
-                        val isFlashing = shiftLight?.isLit == true
-                        val count = if (isFlashing) segments else litSegmentCount(lit.value.toDouble(), segments)
+                        val isBlinking = isFlashing.value
+                        val count = if (isBlinking) segments else litCount.value
                         val dimmed = stale.value
                         for (i in 0 until count) {
                             val color = when {
-                                isFlashing -> colors.danger
+                                isBlinking -> colors.danger
                                 dimmed -> colors.inkFaint
                                 else -> colors.zoneColor(rpmZone(i * SEGMENT_RPM, rpmScale))
                             }

@@ -43,7 +43,7 @@ class ObdDiagnosticsSimulatorTest {
             { SimulatorTransport(sim, EngineModel(sim, Random(7)), clock) }, "sim", NoStore,
             testScope.backgroundScope, log = RingCommLog(clock = clock), random = Random(1),
         )
-        val poller = ObdPollScheduler(manager, testScope.backgroundScope, clock = clock)
+        val poller = ObdPollScheduler(manager, testScope.backgroundScope, wallClock = clock, monotonicClock = clock)
         val diagnostics = ObdDiagnostics(poller, clock)
 
         suspend fun connect() {

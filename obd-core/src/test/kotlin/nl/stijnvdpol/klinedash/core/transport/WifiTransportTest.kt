@@ -46,6 +46,17 @@ class WifiTransportTest {
         getInputStream().read(ByteArray(64))
     }
 
+    /** Everything the transport has queued, read until the queue is empty or the link is gone. */
+    private suspend fun drain(t: WifiTransport): List<String> {
+        val received = ArrayList<String>()
+        try {
+            while (true) received += t.readUntilPrompt(DRAIN_TIMEOUT_MS)
+        } catch (e: TransportException) {
+            // The queue is empty: a timeout, or the adapter hung up after its last response.
+            return received
+        }
+    }
+
     private fun Socket.send(text: String) {
         getOutputStream().apply {
             write(text.toByteArray(Charsets.US_ASCII))
@@ -195,6 +206,60 @@ class WifiTransportTest {
     }
 
     @Test
+    fun adapter_streaming_without_a_prompt_drops_the_link_instead_of_growing_forever() {
+        FakeElm { s ->
+            s.awaitRequest()
+            val chunk = "X".repeat(CHUNK_CHARS)
+            repeat(PromptBuffer.MAX_PENDING_CHARS / CHUNK_CHARS + 2) { s.send(chunk) }
+            Thread.sleep(500)
+        }.use { fake ->
+            runBlocking {
+                val t = WifiTransport("127.0.0.1", fake.port, 2000)
+                try {
+                    t.connect()
+                    t.write("0100\r")
+                    try {
+                        t.readUntilPrompt(5000)
+                        fail("expected PromptOverflowException")
+                    } catch (e: PromptOverflowException) {
+                        assertFalse(t.isConnected)
+                    }
+                } finally {
+                    t.close()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun flood_of_prompts_keeps_only_the_newest_responses_and_a_multi_line_reply_stays_whole() {
+        val floodCount = 500
+        val multiLineReply = "line one\r\nline two\r\nline three\r\r"
+        FakeElm { s ->
+            s.awaitRequest()
+            s.send((1..floodCount).joinToString("") { "$it\r>" })
+            s.send("$multiLineReply>")
+            Thread.sleep(500)
+        }.use { fake ->
+            runBlocking {
+                val t = WifiTransport("127.0.0.1", fake.port, 2000)
+                try {
+                    t.connect()
+                    t.write("0100\r")
+                    Thread.sleep(300) // let the reader queue everything
+                    val received = drain(t)
+
+                    assertEquals(multiLineReply, received.last())
+                    assertTrue("kept ${received.size}", received.size <= StreamTransport.RESPONSE_QUEUE_CAPACITY)
+                    assertEquals("$floodCount\r", received[received.size - 2])
+                } finally {
+                    t.close()
+                }
+            }
+        }
+    }
+
+    @Test
     fun description_is_host_and_port_and_kind_is_wifi() {
         val t = WifiTransport()
         assertEquals("192.168.0.10:35000", t.description)
@@ -203,5 +268,7 @@ class WifiTransportTest {
 
     private companion object {
         const val TEST_TIMEOUT_S = 15L
+        const val CHUNK_CHARS = 512
+        const val DRAIN_TIMEOUT_MS = 200L
     }
 }

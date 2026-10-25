@@ -20,6 +20,8 @@ import nl.stijnvdpol.klinedash.data.TrackRepository
 import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.newTrack
 
+private const val TAG = "LapSessions"
+
 /** A gate is only set from a fix that is at least this young (monotonic clock): the car is moving. */
 const val GATE_MAX_FIX_AGE_MS = 2_000L
 
@@ -173,12 +175,16 @@ class LapSessions(
     suspend fun keepSectorsOrdered() = coroutineScope {
         launch {
             tracks.activeTrack.map { it?.id }.distinctUntilChanged().filterNotNull()
-                .collect { trackId -> orderSectors(trackId, analysis.referenceLap(trackId)) }
+                .collect { trackId ->
+                    survivingErrors(TAG, "Ordering the sector lines of track $trackId") { orderSectors(trackId, analysis.referenceLap(trackId)) }
+                }
         }
         launch {
             liveLaps.live.map { state -> state.trackId?.let { id -> state.lapTiming?.referenceLap?.takeIf { it.isNotEmpty() }?.let { id to it } } }
                 .distinctUntilChanged().filterNotNull()
-                .collect { (trackId, lap) -> orderSectors(trackId, lap) }
+                .collect { (trackId, lap) ->
+                    survivingErrors(TAG, "Ordering the sector lines of track $trackId") { orderSectors(trackId, lap) }
+                }
         }
     }
 

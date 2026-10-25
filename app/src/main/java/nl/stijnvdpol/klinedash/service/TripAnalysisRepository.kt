@@ -72,8 +72,7 @@ class TripAnalysisRepository internal constructor(
     /** Reads the CSV of trip [tripId] once and returns its statistics, laps for the trip's track, and the route. */
     suspend fun analyze(tripId: Long): AnalysisResult {
         val trip = tripDao.get(tripId) ?: return AnalysisResult.TripNotFound
-        val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile }
-            ?: return AnalysisResult.Failed("The trip file is missing.")
+        val file = existingFile(trip) ?: return AnalysisResult.Failed("The trip file is missing.")
         val track = trip.trackId?.let { trackDao.get(it) }
         return try {
             AnalysisResult.Done(withContext(ioDispatcher) { analyzeFile(trip, file, track) })
@@ -89,7 +88,7 @@ class TripAnalysisRepository internal constructor(
      */
     suspend fun lapTrace(tripId: Long, lap: Lap): LapTrace? {
         val trip = tripDao.get(tripId) ?: return null
-        val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile } ?: return null
+        val file = existingFile(trip) ?: return null
         return try {
             withContext(ioDispatcher) { withTripCsv(file) { csv -> lapTraceOf(csv.samples, lap) } }
         } catch (e: IOException) {
@@ -106,7 +105,7 @@ class TripAnalysisRepository internal constructor(
     suspend fun referenceLap(trackId: Long): List<GeoFix> {
         val track = trackDao.get(trackId) ?: return emptyList()
         for (trip in tripDao.getByTrack(trackId, REFERENCE_LAP_TRIPS).filter { it.endMs != null }) {
-            val file = resolveTripFile(tripsDir, trip.fileName)?.takeIf { it.isFile } ?: continue
+            val file = existingFile(trip) ?: continue
             val lap = try {
                 withContext(ioDispatcher) { referenceLapOf(file, track, trip.lapTimingAfterMs) }
             } catch (e: IOException) {
@@ -128,6 +127,9 @@ class TripAnalysisRepository internal constructor(
         }
         return result
     }
+
+    private suspend fun existingFile(trip: Trip): File? =
+        withContext(ioDispatcher) { resolveExistingTripFile(tripsDir, trip.fileName) }
 
     private fun referenceLapOf(file: File, track: Track, lapTimingAfterMs: Long?): List<GeoFix> = withTripCsv(file) { csv ->
         val analyzer = TripAnalyzer(track.lapGates(), lapTimingAfterMs = lapTimingAfterMs)

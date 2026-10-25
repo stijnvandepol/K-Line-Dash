@@ -58,7 +58,7 @@ class ActiveTrackReleaseTest {
 
     private fun TestScope.recorder() = TripRecorder(
         tripsDir = tripsDir, tripDao = tripDao, settings = settings, poller = pollerFlow,
-        clock = { TEST_BASE_MS + currentTime }, zone = ZoneOffset.UTC, ioDispatcher = StandardTestDispatcher(testScheduler),
+        clock = { TEST_BASE_MS + currentTime }, elapsed = { currentTime }, zone = ZoneOffset.UTC, ioDispatcher = StandardTestDispatcher(testScheduler),
         activeTrack = tracks.activeTrack, releaseTrack = tracks::release,
     )
 

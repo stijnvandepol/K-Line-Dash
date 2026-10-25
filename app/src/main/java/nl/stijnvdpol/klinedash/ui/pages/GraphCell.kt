@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -117,7 +118,7 @@ private fun GraphPlot(
     val colors = KLineTheme.colors
     val measurer = rememberTextMeasurer()
     Spacer(
-        modifier.fillMaxSize().drawWithCache {
+        modifier.fillMaxSize().graphicsLayer().drawWithCache {
             val path = Path()
             val frame = PlotFrame(size, this, measurer, sample)
             val high = ValueLabel(measurer, display.decimals)

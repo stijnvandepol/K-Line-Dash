@@ -17,14 +17,15 @@ import java.net.Socket
  * The read timeout is deliberately left at 0 (infinite): timeouts are enforced by
  * [readUntilPrompt], and closing the socket is what unblocks the reader thread.
  *
- * Android caveat (handled outside this class): when the adapter's Wi-Fi has no internet, Android
- * may keep routing traffic over another network; the app layer may need to bind the process to the
- * Wi-Fi network via ConnectivityManager.
+ * Android caveat: when the adapter's Wi-Fi has no internet, Android keeps mobile data as the
+ * default network and a plain socket to the adapter goes there and fails. The app passes a
+ * [newSocket] that binds the socket to the Wi-Fi network.
  */
 class WifiTransport(
     private val host: String = DEFAULT_HOST,
     private val port: Int = DEFAULT_PORT,
     private val connectTimeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
+    private val newSocket: () -> Socket = ::Socket,
 ) : StreamTransport() {
 
     override val kind: TransportKind = TransportKind.WIFI
@@ -34,7 +35,7 @@ class WifiTransport(
     @Volatile private var socket: Socket? = null
 
     override suspend fun openStreams(): Pair<InputStream, OutputStream> {
-        val s = Socket()
+        val s = withContext(Dispatchers.IO) { newSocket() }
         socket = s
         try {
             // Connect is blocking and not cancellable, but bounded by connectTimeoutMs.

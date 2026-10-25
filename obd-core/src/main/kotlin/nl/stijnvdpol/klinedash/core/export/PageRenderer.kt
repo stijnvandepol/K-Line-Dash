@@ -81,7 +81,7 @@ internal object PageRenderer {
         val sizeKb = String.format(Locale.US, "%.1f KB", file.length() / BYTES_PER_KB)
         val modified = TIME_FORMAT.format(Instant.ofEpochMilli(file.lastModified()))
         return "<li><div>${htmlEncode(file.name)}<small>$sizeKb &middot; $modified</small></div>" +
-            "<a href=\"/download/$index\">Download</a></li>"
+            "<a href=\"/download/$index/${sanitizeDownloadName(file.name)}\">Download</a></li>"
     }
 
     private fun page(title: String, body: String): String =

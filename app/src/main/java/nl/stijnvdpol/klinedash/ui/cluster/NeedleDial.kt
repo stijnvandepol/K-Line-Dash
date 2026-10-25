@@ -84,6 +84,7 @@ internal fun NeedleDial(spec: DialSpec, feed: GaugeFeed, readoutSample: String, 
         Spacer(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer()
                 .drawWithCache {
                     val painter = NeedlePainter(size.minDimension, spec.scale, colors)
                     onDrawBehind { painter.draw(this, feed.drawnValue()) }

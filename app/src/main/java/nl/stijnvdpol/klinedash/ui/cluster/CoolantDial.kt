@@ -182,6 +182,7 @@ internal fun CoolantDial(feed: GaugeFeed, limits: AlertSettings, modifier: Modif
         Spacer(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer()
                 .drawWithCache {
                     val painter = CoolantPointer(CoolantFrame(size), colors, coolantScale(units))
                     onDrawBehind { painter.draw(this, feed.drawnValue()) }

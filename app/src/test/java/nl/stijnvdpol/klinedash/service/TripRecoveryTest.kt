@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.service
 
 import java.io.File
+import java.io.StringReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import nl.stijnvdpol.klinedash.core.obd.Reading
@@ -45,7 +46,7 @@ class TripRecoveryTest {
 
     @Test
     fun completeFileGivesCountEndDistanceAndMaxima() {
-        val summary = checkNotNull(recoverTripSummary(lines(csv(61)), endsWithNewline = true))
+        val summary = checkNotNull(recoverTripSummary(StringReader(csv(61))))
         assertEquals(61, summary.sampleCount)
         assertEquals(startMs + 60_000, summary.endMs)
         assertEquals(1060.0, checkNotNull(summary.maxRpm), 0.001)
@@ -57,22 +58,34 @@ class TripRecoveryTest {
     @Test
     fun rowCutInTheMiddleIsDropped() {
         val cut = csv(10).dropLast(7) // loses the line feed and part of the last row
-        val summary = checkNotNull(recoverTripSummary(lines(cut), endsWithNewline = false))
+        val summary = checkNotNull(recoverTripSummary(StringReader(cut)))
         assertEquals(9, summary.sampleCount)
         assertEquals(startMs + 8_000, summary.endMs)
     }
 
     @Test
     fun headerOnlyOrEmptyFilesHaveNothingToRecover() {
-        assertNull(recoverTripSummary(emptyList(), endsWithNewline = false))
-        assertNull(recoverTripSummary(lines(csv(0)), endsWithNewline = true))
-        assertNull(recoverTripSummary(listOf("\uFEFFtime_iso,elapsed_s"), endsWithNewline = false))
+        assertNull(recoverTripSummary(StringReader("")))
+        assertNull(recoverTripSummary(StringReader(csv(0))))
+        assertNull(recoverTripSummary(StringReader("\uFEFFtime_iso,elapsed_s")))
     }
 
     @Test
     fun rowWithAnUnreadableTimeIsSkipped() {
         val broken = lines(csv(3)).toMutableList().also { it[2] = "garbage,1.0,1000,36,90" }
-        assertEquals(2, recoverTripSummary(broken, endsWithNewline = true)?.sampleCount)
+        assertEquals(2, recoverTripSummary(StringReader(broken.joinToString("\n", postfix = "\n")))?.sampleCount)
+    }
+
+    @Test
+    fun aFileCutInTheMiddleOfARowIsRecoveredFromDiskWithoutThatRow() = runBlocking {
+        val dao = FakeTripDao()
+        val dir = folder.newFolder("trips")
+        File(dir, "cut.csv").writeText("\uFEFF" + csv(10).dropLast(7), Charsets.UTF_8)
+        val id = dao.insert(trip("cut.csv"))
+
+        TripRecovery(dir, dao, Dispatchers.Unconfined).recover(activeTripId = null)
+
+        assertEquals(9, checkNotNull(dao.get(id)).sampleCount)
     }
 
     @Test
@@ -107,9 +120,9 @@ class TripRecoveryTest {
     @Test
     fun recoveredTripWithPositionsUsesGpsDistanceAndKnowsItHasGps() {
         val text = tripCsvOf(circuitFixes(speedKmh = 72.0, durationMs = 60_000))
-        val recovered = checkNotNull(recoverTrip(lines(text), endsWithNewline = true))
+        val recovered = checkNotNull(recoverTrip(StringReader(text)))
         assertTrue(recovered.hasGps)
         assertEquals("1.2 km at 20 m/s, taken from the fixes", 1.2, recovered.stats.gpsDistanceKm, 0.02)
-        assertFalse(checkNotNull(recoverTrip(lines(csv(5)), endsWithNewline = true)).hasGps)
+        assertFalse(checkNotNull(recoverTrip(StringReader(csv(5)))).hasGps)
     }
 }

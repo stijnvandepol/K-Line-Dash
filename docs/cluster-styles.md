@@ -35,8 +35,9 @@ Shared dial rules:
   260 km/h (major every 20, numerals every 40). Redline zone from the redline, caution zone from
   1 000 rpm below it, drawn as an arc band inside the ticks in the theme's caution/danger colours.
   The numerals of those zones take the same colours.
-- Needles move with the same interpolation as the RPM bar (tween as long as the measured update
-  interval, linear) so they glide instead of jumping; the needle is drawn in the draw phase only.
+- Needles move with the same interpolation as the RPM bar (ease-out tween as long as the measured
+  update interval, at most 350 ms) so they glide instead of jumping; the needle is drawn in the
+  draw phase only.
 - A stale value parks nothing: the needle stays where it was and the digital value dims.
 - Engine off: needles at zero, digital RPM "0".
 - No needle bounce, no start-up sweep animation (a driver glances, it must never look busy).
@@ -110,8 +111,8 @@ are plain functions in `ClusterGeometry.kt` with unit tests.
   own layer with `drawWithCache`; the needle is another layer that reads the glided value in the
   draw phase, so a moving needle redraws one path and recomposes nothing. The digital values are
   the only text that recomposes, and only when their text changes.
-- The glide is the one of the RPM bar (`rememberGlide`): a linear tween as long as the measured
-  update interval. It starts at the current reading, so a page that scrolls back into view does not
+- The glide is the one of the RPM bar (`rememberGlide`): an ease-out tween as long as the measured
+  update interval, at most 350 ms. It starts at the current reading, so a page that scrolls back into view does not
   sweep up from 0. A stale reading changes nothing: the needle stays, the digital value dims.
   The coolant pointer reads the latest value directly (it changes slowly), and the engine off
   reading 0 puts every needle at 0.

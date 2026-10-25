@@ -10,6 +10,7 @@ import nl.stijnvdpol.klinedash.core.transport.WifiTransport
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.transport.BleTransport
 import nl.stijnvdpol.klinedash.transport.BtClassicTransport
+import nl.stijnvdpol.klinedash.transport.wifiBoundSocket
 
 object TransportFactory {
 
@@ -50,7 +51,7 @@ object TransportFactory {
                 val port = settings.wifiPort
                 val factory: () -> Transport = {
                     if (host.isEmpty()) throw noAdapter(appContext)
-                    WifiTransport(host, port)
+                    WifiTransport(host, port, newSocket = { wifiBoundSocket(appContext) })
                 }
                 factory to adapterKey(settings)
             }

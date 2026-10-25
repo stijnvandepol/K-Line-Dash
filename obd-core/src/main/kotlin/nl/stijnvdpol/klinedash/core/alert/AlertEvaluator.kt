@@ -9,6 +9,12 @@ import nl.stijnvdpol.klinedash.core.obd.Signals
  * lives in [AlertMemory.values] (named keys below), and the previous [AlertState.active] list
  * provides the hysteresis ("already raised, so clear later").
  *
+ * Time here is whatever clock [AlertInput.nowMs] and the readings' timestamps share. The app passes
+ * a monotonic clock and re-stamps the readings onto it (AlertMonitor), so a head unit without an
+ * RTC, which steps its wall clock when GPS or NTP time arrives, does not distort the ages. Should a
+ * caller use the wall clock anyway, a step back would leave the voltage debounce timer in the
+ * future; that timer then restarts instead of waiting for hours.
+ *
  * Readings older than a freshness window are ignored. The window depends on how often the signal is
  * polled ([PollTier]); on the K-line target car slow signals (battery, MIL, code count) refresh only
  * about every 15 s, so they get twice that. What an ignored reading means differs per rule:
@@ -187,7 +193,10 @@ object AlertEvaluator : AlertRules {
                 memory.remove(timerKey)
                 return
             }
-            val sinceMs = memory.getOrPut(timerKey) { input.nowMs.toDouble() }.toLong()
+            // A timer that lies in the future means the wall clock was stepped back: start over instead of
+            // waiting hours for the clock to catch up.
+            val sinceMs = memory[timerKey]?.toLong()?.takeIf { it <= input.nowMs } ?: input.nowMs
+            memory[timerKey] = sinceMs.toDouble()
             if (input.nowMs - sinceMs >= VOLTAGE_DEBOUNCE_MS) raise(kind, severity, value, sinceMs)
         }
 

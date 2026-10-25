@@ -149,6 +149,7 @@ class Elm327Session(
                 stnId = identity.stnId,
                 usesAdaptiveTiming2 = fastTiming,
             ),
+            supportedPidsReply = protocol.probeReply,
         )
     }
 
@@ -212,7 +213,7 @@ class Elm327Session(
     }
 
     /** The protocol the ECU answered on, and whether it was the saved one. */
-    private class EcuProtocol(val number: String, val isSaved: Boolean)
+    private class EcuProtocol(val number: String, val isSaved: Boolean, val probeReply: ElmResult.Data)
 
     /**
      * Saved protocol first, then ATSP0 auto-detection, then the explicit ladder (K-line, CAN and
@@ -229,7 +230,7 @@ class Elm327Session(
         if (savedProtocol != null) {
             step(onStep, "Connecting to ECU (saved protocol $savedProtocol)")
             val probe = tryProtocol(savedProtocol, unsupported, SAVED_PROBE_TIMEOUT_MS)
-            if (probe is ElmResult.Data) return EcuProtocol(savedProtocol, isSaved = true)
+            if (probe is ElmResult.Data) return EcuProtocol(savedProtocol, isSaved = true, probe)
             log.record(LogKind.INFO, "Saved protocol $savedProtocol failed (${describe(probe)}), falling back to auto-detect")
             // ISO 9141-2 wants the bus idle for a while before the next 5-baud init.
             delay(K_LINE_REINIT_PAUSE_MS)
@@ -238,7 +239,7 @@ class Elm327Session(
         step(onStep, "Detecting protocol (ECU init takes a few seconds)")
         send("ATSP0")
         var lastProbe = probeEcu(DETECT_PROBE_TIMEOUT_MS)
-        if (lastProbe is ElmResult.Data) return EcuProtocol(readDetectedProtocol(), isSaved = false)
+        if (lastProbe is ElmResult.Data) return EcuProtocol(readDetectedProtocol(), isSaved = false, lastProbe)
 
         // Clone auto-search is unreliable, and some Toyota ECUs only answer a 5-baud init to
         // address 0x13. Try the protocols explicitly before giving up.
@@ -247,7 +248,7 @@ class Elm327Session(
             delay(pauseBeforeRungMs(candidate))
             step(onStep, "Trying ${protocolLabel(candidate)}")
             lastProbe = tryProtocol(candidate, unsupported, rungTimeoutMs(candidate))
-            if (lastProbe is ElmResult.Data) return EcuProtocol(candidate, isSaved = false)
+            if (lastProbe is ElmResult.Data) return EcuProtocol(candidate, isSaved = false, lastProbe)
         }
 
         throw EcuNotRespondingException(
@@ -316,14 +317,11 @@ class Elm327Session(
         return result
     }
 
-    /** [execute] for init steps: a banner in reply to anything but ATZ/ATI means the adapter reset. */
+    /** [execute] for init steps: a banner (or LV RESET) in reply to anything but ATZ/ATI means the adapter reset. */
     private suspend fun send(cmd: String, timeoutMs: Long = AT_TIMEOUT_MS): ElmResult {
         val result = execute(cmd, timeoutMs)
-        if (result !is ElmResult.Timeout &&
-            cmd.uppercase() !in BANNER_EXPECTED &&
-            ElmParser.looksLikeReset(result.raw)
-        ) {
-            log.record(LogKind.ERROR, "Unexpected adapter banner in reply to \"$cmd\"")
+        if (ElmParser.isAdapterReset(cmd, result)) {
+            log.record(LogKind.ERROR, "Unexpected adapter reset in reply to \"$cmd\"")
             throw AdapterResetException()
         }
         return result
@@ -364,7 +362,6 @@ class Elm327Session(
         private const val ADAPTIVE_TIMING_2 = "ATAT2"
         private const val UNKNOWN_VERSION = "unknown"
         private val FAST_TIMING_FAMILIES = setOf(ChipFamily.STN, ChipFamily.GENUINE_ELM)
-        private val BANNER_EXPECTED = setOf("ATZ", "ATWS", "ATI")
 
         private const val AT_TIMEOUT_MS = 2_000L
         private const val RESET_TIMEOUT_MS = 4_000L

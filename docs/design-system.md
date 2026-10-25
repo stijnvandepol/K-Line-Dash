@@ -106,9 +106,10 @@ measured request rate ("ISO 9141-2  4.4/s").
   segments in `inkFaint`. Scale numbers every 1 000 rpm below the bar in `fieldLabel`/`inkMuted`,
   left-aligned to their segment (the last one right-aligned to the end of the bar). The
   tachometers of the cluster styles use the same scale, zones and numerals.
-- **Bar motion:** the lit length is interpolated between readings with a linear tween as long
-  as the measured RPM update interval (clamped 100 to 1 000 ms), so the bar sweeps instead of
-  jumping. No other animation on the dashboard.
+- **Bar motion:** the lit length moves to each reading with an ease-out tween as long as the
+  measured RPM update interval, clamped 100 to 350 ms: on a fast link the bar sweeps without
+  stopping, on a slow K-line link it reaches the new value within a third of a second instead of
+  trailing a whole interval. No other animation on the dashboard.
 - **Primary row:** three fields with widths 2 : 1.4 : 1. Label top-left, unit top-right in the
   same `fieldLabel` style, value right-aligned at the bottom of the field, so all three share
   one baseline. The numerals grow past their design size to fill the field: RPM up to 1.75x

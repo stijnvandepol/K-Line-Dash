@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -29,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.core.obd.PollMode
+import nl.stijnvdpol.klinedash.core.obd.PollStats
 import nl.stijnvdpol.klinedash.service.formatNumber
 import nl.stijnvdpol.klinedash.service.headline
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
@@ -49,6 +52,17 @@ private const val BUTTONS_WEIGHT = 6f
 private const val STATUS_WEIGHT = 3f
 private const val RATE_SAMPLE = "88.8/s"
 private val StatusGap = 12.dp
+
+/**
+ * What the status chip shows of [PollStats]: the engine-off state and the request rate as text.
+ * The stats are a new object with every request; this only changes when the shown text does.
+ */
+internal data class LinkRate(val isEngineOff: Boolean, val rateText: String)
+
+internal fun linkRateOf(stats: PollStats): LinkRate {
+    val rate = if (stats.mode == PollMode.ACTIVE) formatNumber(stats.requestsPerSecond, 1) else MISSING_VALUE
+    return LinkRate(stats.mode == PollMode.ENGINE_OFF, rate)
+}
 
 /**
  * Bottom bar: five text buttons separated by rules, the active one marked by a 4 dp bar in the accent colour on
@@ -105,7 +119,8 @@ private fun NavButton(screen: Screen, isSelected: Boolean, onClick: () -> Unit, 
 private fun LinkStatus(onOpenGps: () -> Unit, modifier: Modifier) {
     val vm = graphViewModel { LiveDataViewModel.forGraph(it) }
     val connection by vm.connectionState.collectAsStateWithLifecycle()
-    val stats by vm.stats.collectAsStateWithLifecycle()
+    val stats = vm.stats.collectAsStateWithLifecycle()
+    val rate by remember(stats) { derivedStateOf { linkRateOf(stats.value) } }
     val colors = KLineTheme.colors
     val state = connection
     val rateWidth = rememberTextWidth(RATE_SAMPLE, KLineType.caption)
@@ -120,16 +135,15 @@ private fun LinkStatus(onOpenGps: () -> Unit, modifier: Modifier) {
         Spacer(Modifier.width(StatusGap))
         if (state !is ConnectionState.Connected) {
             Text(state.headline(LocalContext.current.resources), style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
-        } else if (stats.mode == PollMode.ENGINE_OFF) {
+        } else if (rate.isEngineOff) {
             Text(stringResource(R.string.status_engine_off), style = KLineType.caption, color = colors.ink, maxLines = 1)
         } else {
             if (showProtocol) {
                 Text(state.info.protocolName, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
                 Spacer(Modifier.width(StatusGap))
             }
-            val rate = if (stats.mode == PollMode.ACTIVE) formatNumber(stats.requestsPerSecond, 1) else MISSING_VALUE
             Text(
-                stringResource(R.string.status_rate, rate),
+                stringResource(R.string.status_rate, rate.rateText),
                 style = KLineType.caption,
                 color = colors.ink,
                 textAlign = TextAlign.End,

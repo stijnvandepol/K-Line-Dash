@@ -372,6 +372,34 @@ class ElmParserTest {
     }
 
     @Test
+    fun `a banner or lv reset in reply to anything but atz atws and ati is an adapter reset`() {
+        val banner = "\r\rELM327 v1.5\r\r"
+        for (command in listOf("010C", "010C1", "ATRV", "0100")) {
+            assertTrue(command, ElmParser.isAdapterReset(command, ElmParser.parse(command, banner)))
+        }
+        val lowVoltage = ElmParser.parse("010C", "LV RESET\r\r")
+        assertIs<ElmResult.BusError>(lowVoltage)
+        assertTrue(ElmParser.isAdapterReset("010C", lowVoltage))
+    }
+
+    @Test
+    fun `the banner is the expected answer to atz atws and ati`() {
+        for (command in listOf("ATZ", "atz", "AT Z", "ATWS", "ATI")) {
+            val result = ElmParser.parse(command, "\r\rELM327 v1.5\r\r")
+            assertFalse(command, ElmParser.isAdapterReset(command, result))
+        }
+    }
+
+    @Test
+    fun `ordinary replies and timeouts are not an adapter reset`() {
+        assertFalse(ElmParser.isAdapterReset("010C", ElmParser.parse("010C", "41 0C 1A F8\r\r")))
+        assertFalse(ElmParser.isAdapterReset("010C", ElmParser.parse("010C", "NO DATA\r\r")))
+        assertFalse(ElmParser.isAdapterReset("010C", ElmParser.parse("010C", "DATA ERROR\r\r")))
+        assertFalse(ElmParser.isAdapterReset("ATRV", ElmParser.parse("ATRV", "12.4V\r\r")))
+        assertFalse(ElmParser.isAdapterReset("010C", ElmResult.Timeout("ELM327 v1.5")))
+    }
+
+    @Test
     fun `data results expose parsed lines through the sealed type`() {
         val result = ElmParser.parse("010C", "41 0C 1A F8\r\r")
         val data = assertIs<ElmResult.Data>(result)

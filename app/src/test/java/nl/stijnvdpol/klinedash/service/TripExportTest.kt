@@ -2,13 +2,18 @@ package nl.stijnvdpol.klinedash.service
 
 import android.content.ContentResolver
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import nl.stijnvdpol.klinedash.core.geo.Geodesy
 import nl.stijnvdpol.klinedash.data.GateSpec
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.Trip
+import nl.stijnvdpol.klinedash.data.TripDao
 import nl.stijnvdpol.klinedash.data.TrackRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -265,5 +270,36 @@ class TripExportTest {
         assertEquals("application/gpx+xml", mimeTypeOf("a.gpx"))
         assertEquals("application/octet-stream", mimeTypeOf("a.vbo"))
         assertEquals("trip-1.laps.csv", exportFileName("trip-1.csv", ExportFormat.LAPS_CSV))
+    }
+
+    /** Counts how many exports of the same trip are inside the exporter at once (each starts with a [TripDao.get]). */
+    private class OverlapCountingDao(private val rows: TripDao) : TripDao by rows {
+        private val inFlight = AtomicInteger()
+        val maxInFlight = AtomicInteger()
+
+        override suspend fun get(id: Long): Trip? {
+            maxInFlight.accumulateAndGet(inFlight.incrementAndGet(), ::maxOf)
+            try {
+                delay(20)
+                return rows.get(id)
+            } finally {
+                inFlight.decrementAndGet()
+            }
+        }
+    }
+
+    @Test
+    fun exportsOfTheSameTripRunOneAfterTheOther() = runBlocking {
+        val trip = storeTrip()
+        val counting = OverlapCountingDao(tripDao)
+        val parallelAnalysis = TripAnalysisRepository(tripsDir, tripDao, trackDao, Dispatchers.Unconfined)
+        val parallel = TripExporter(tripsDir, counting, parallelAnalysis, recording, { TEST_BASE_MS }, Dispatchers.IO)
+
+        val results = (1..4).map { async(Dispatchers.Default) { parallel.exportTrip(trip.id) } }.awaitAll()
+
+        assertTrue(results.all { it is ExportResult.Done })
+        assertEquals("one export of this trip at a time", 1, counting.maxInFlight.get())
+        assertTrue(File(tripsDir, exportFileName(trip.fileName, ExportFormat.GPX)).isFile)
+        assertTrue("no half-written file is left behind", tripsDir.listFiles().orEmpty().none { it.name.endsWith(PARTIAL_FILE_SUFFIX) })
     }
 }

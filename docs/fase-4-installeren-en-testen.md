@@ -162,7 +162,7 @@ een amber kader en de balk **CHECK ENGINE LIGHT ON**.
       ```bash
       adb forward tcp:8080 tcp:8080
       ```
-      en open `http://localhost:8080` in de browser op de pc. Verwacht de pagina "K-Line Dash export"
+      en open `http://127.0.0.1:8080` in de browser (niet `localhost`: de export accepteert alleen een IP-adres) op de pc. Verwacht de pagina "K-Line Dash export"
       met een PIN-veld; na de juiste PIN de ritlijst.
     - Tik **Stop Wi-Fi export**: de pagina is niet meer bereikbaar. Een nieuwe start geeft een **nieuwe PIN**.
 11. **Kopiëren naar USB of SD.** Tik **Copy to USB or SD card**. Het systeem opent zijn mappenkiezer

@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -163,8 +164,8 @@ private fun ActionCell(modifier: Modifier, content: @Composable () -> Unit) {
 @Composable
 private fun BusyPane(title: String, hint: String) {
     val colors = KLineTheme.colors
-    val startMs = remember { System.currentTimeMillis() }
-    val nowMs by rememberNowMs()
+    val startMs = remember { SystemClock.elapsedRealtime() }
+    val nowMs by rememberElapsedMs()
     Column(
         Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,

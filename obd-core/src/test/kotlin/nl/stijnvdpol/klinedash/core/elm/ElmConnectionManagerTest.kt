@@ -245,6 +245,27 @@ class ElmConnectionManagerTest {
     }
 
     @Test
+    fun `an adapter that resets itself mid-stream is reconnected at once`() = runTest {
+        val config = SimulatorConfig()
+        val manager = ElmConnectionManager({ SimulatorTransport(config) }, "sim", FakeProtocolStore(), backgroundScope)
+        manager.start()
+        withTimeout(60_000) { manager.state.first { it is ConnectionState.Connected } }
+
+        config.spontaneousResetRate = 1.0
+        val reply = manager.execute("010C") // answered with the power-up banner
+        config.spontaneousResetRate = 0.0
+
+        assertIs<ElmResult.Garbage>(reply)
+        assertFails<IllegalStateException> { manager.execute("010C") }
+        val reconnecting = assertIs<ConnectionState.Reconnecting>(
+            withTimeout(5_000) { manager.state.first { it is ConnectionState.Reconnecting } },
+        )
+        assertTrue(reconnecting.reason.contains("reset"))
+        assertIs<ConnectionState.Connected>(withTimeout(300_000) { manager.state.first { it is ConnectionState.Connected } })
+        assertTrue(manager.execute("010C") is ElmResult.Data)
+    }
+
+    @Test
     fun `commands are serialised`() = runTest {
         val manager = ElmConnectionManager({ SimulatorTransport() }, "sim", FakeProtocolStore(), backgroundScope)
         manager.start()

@@ -36,6 +36,13 @@ fun resolveTripFile(tripsDir: File, fileName: String): File? {
 }
 
 /**
+ * [resolveTripFile] when that file exists, else null (bad name or file gone). It reads the file
+ * system: call it off the main thread.
+ */
+fun resolveExistingTripFile(tripsDir: File, fileName: String): File? =
+    resolveTripFile(tripsDir, fileName)?.takeIf { it.isFile }
+
+/**
  * The files generated from a trip CSV for analysis on a PC, named after the trip: the trip
  * `trip-20261022-140307.csv` gives `trip-20261022-140307.vbo`, `.gpx`, `.pc.csv` and `.laps.csv`.
  * They live next to the trip, so the Wi-Fi export, the USB copy and the delete of the trip handle
@@ -65,7 +72,7 @@ fun exportFileName(tripFileName: String, format: ExportFormat): String = tripBas
 
 /** The generated files of [tripFileName] that exist now. */
 fun derivedFiles(tripsDir: File, tripFileName: String): List<File> =
-    ExportFormat.entries.mapNotNull { resolveTripFile(tripsDir, exportFileName(tripFileName, it))?.takeIf(File::isFile) }
+    ExportFormat.entries.mapNotNull { resolveExistingTripFile(tripsDir, exportFileName(tripFileName, it)) }
 
 /** Starts the CSV files: Excel on Windows misreads UTF-8 without it (the headers hold a degree sign). */
 internal const val BYTE_ORDER_MARK = "\uFEFF"

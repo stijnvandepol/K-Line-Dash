@@ -58,6 +58,8 @@
     <string name="sensors_column_value">Value</string>
     <string name="sensors_column_rate">Updates</string>
     <string name="sensors_rate">%1$s/s</string>
+    <string name="sensors_link_label">Link</string>
+    <string name="sensors_link_summary">%1$s requests/s, %2$s ms per request</string>
 
     <!-- Diagnostics -->
     <string name="diag_label_mil">Check engine</string>

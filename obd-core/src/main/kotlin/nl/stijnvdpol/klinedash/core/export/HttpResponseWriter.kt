@@ -10,6 +10,7 @@ private val REASONS = mapOf(
     303 to "See Other",
     400 to "Bad Request",
     401 to "Unauthorized",
+    403 to "Forbidden",
     404 to "Not Found",
     405 to "Method Not Allowed",
     408 to "Request Timeout",

@@ -55,9 +55,21 @@ data class AdapterInfo(
     val unsupportedCommands: Set<String>,
     /** What the init probes revealed about the adapter itself; [AdapterProfile.UNKNOWN] when nothing is known. */
     val profile: AdapterProfile = AdapterProfile.UNKNOWN,
+    /**
+     * The ECU's answer to the 0100 probe that proved the protocol, for the poller to read the
+     * supported PIDs from without asking again; null when the connection did not keep one.
+     */
+    val supportedPidsReply: ElmResult.Data? = null,
 ) {
     /** True when the car talks CAN (ISO 15765, ELM protocols 6-9), in which multi-PID requests are possible. */
     val isCan: Boolean get() = isCanProtocol(protocolNumber)
+
+    /**
+     * True on the K-line protocols (ISO 9141-2 and ISO 14230-4, ELM protocols 3-5, and the Toyota
+     * profile): the bus goes to sleep after a few idle seconds and the next request has to wake the
+     * ECU with a slow 5-baud init.
+     */
+    val isKLine: Boolean get() = isKLineProtocol(protocolNumber)
 }
 
 /** True for ELM protocol numbers 6-9 (also in the "A6" auto-detected spelling): ISO 15765-4 CAN. */
@@ -65,6 +77,13 @@ internal fun isCanProtocol(protocolNumber: String): Boolean =
     ElmParser.parseProtocolNumber(protocolNumber)?.single() in CAN_PROTOCOLS
 
 private val CAN_PROTOCOLS = '6'..'9'
+
+/** True for ELM protocol numbers 3-5 (ISO 9141-2, ISO 14230-4 slow and fast init) and the Toyota profile. */
+internal fun isKLineProtocol(protocolNumber: String): Boolean =
+    protocolNumber == Elm327Session.TOYOTA_PROFILE ||
+        ElmParser.parseProtocolNumber(protocolNumber)?.single() in K_LINE_PROTOCOLS
+
+private val K_LINE_PROTOCOLS = '3'..'5'
 
 /** Persists the detected protocol per adapter, so the next start can skip ATSP0 searching. */
 interface ProtocolStore {

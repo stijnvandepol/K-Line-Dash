@@ -104,14 +104,15 @@ private fun rememberMinuteOfDay(isTicking: Boolean): State<Int> {
 
 /**
  * Applies the theme in effect to [content] as soon as the settings and the theme files are
- * loaded (nothing is drawn before that, so no wrong theme flashes by). Follows the settings, the
+ * loaded (nothing is drawn before that, so no wrong theme flashes by). Both are read ahead from
+ * KLineDashApp.onCreate (see AppGraph.warmUp), so they are normally there in the first composition. Follows the settings, the
  * clock (schedule mode) and the system night flag (the activity handles `uiMode` itself, so the
  * configuration changes under it without a restart).
  */
 @Composable
 fun ActiveThemeHost(content: @Composable () -> Unit) {
     val graph = LocalContext.current.appGraph
-    val settings by graph.themeSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)
+    val settings by graph.themeSettings.collectAsStateWithLifecycle()
     val catalog by graph.themeCatalog.catalog.collectAsStateWithLifecycle()
     val isSystemNight = LocalConfiguration.current.isNight()
     val minuteOfDay by rememberMinuteOfDay(settings?.mode == DayNightMode.SCHEDULE)

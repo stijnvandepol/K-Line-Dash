@@ -7,13 +7,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import nl.stijnvdpol.klinedash.core.car.CarMake
 import nl.stijnvdpol.klinedash.core.car.EngineNotes
@@ -27,13 +31,20 @@ import nl.stijnvdpol.klinedash.data.AlertSettingsRepository
 import nl.stijnvdpol.klinedash.data.CarSettingsRepository
 import nl.stijnvdpol.klinedash.data.CarIdentity
 import nl.stijnvdpol.klinedash.data.AppDatabase
+import nl.stijnvdpol.klinedash.data.DashboardLayout
 import nl.stijnvdpol.klinedash.data.DashboardLayoutRepository
+import nl.stijnvdpol.klinedash.data.ConnectionSettings
+import nl.stijnvdpol.klinedash.data.CarSettings
+import nl.stijnvdpol.klinedash.data.GeneralSettings
+import nl.stijnvdpol.klinedash.data.ThemeSettings
 import nl.stijnvdpol.klinedash.data.GeneralSettingsRepository
 import nl.stijnvdpol.klinedash.data.GpsSettingsRepository
 import nl.stijnvdpol.klinedash.data.MIGRATION_1_2
 import nl.stijnvdpol.klinedash.data.MIGRATION_2_3
 import nl.stijnvdpol.klinedash.data.MIGRATION_3_4
 import nl.stijnvdpol.klinedash.data.RoomProtocolStore
+import nl.stijnvdpol.klinedash.data.SettingsDao
+import nl.stijnvdpol.klinedash.data.SharedSettingsDao
 import nl.stijnvdpol.klinedash.data.SettingsRepository
 import nl.stijnvdpol.klinedash.data.StartupSettingsRepository
 import nl.stijnvdpol.klinedash.data.ThemeSettingsRepository
@@ -76,15 +87,17 @@ class AppGraph(val appContext: Context) {
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
-    val settingsRepository: SettingsRepository by lazy { SettingsRepository(database.settingsDao()) }
-    val protocolStore: ProtocolStore by lazy { RoomProtocolStore(database.settingsDao()) }
 
     /**
-     * For work that belongs to the process rather than to a screen or the service: the shared GPS
-     * and settings flows, the export server, background loads, boot handling. Never cancelled on
-     * purpose, it ends with the process; a failing child does not cancel the others.
+     * The settings table behind one shared query for all settings repositories. It starts reading as
+     * soon as it is created (see [warmUp]), after the 1.1.0 car profile was carried over, so no
+     * reader sees the old rows.
      */
-    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val sharedSettingsDao: SettingsDao by lazy {
+        SharedSettingsDao(database.settingsDao(), applicationScope) { carSettingsRepository.migrateEngineProfile() }
+    }
+    val settingsRepository: SettingsRepository by lazy { SettingsRepository(sharedSettingsDao) }
+    val protocolStore: ProtocolStore by lazy { RoomProtocolStore(database.settingsDao()) }
 
     /**
      * Uncaught exceptions of this process, installed as the crash handler by KLineDashApp. Internal
@@ -93,12 +106,20 @@ class AppGraph(val appContext: Context) {
      */
     val crashLog: CrashLog by lazy { CrashLog(File(appContext.applicationInfo.dataDir, CRASH_DIR_NAME)) }
 
-    val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(database.settingsDao()) }
-    val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(database.settingsDao()) }
-    val dashboardLayoutRepository: DashboardLayoutRepository by lazy { DashboardLayoutRepository(database.settingsDao()) }
-    val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(database.settingsDao()) }
-    val generalSettingsRepository: GeneralSettingsRepository by lazy { GeneralSettingsRepository(database.settingsDao()) }
-    val carSettingsRepository: CarSettingsRepository by lazy { CarSettingsRepository(database.settingsDao()) }
+    /**
+     * For work that belongs to the process rather than to a screen or the service: the shared GPS
+     * and settings flows, the export server, background loads, boot handling. Never cancelled on
+     * purpose, it ends with the process; a failing child does not cancel the others, and an exception
+     * nobody caught goes to the [crashLog] instead of ending the app.
+     */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + crashLog.asCoroutineExceptionHandler(TAG))
+
+    val alertSettingsRepository: AlertSettingsRepository by lazy { AlertSettingsRepository(sharedSettingsDao) }
+    val tripSettingsRepository: TripSettingsRepository by lazy { TripSettingsRepository(sharedSettingsDao) }
+    val dashboardLayoutRepository: DashboardLayoutRepository by lazy { DashboardLayoutRepository(sharedSettingsDao) }
+    val startupSettingsRepository: StartupSettingsRepository by lazy { StartupSettingsRepository(sharedSettingsDao) }
+    val generalSettingsRepository: GeneralSettingsRepository by lazy { GeneralSettingsRepository(sharedSettingsDao) }
+    val carSettingsRepository: CarSettingsRepository by lazy { CarSettingsRepository(sharedSettingsDao) }
 
     /** Reads the VIN after connecting; process-wide because it remembers which adapters have answered. */
     val vinDetector: VinDetector by lazy { VinDetector(carSettingsRepository) }
@@ -113,7 +134,7 @@ class AppGraph(val appContext: Context) {
         external ?: File(appContext.filesDir, TRIPS_DIR_NAME)
     }
 
-    val gpsSettingsRepository: GpsSettingsRepository by lazy { GpsSettingsRepository(database.settingsDao()) }
+    val gpsSettingsRepository: GpsSettingsRepository by lazy { GpsSettingsRepository(sharedSettingsDao) }
     val trackRepository: TrackRepository by lazy {
         TrackRepository(database.trackDao(), database.tripDao(), gpsSettingsRepository)
     }
@@ -193,7 +214,7 @@ class AppGraph(val appContext: Context) {
             }
         }.await()
 
-    val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(database.settingsDao()) }
+    val themeSettingsRepository: ThemeSettingsRepository by lazy { ThemeSettingsRepository(sharedSettingsDao) }
 
     /**
      * Where users put their own theme files; created on first use, by the theme loader off the main
@@ -212,6 +233,31 @@ class AppGraph(val appContext: Context) {
             userDir = { themesDir },
         )
         ThemeCatalogSource(loader, applicationScope).also { it.reload() }
+    }
+
+    /*
+     * What the first frame needs, read ahead of the UI: null until read, after that the value the
+     * screens start with, so they draw content in their first composition instead of waiting for
+     * their own read. All of them follow the one shared settings query.
+     */
+    val generalSettings: StateFlow<GeneralSettings?> by lazy { generalSettingsRepository.settings.readAhead() }
+    val carSettings: StateFlow<CarSettings?> by lazy { carSettingsRepository.settings.readAhead() }
+    val themeSettings: StateFlow<ThemeSettings?> by lazy { themeSettingsRepository.settings.readAhead() }
+    val connectionSettings: StateFlow<ConnectionSettings?> by lazy { settingsRepository.connectionSettings.readAhead() }
+    val dashboardLayout: StateFlow<DashboardLayout?> by lazy { dashboardLayoutRepository.layout.readAhead() }
+
+    private fun <T : Any> Flow<T>.readAhead(): StateFlow<T?> = stateIn(applicationScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Starts reading everything the first frame needs, in parallel and off the main thread: the
+     * settings (one query, see [sharedSettingsDao]) and the theme files. The returned job is done
+     * when the settings are in, which is also when work that would compete for the first database
+     * open can start.
+     */
+    fun warmUp(): Job = applicationScope.launch {
+        themeCatalog
+        val settings = listOf(generalSettings, carSettings, themeSettings, connectionSettings, dashboardLayout)
+        settings.forEach { state -> state.first { it != null } }
     }
 }
 

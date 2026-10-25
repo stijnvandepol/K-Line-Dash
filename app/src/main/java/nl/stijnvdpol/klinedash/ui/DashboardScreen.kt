@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.ui
 
+import androidx.activity.compose.ReportDrawn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -47,7 +48,8 @@ private const val PAGE_NAME_MS = 1_000L
  * The dashboard: the pages of the layout side by side, swiped horizontally. Asks the poller for
  * exactly what the current page shows, while the dashboard is visible, and names the page for a
  * second after each swipe. While no adapter is chosen (and the simulator is not either) it shows
- * [DashEmptyState] instead: a wall of "--" tells a new user nothing.
+ * [DashEmptyState] instead: a wall of "--" tells a new user nothing. The first time either shows,
+ * the activity reports itself as fully drawn (the "Fully drawn" time of `am start -W`).
  *
  * @param onSetUpAdapter opens the first-run setup.
  * @param onTrySimulator switches to the simulator and connects.
@@ -61,9 +63,13 @@ fun DashboardScreen(onSetUpAdapter: () -> Unit, onTrySimulator: () -> Unit) {
     val adapter by connection.settings.collectAsStateWithLifecycle()
     val loadedAdapter = adapter ?: return
     if (!loadedAdapter.hasAdapter) {
+        ReportDrawn()
         DashEmptyState(onSetUpAdapter, onTrySimulator)
     } else {
-        layout?.let { DashboardPager(it, live, dashboard) }
+        layout?.let {
+            ReportDrawn()
+            DashboardPager(it, live, dashboard)
+        }
     }
 }
 

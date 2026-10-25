@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.core.alert
 
+import kotlin.time.Duration.Companion.hours
 import nl.stijnvdpol.klinedash.core.obd.Reading
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,6 +12,7 @@ class AlertEvaluatorTest {
 
     private val settings = AlertSettings()
     private val t0 = 1_000_000L
+    private val stepBackMs = 3.hours.inWholeMilliseconds
 
     /** Evaluates one moment; readings are stamped [ageMs] before [nowMs] unless given a pair. */
     private fun step(
@@ -247,6 +249,19 @@ class AlertEvaluatorTest {
         val raised = raiseVoltage("battery" to 13.0, "rpm" to 2_000.0)
         val stopped = step(raised, t0 + 20_000, "battery" to 12.4, "rpm" to 0.0)
         assertNull(stopped.alert(AlertKind.VOLTAGE_LOW))
+    }
+
+    @Test
+    fun aWallClockStepBackDuringTheVoltageDebounceRestartsTheTimer() {
+        val readings = arrayOf("battery" to 13.0, "rpm" to 2_000.0)
+        val first = step(AlertState(), t0, *readings)
+        val afterStep = t0 - stepBackMs
+
+        val restarted = step(first, afterStep, *readings)
+        assertNull(restarted.alert(AlertKind.VOLTAGE_LOW))
+
+        val raised = step(restarted, afterStep + 10_000, *readings)
+        assertEquals(afterStep, raised.alert(AlertKind.VOLTAGE_LOW)!!.sinceMs)
     }
 
     /** Feeds the same voltage readings at t0 and t0 + 10 s, which is exactly the debounce. */

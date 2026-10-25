@@ -15,11 +15,16 @@ import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.Level
+import java.util.logging.Logger
+import nl.stijnvdpol.klinedash.core.time.monotonicMillis
 
 private const val WORKER_THREADS = 4
 private const val PENDING_CONNECTIONS = 8
 private const val ACCEPT_BACKLOG = 16
 private const val SOCKET_READ_TIMEOUT_MS = 10_000
+private const val INTERNAL_ERROR_STATUS = 500
+private val LOGGER: Logger = Logger.getLogger(HttpTripExportServer::class.java.name)
 private const val DRAIN_TIMEOUT_MS = 300
 private const val DRAIN_CHUNK_BYTES = 4096
 private const val MAX_DRAIN_BYTES = 64 * 1024
@@ -32,11 +37,17 @@ internal const val WRITE_STALL_TIMEOUT_MS = 30_000L
  * Plain-HTTP trip export server (approved exception to guidelines §6, see [TripExportServer]).
  * Short-lived `Connection: close` requests on a small fixed worker pool; nothing about the PIN or
  * session tokens is logged.
+ *
+ * [clock] times the idle stop and the write-stall check, so it has to be monotonic: a wall clock
+ * stepped back by GPS or NTP time would keep the export open for hours, one stepped forward would
+ * close it at once. A bug in the request handling is passed to [onInternalError] (logged by default)
+ * and answered with a 500; it never leaves the worker thread, where it would kill the whole app.
  */
 class HttpTripExportServer(
     private val config: ExportServerConfig,
     private val files: TripFileSource,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = ::monotonicMillis,
+    private val onInternalError: (Throwable) -> Unit = ::logInternalError,
 ) : TripExportServer {
 
     private class Running(
@@ -44,6 +55,7 @@ class HttpTripExportServer(
         val workers: ThreadPoolExecutor,
         val scheduler: ScheduledExecutorService,
         val handler: ExportRequestHandler,
+        val activity: ExportActivity,
     )
 
     private val lifecycleLock = Any()
@@ -51,7 +63,6 @@ class HttpTripExportServer(
     private val openSockets = ConcurrentHashMap.newKeySet<Socket>()
     private val responses = ConcurrentHashMap<Socket, ProgressOutputStream>()
     private val activeConnections = AtomicInteger(0)
-    @Volatile private var lastRequestMs = 0L
 
     override val isRunning: Boolean get() = running != null
 
@@ -64,9 +75,9 @@ class HttpTripExportServer(
             ArrayBlockingQueue(PENDING_CONNECTIONS), daemonThreads("trip-export-worker"),
         )
         val scheduler = Executors.newSingleThreadScheduledExecutor(daemonThreads("trip-export-idle"))
-        val handler = ExportRequestHandler(ExportAuth(config.pin, config.maxPinAttempts), files)
-        lastRequestMs = clock()
-        running = Running(serverSocket, workers, scheduler, handler)
+        val activity = ExportActivity(clock)
+        val handler = ExportRequestHandler(ExportAuth(config.pin, config.maxPinAttempts), files, activity)
+        running = Running(serverSocket, workers, scheduler, handler, activity)
         scheduler.scheduleWithFixedDelay(::checkIdle, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS)
         scheduler.scheduleWithFixedDelay(
             ::closeStalledResponses, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS,
@@ -104,10 +115,10 @@ class HttpTripExportServer(
         return socket
     }
 
-    /** Stops the server when no request has arrived for the configured idle time. */
+    /** Stops the server when nobody has logged in or used a session for the configured idle time. */
     internal fun checkIdle() {
-        if (running == null || activeConnections.get() > 0) return
-        if (clock() - lastRequestMs >= config.idleTimeoutMs) stop()
+        val current = running ?: return
+        if (current.activity.isIdleFor(config.idleTimeoutMs)) stop()
     }
 
     /** Closes connections whose response has not moved for [WRITE_STALL_TIMEOUT_MS]; frees their workers. */
@@ -163,10 +174,8 @@ class HttpTripExportServer(
         activeConnections.incrementAndGet()
         openSockets.add(socket)
         try {
-            socket.soTimeout = SOCKET_READ_TIMEOUT_MS
             if (running == null) return
-            val request = RequestReader.read(socket.getInputStream())
-            lastRequestMs = clock()
+            val request = RequestReader.read(socket.getInputStream(), SOCKET_READ_TIMEOUT_MS) { socket.soTimeout = it }
             val response = ProgressOutputStream(socket.getOutputStream(), clock)
             responses[socket] = response
             handler.handle(request, response)
@@ -175,13 +184,14 @@ class HttpTripExportServer(
         } catch (_: IOException) {
             // Client went away, timed out or the server is stopping: nothing useful left to do.
         } catch (bug: RuntimeException) {
-            replyError(socket, 500)
-            throw bug
+            // Rethrowing would reach the default uncaught-exception handler of this daemon thread,
+            // which ends the whole app (and a running trip); any device on the Wi-Fi could trigger it.
+            onInternalError(bug)
+            replyError(socket, INTERNAL_ERROR_STATUS)
         } finally {
             responses.remove(socket)
             openSockets.remove(socket)
             closeQuietly(socket)
-            lastRequestMs = clock()
             activeConnections.decrementAndGet()
         }
     }
@@ -231,4 +241,8 @@ class HttpTripExportServer(
             // Best-effort cleanup: stop() promises not to throw.
         }
     }
+}
+
+private fun logInternalError(error: Throwable) {
+    LOGGER.log(Level.SEVERE, "Trip export: unexpected error while serving a request", error)
 }

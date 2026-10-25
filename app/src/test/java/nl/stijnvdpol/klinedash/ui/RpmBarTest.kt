@@ -91,20 +91,26 @@ class RpmBarTest {
     }
 
     @Test
-    fun `bar takes as long as the measured interval between readings`() {
-        assertEquals(400, sweepDurationMs(2.5))
-        assertEquals(1000, sweepDurationMs(1.0))
+    fun `on a fast link the bar takes as long as the measured interval between readings`() {
+        assertEquals(250, sweepDurationMs(4.0))
+        assertEquals(125, sweepDurationMs(8.0))
     }
 
     @Test
-    fun `sweep duration is clamped between 100 and 1000 ms`() {
+    fun `on a slow link the bar arrives within 350 ms instead of trailing a whole interval`() {
+        assertEquals(350, sweepDurationMs(2.0))
+        assertEquals(350, sweepDurationMs(0.5))
+    }
+
+    @Test
+    fun `sweep duration is clamped between 100 and 350 ms`() {
         assertEquals(100, sweepDurationMs(50.0))
-        assertEquals(1000, sweepDurationMs(0.2))
+        assertEquals(350, sweepDurationMs(0.2))
     }
 
     @Test
-    fun `sweep duration falls back to a default before anything is measured`() {
-        assertEquals(500, sweepDurationMs(null))
-        assertEquals(500, sweepDurationMs(0.0))
+    fun `sweep duration falls back to the longest glide before anything is measured`() {
+        assertEquals(350, sweepDurationMs(null))
+        assertEquals(350, sweepDurationMs(0.0))
     }
 }

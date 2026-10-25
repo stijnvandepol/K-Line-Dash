@@ -51,7 +51,7 @@ class TripRecorderGpsTest {
         val analysis = TripAnalysisRepository(tripsDir, tripDao, trackDao, dispatcher)
         return TripRecorder(
             tripsDir = tripsDir, tripDao = tripDao, settings = settings, poller = poller,
-            clock = { TEST_BASE_MS + currentTime }, zone = ZoneOffset.UTC, ioDispatcher = dispatcher,
+            clock = { TEST_BASE_MS + currentTime }, elapsed = { currentTime }, zone = ZoneOffset.UTC, ioDispatcher = dispatcher,
             location = location, activeTrack = activeTrack, refreshSummary = { analysis.refreshSummary(it) },
         )
     }
@@ -68,7 +68,7 @@ class TripRecorderGpsTest {
 
     @Test
     fun aTripOnTheSimulatedCircuitRecordsPositionsAndTimesTheLaps() = runTest {
-        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime })
+        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime }, elapsed = { currentTime })
         trackDao.insert(circuitTrack(id = 0))
         activeTrack.value = trackDao.get(1)
         val recorder = recorder(source)
@@ -211,7 +211,7 @@ class TripRecorderGpsTest {
 
     @Test
     fun aLineSetMidTripGivesTheSameLapsLiveAndInTheStoredTrip() = runTest {
-        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime })
+        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime }, elapsed = { currentTime })
         val recorder = recorder(source)
         backgroundScope.launch { recorder.run() }
         source.start()
@@ -266,7 +266,7 @@ class TripRecorderGpsTest {
 
     @Test
     fun addingASectorLineWhileTimingKeepsTheLapClockRunning() = runTest {
-        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime })
+        val source = SimulatedLocationSource(pollerFlow, backgroundScope, clock = { TEST_BASE_MS + currentTime }, elapsed = { currentTime })
         trackDao.insert(circuitTrack(id = 0))
         activeTrack.value = trackDao.get(1)
         val recorder = recorder(source)

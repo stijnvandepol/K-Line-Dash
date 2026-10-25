@@ -11,8 +11,10 @@ import java.io.File
  * trusted TLS certificate. Mitigations: off by default and started only by the user, only IPv4
  * peers on a private network ([isLocalNetworkAddress]), a one-time
  * PIN shown on the head unit, a session cookie after the PIN, a lockout after repeated wrong PINs,
- * read-only (GET downloads of listed files only, never a path from the request), and an automatic
- * stop after [ExportServerConfig.idleTimeoutMs] without requests.
+ * read-only (GET downloads of listed files only, never a path from the request), requests that do
+ * not come from the server's own IP address are refused (login CSRF, DNS rebinding), and an
+ * automatic stop after [ExportServerConfig.idleTimeoutMs] without a login or a request with a
+ * valid session.
  */
 interface TripExportServer {
     /** Starts listening; returns the port actually bound. Idempotent while running. */

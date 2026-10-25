@@ -1,5 +1,6 @@
 package nl.stijnvdpol.klinedash.core.transport
 
+import nl.stijnvdpol.klinedash.core.assertFails
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -81,5 +82,41 @@ class PromptBufferTest {
         buffer.clear()
         assertEquals("", buffer.pending())
         assertEquals(listOf("OK\r"), buffer.feed(bytes("OK\r>")))
+    }
+
+    @Test
+    fun `a response at the cap is accepted`() {
+        val buffer = PromptBuffer()
+        val text = "A".repeat(PromptBuffer.MAX_PENDING_CHARS)
+        assertEquals(listOf(text), buffer.feed(bytes("$text>")))
+    }
+
+    @Test
+    fun `text beyond the cap without a prompt throws and empties the buffer`() {
+        val buffer = PromptBuffer()
+        val flood = bytes("A".repeat(PromptBuffer.MAX_PENDING_CHARS + 1))
+
+        assertFails<PromptOverflowException> { buffer.feed(flood) }
+
+        assertEquals("", buffer.pending())
+        assertEquals(listOf("OK\r"), buffer.feed(bytes("OK\r>")))
+    }
+
+    @Test
+    fun `the cap counts text over several chunks`() {
+        val buffer = PromptBuffer()
+        val chunk = bytes("B".repeat(PromptBuffer.MAX_PENDING_CHARS / 2))
+        assertTrue(buffer.feed(chunk).isEmpty())
+        assertTrue(buffer.feed(chunk).isEmpty())
+
+        assertFails<PromptOverflowException> { buffer.feed(bytes("B")) }
+    }
+
+    @Test
+    fun `ignored garbage bytes do not count towards the cap`() {
+        val buffer = PromptBuffer()
+        val garbage = ByteArray(PromptBuffer.MAX_PENDING_CHARS * 4) { 0xFF.toByte() }
+        assertTrue(buffer.feed(garbage).isEmpty())
+        assertEquals("", buffer.pending())
     }
 }

@@ -269,6 +269,7 @@ internal fun VirtualCluster(page: MainPage, live: LiveState, modifier: Modifier 
         Spacer(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer()
                 .drawWithCache {
                     val painter = RingLit(size, colors, specs)
                     onDrawBehind {
