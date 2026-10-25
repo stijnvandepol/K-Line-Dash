@@ -44,7 +44,7 @@ where the limits are. It was last reviewed for release 1.0.0.
 
 ## Reporting a vulnerability
 
-Open an issue on GitHub: <https://github.com/stijnvandepol/CarPlayinfo/issues>. Describe the problem
+Open an issue on GitHub: <https://github.com/stijnvandepol/K-Line-Dash/issues>. Describe the problem
 and how to reproduce it, but leave out working exploit details and any personal data (trip files,
 positions, VINs). If the issue needs a private channel, say so in the issue and the maintainer will
 contact you. Fixes ship as a new release; see `CHANGELOG.md`.

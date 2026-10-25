@@ -108,7 +108,7 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/stijnvandepol/CarPlayinfo/releases/tag/v1.0.0
+[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/stijnvandepol/K-Line-Dash/releases/tag/v1.0.0

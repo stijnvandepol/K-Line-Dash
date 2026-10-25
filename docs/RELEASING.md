@@ -75,10 +75,10 @@ The release workflow builds from four repository secrets
 With the GitHub CLI, from the folder that holds the keystore:
 
 ```bash
-base64 -w0 kline-dash-release.jks | gh secret set KLD_KEYSTORE_BASE64 --repo stijnvandepol/CarPlayinfo
-gh secret set KLD_KEYSTORE_PASSWORD --repo stijnvandepol/CarPlayinfo
-gh secret set KLD_KEY_ALIAS --repo stijnvandepol/CarPlayinfo
-gh secret set KLD_KEY_PASSWORD --repo stijnvandepol/CarPlayinfo
+base64 -w0 kline-dash-release.jks | gh secret set KLD_KEYSTORE_BASE64 --repo stijnvandepol/K-Line-Dash
+gh secret set KLD_KEYSTORE_PASSWORD --repo stijnvandepol/K-Line-Dash
+gh secret set KLD_KEY_ALIAS --repo stijnvandepol/K-Line-Dash
+gh secret set KLD_KEY_PASSWORD --repo stijnvandepol/K-Line-Dash
 ```
 
 (`gh secret set NAME` without input prompts for the value.) On Windows PowerShell, the base64 value is

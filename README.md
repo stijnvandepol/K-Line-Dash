@@ -65,7 +65,7 @@ Scanner or OBD Fusion should work here too (sources: `docs/research/popular-obd-
 
 ## Install
 
-1. Open the [latest release](https://github.com/stijnvandepol/CarPlayinfo/releases/latest) and
+1. Open the [latest release](https://github.com/stijnvandepol/K-Line-Dash/releases/latest) and
    download `kline-dash-<version>.apk` and `SHA256SUMS.txt`.
 2. **Check the download** (optional, recommended). On a PC, in the download folder:
    - Linux: `sha256sum -c --ignore-missing SHA256SUMS.txt`; macOS:
@@ -102,7 +102,7 @@ that closes the app, no GPS fix, a trip that did not record), supported adapters
 exporting to a PC and your car battery. **SETUP > Debug** shows what the adapter and the car say,
 which helps when you report a problem.
 
-Found a bug? [Open an issue](https://github.com/stijnvandepol/CarPlayinfo/issues) with the app
+Found a bug? [Open an issue](https://github.com/stijnvandepol/K-Line-Dash/issues) with the app
 version (SETUP > About) and, if the app crashed, the exported crash log from SETUP > About.
 Security problems: see [`docs/SECURITY.md`](docs/SECURITY.md).
 
