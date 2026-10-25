@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-25
+
+K-Line Dash learns the make of the car: trouble code meanings and the connection now fit German,
+Japanese and other cars, not just Toyota.
+
 ### Added
 
 - **SETUP > Car:** the make of the car replaces the trouble code profile. "Automatic" reads the VIN
@@ -103,6 +108,7 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/stijnvandepol/CarPlayinfo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/stijnvandepol/CarPlayinfo/releases/tag/v1.0.0
