@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+More makes with trouble code meanings, old trips cleaned up, and a Bluetooth LE scan that says
+why it finds nothing.
+
 ### Added
 
 - **Keep trips** (TRIPS, under the automatic recording switches): how many of the newest trips to
@@ -205,7 +210,8 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.0.0...v1.1.0

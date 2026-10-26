@@ -10,8 +10,8 @@ plugins {
 // The one place the version lives. versionCode follows from it (major * 10000 + minor * 100 + patch),
 // so a release is a one-line change here. Both reach the app as BuildConfig.VERSION_NAME / VERSION_CODE.
 val versionMajor = 1
-val versionMinor = 2
-val versionPatch = 1
+val versionMinor = 3
+val versionPatch = 0
 val appVersionName = "$versionMajor.$versionMinor.$versionPatch"
 val appVersionCode = versionMajor * 10_000 + versionMinor * 100 + versionPatch
 
