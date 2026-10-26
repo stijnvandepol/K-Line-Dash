@@ -241,6 +241,7 @@ private fun TransportDetails(
                     if (onScanRequested()) vm.startClassicSearch() else vm.showClassicPermissionMissing()
                 }
                 ClassicSearchResults(vm, isPermissionGranted, onConnect)
+                PairAgainAction(vm, s.btAddress, s.btName)
                 SectionTitle(stringResource(R.string.section_devices_paired))
                 BluetoothSettingsRow(onRefresh = vm::refreshBonded)
                 DeviceList(
@@ -361,6 +362,9 @@ internal fun DeviceRow(device: BtDeviceInfo, selected: Boolean, onClick: () -> U
             Text(device.name, style = KLineType.body, color = if (selected) colors.ink else colors.inkMuted, maxLines = 1)
             if (device.knownAppLocked) {
                 Text(stringResource(R.string.device_may_not_work), style = KLineType.caption, color = colors.caution, maxLines = 1)
+            }
+            if (device.isPaired) {
+                Text(stringResource(R.string.device_already_paired), style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
             }
             Text(device.address, style = KLineType.caption, color = colors.inkMuted, maxLines = 1)
         }

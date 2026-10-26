@@ -12,11 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
+import nl.stijnvdpol.klinedash.core.elm.ConnectionState
 import nl.stijnvdpol.klinedash.transport.BleScanNotice
 import nl.stijnvdpol.klinedash.transport.ClassicPairing
 import nl.stijnvdpol.klinedash.transport.ClassicSearchCheck
 import nl.stijnvdpol.klinedash.transport.PairingFailure
 import nl.stijnvdpol.klinedash.transport.classicSearchChecks
+import nl.stijnvdpol.klinedash.transport.suggestsPairingAgain
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
@@ -38,7 +40,7 @@ internal fun ClassicSearchButton(connection: ConnectionViewModel, onSearch: () -
 
 /**
  * Everything a Bluetooth Classic search leaves on screen: why it did not run or what to check, how the
- * pairing stands, and the unpaired devices found (tap one to pair). Shared by SETUP > Connection and
+ * pairing stands, and the devices found (tap one to pair it, or to choose it when it is already paired). Shared by SETUP > Connection and
  * the setup wizard. [onConnect] adds a Connect button to the "paired" message; null leaves it out.
  * [isPermissionGranted] hides a stale "permission missing" notice once the permission is there.
  */
@@ -74,7 +76,7 @@ private fun PairingStatus(pairing: ClassicPairing, onRetry: () -> Unit, onConnec
         }
         is ClassicPairing.Failed -> {
             NoticeLine(stringResource(pairing.reason.messageRes(), pairing.device.name), KLineTheme.colors.caution)
-            Hint(stringResource(R.string.bt_pairing_pin_hint))
+            if (pairing.reason.isAboutPin()) Hint(stringResource(R.string.bt_pairing_pin_hint))
             ButtonRow { SecondaryButton(stringResource(R.string.btn_retry), onRetry, Modifier.weight(1f)) }
         }
     }
@@ -83,8 +85,42 @@ private fun PairingStatus(pairing: ClassicPairing, onRetry: () -> Unit, onConnec
 @StringRes
 private fun PairingFailure.messageRes(): Int = when (this) {
     PairingFailure.NOT_STARTED -> R.string.bt_pairing_not_started
+    PairingFailure.NO_ADAPTER -> R.string.bt_pairing_no_adapter
+    PairingFailure.BLUETOOTH_OFF -> R.string.bt_pairing_bluetooth_off
+    PairingFailure.PERMISSION_MISSING -> R.string.bt_pairing_permission_missing
+    PairingFailure.UNPAIR_FAILED -> R.string.bt_pairing_unpair_failed
     PairingFailure.REJECTED -> R.string.bt_pairing_rejected
+    PairingFailure.UNREACHABLE -> R.string.bt_pairing_unreachable
     PairingFailure.TIMED_OUT -> R.string.bt_pairing_timed_out
+}
+
+/** Only these failures can be a matter of the PIN, so only they repeat the PIN hint. */
+private fun PairingFailure.isAboutPin(): Boolean = this == PairingFailure.REJECTED || this == PairingFailure.TIMED_OUT
+
+/**
+ * Offers to remove the pairing of the selected adapter and pair again, while the link fails in the way
+ * of a stale pairing (see [suggestsPairingAgain]). Re-flashing an ESP32 bridge erases its link keys.
+ */
+@Composable
+internal fun PairAgainAction(connection: ConnectionViewModel, btAddress: String?, btName: String?) {
+    val state by connection.connectionState.collectAsStateWithLifecycle()
+    val pairing by connection.pairing.collectAsStateWithLifecycle()
+    if (btAddress == null || !suggestsPairingAgain(state.failureReason())) return
+    Hint(stringResource(R.string.bt_pair_again_hint))
+    ButtonRow {
+        SecondaryButton(
+            stringResource(R.string.btn_pair_again),
+            onClick = { connection.pairAgain(btAddress, btName) },
+            modifier = Modifier.weight(1f),
+            enabled = pairing !is ClassicPairing.Pairing,
+        )
+    }
+}
+
+private fun ConnectionState.failureReason(): String? = when (this) {
+    is ConnectionState.Reconnecting -> reason
+    is ConnectionState.Failed -> reason
+    else -> null
 }
 
 /** The checklist for a search that found nothing, for [BleScanNoticeBlock]. */

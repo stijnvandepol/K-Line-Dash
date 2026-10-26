@@ -23,9 +23,59 @@ class ClassicPairingPolicyTest {
     }
 
     @Test
-    fun `a bond that breaks off after bonding is a rejection`() {
-        val state = pairing.next(bond(bridge.address, BondState.BONDING, BondState.NONE))
-        assertEquals(ClassicPairing.Failed(bridge, 0, PairingFailure.REJECTED), state)
+    fun `a bond that breaks off after bonding with an authentication reason is a rejection`() {
+        for (reason in listOf(1, 2, null)) {
+            val state = pairing.next(PairingEvent.BondChanged(bridge.address, BondState.BONDING, BondState.NONE, reason))
+            assertEquals("reason $reason", ClassicPairing.Failed(bridge, 0, PairingFailure.REJECTED), state)
+        }
+    }
+
+    @Test
+    fun `a bond that breaks off for another reason means the device could not be reached`() {
+        for (reason in listOf(0, 3, 4, 5, 6, 7, 8, 9)) {
+            val state = pairing.next(PairingEvent.BondChanged(bridge.address, BondState.BONDING, BondState.NONE, reason))
+            assertEquals("reason $reason", ClassicPairing.Failed(bridge, 0, PairingFailure.UNREACHABLE), state)
+        }
+    }
+
+    @Test
+    fun `only an authentication failure moves a retry to the next pin`() {
+        for (reason in PairingFailure.entries) {
+            val failed = ClassicPairing.Failed(bridge, attempt = 1, reason = reason)
+            val expected = if (reason == PairingFailure.REJECTED) 2 else 1
+            assertEquals(reason.name, expected, failed.nextAttempt())
+        }
+    }
+
+    @Test
+    fun `a timeout that finds the device bonded is a success, otherwise a failure`() {
+        assertEquals(ClassicPairing.Paired(bridge), pairing.next(PairingEvent.TimedOut(BondState.BONDED)))
+        assertEquals(ClassicPairing.Failed(bridge, 0, PairingFailure.TIMED_OUT), pairing.next(PairingEvent.TimedOut(BondState.BONDING)))
+    }
+
+    @Test
+    fun `a blocked pairing reports its own reason`() {
+        for (reason in listOf(PairingFailure.BLUETOOTH_OFF, PairingFailure.NO_ADAPTER, PairingFailure.PERMISSION_MISSING, PairingFailure.UNPAIR_FAILED)) {
+            assertEquals(ClassicPairing.Failed(bridge, 0, reason), pairing.next(PairingEvent.Blocked(reason)))
+        }
+    }
+
+    @Test
+    fun `pairing needs only an adapter that is on, no location`() {
+        val env = ScanEnvironment(
+            sdkInt = 27, androidRelease = "8.1.0", hasBleFeature = false, hasAdapter = true, isBluetoothOn = true,
+            hasLeScanner = false, isLocationOn = false, hasLocationPermission = false, hasNearbyPermission = null,
+        )
+        assertNull(decidePairingBlock(env))
+        assertEquals(PairingFailure.BLUETOOTH_OFF, decidePairingBlock(env.copy(isBluetoothOn = false)))
+        assertEquals(PairingFailure.NO_ADAPTER, decidePairingBlock(env.copy(hasAdapter = false)))
+    }
+
+    @Test
+    fun `pairing variants have names for the log`() {
+        assertEquals("PIN", pairingVariantName(BluetoothDevice.PAIRING_VARIANT_PIN))
+        assertEquals("PASSKEY_CONFIRMATION", pairingVariantName(BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION))
+        assertEquals("OTHER(7)", pairingVariantName(7))
     }
 
     @Test
@@ -38,14 +88,14 @@ class ClassicPairingPolicyTest {
     @Test
     fun `refusal and timeout fail a pairing with their own reason`() {
         assertEquals(ClassicPairing.Failed(bridge, 0, PairingFailure.NOT_STARTED), pairing.next(PairingEvent.Refused))
-        assertEquals(ClassicPairing.Failed(bridge, 0, PairingFailure.TIMED_OUT), pairing.next(PairingEvent.TimedOut))
+        assertEquals(ClassicPairing.Failed(bridge, 0, PairingFailure.TIMED_OUT), pairing.next(PairingEvent.TimedOut(BondState.NONE)))
     }
 
     @Test
     fun `events outside a pairing change nothing`() {
         val idle = ClassicPairing.Idle
         assertSame(idle, idle.next(bond(bridge.address, BondState.BONDING, BondState.BONDED)))
-        assertSame(idle, idle.next(PairingEvent.TimedOut))
+        assertSame(idle, idle.next(PairingEvent.TimedOut(BondState.NONE)))
         val paired = ClassicPairing.Paired(bridge)
         assertSame(paired, paired.next(PairingEvent.Refused))
     }
@@ -101,12 +151,19 @@ class ClassicPairingPolicyTest {
     }
 
     @Test
-    fun `classic and dual devices that are not paired are listed, all classes`() {
-        assertTrue(isPairableClassic(BluetoothDevice.DEVICE_TYPE_CLASSIC, BondState.NONE))
-        assertTrue(isPairableClassic(BluetoothDevice.DEVICE_TYPE_DUAL, BondState.NONE))
-        assertTrue(isPairableClassic(BluetoothDevice.DEVICE_TYPE_UNKNOWN, BondState.BONDING))
-        assertFalse(isPairableClassic(BluetoothDevice.DEVICE_TYPE_LE, BondState.NONE))
-        assertFalse(isPairableClassic(BluetoothDevice.DEVICE_TYPE_CLASSIC, BondState.BONDED))
+    fun `classic and dual devices are listed, all classes, paired or not, but not le-only ones`() {
+        assertTrue(isClassicCapable(BluetoothDevice.DEVICE_TYPE_CLASSIC))
+        assertTrue(isClassicCapable(BluetoothDevice.DEVICE_TYPE_DUAL))
+        assertTrue(isClassicCapable(BluetoothDevice.DEVICE_TYPE_UNKNOWN))
+        assertFalse(isClassicCapable(BluetoothDevice.DEVICE_TYPE_LE))
+    }
+
+    @Test
+    fun `a paired sighting replaces the unpaired one of the same device`() {
+        val paired = btDeviceInfo("OBDII-Bridge", bridge.address, isPaired = true)
+        assertEquals(listOf(paired), mergeClassicResult(mergeClassicResult(emptyList(), bridge), paired))
+        assertTrue(paired.isPaired)
+        assertFalse(bridge.isPaired)
     }
 
     @Test

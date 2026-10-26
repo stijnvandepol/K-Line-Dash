@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-26
+
+More robust Bluetooth Classic pairing on head units with their own Bluetooth app.
+
+### Fixed
+
+- **Pairing a Bluetooth Classic adapter in the app is more reliable on head units** (tested
+  against an ESP32 bridge with a PIN on Android 8.1):
+  - The PIN request is answered ahead of a vendor app and then no longer passed on, so no second
+    answer or dialog follows.
+  - A retry only tries the next PIN when the adapter turned the last one down; when the adapter was
+    out of range or not discoverable it says so and keeps the same PIN.
+  - A pairing that takes too long is checked once more and counted as paired if it made it, otherwise
+    it is cancelled. A device that is already paired is selected at once.
+  - Search also lists adapters that are already paired ("Already paired"), so an old pairing no
+    longer hides them. When connecting to a paired adapter fails like a stale pairing (for example
+    after the ESP32 was re-flashed), the app says so and offers Pair again.
+  - Pairing waits until the search has really stopped, and for Android's own service lookup before
+    the first connect.
+  - Pairing no longer needs Location (only searching does, on Android 11 and older) and says why it
+    could not start: Bluetooth off, no Bluetooth, or a missing permission.
+  - A late "search finished" from an earlier search no longer ends a new search immediately.
+
 ## [1.3.1] - 2026-10-26
 
 Pair a Bluetooth Classic adapter from inside the app, for head units whose own Bluetooth screen
@@ -224,7 +247,8 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...v1.2.1

@@ -176,6 +176,21 @@ internal class ScanTally {
     }
 }
 
+/**
+ * Tells a DISCOVERY_FINISHED that ends our discovery from a late one of an earlier discovery (the
+ * cancel of the previous search): only a finish after our own DISCOVERY_STARTED counts.
+ */
+internal class DiscoveryProgress {
+    private var isStarted = false
+
+    fun onStarted() {
+        isStarted = true
+    }
+
+    /** True when the finish belongs to our discovery. */
+    fun isOurFinish(): Boolean = isStarted
+}
+
 /** The list with [device] added, or replacing the entry of the same address; likely OBD adapters first. */
 internal fun mergeScanResult(list: List<BtDeviceInfo>, device: BtDeviceInfo): List<BtDeviceInfo> {
     val index = list.indexOfFirst { it.address == device.address }
@@ -190,7 +205,7 @@ internal sealed interface BleScanNotice {
     /** The scan ran to its end without a device; [failureCode] is the stack's error, if it gave one. */
     data class NothingFound(val failureCode: Int?) : BleScanNotice
 
-    /** A Bluetooth Classic search ran to its end without an unpaired device. */
+    /** A Bluetooth Classic search ran to its end without a device. */
     data object NothingFoundClassic : BleScanNotice
 
     /** Android would not start the Bluetooth Classic search. */

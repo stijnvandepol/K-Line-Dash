@@ -193,4 +193,12 @@ class BleScanPolicyTest {
     fun `scans last long enough for a slow advertiser and a classic inquiry`() {
         assertTrue(BLE_SCAN_DURATION_MS >= 12_000)
     }
+
+    @Test
+    fun `a discovery finish before our own start is a late one and is ignored`() {
+        val progress = DiscoveryProgress()
+        assertFalse(progress.isOurFinish())
+        progress.onStarted()
+        assertTrue(progress.isOurFinish())
+    }
 }

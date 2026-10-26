@@ -26,13 +26,17 @@ import nl.stijnvdpol.klinedash.transport.BleScanNotice
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
 import nl.stijnvdpol.klinedash.transport.ClassicPairing
 import nl.stijnvdpol.klinedash.transport.PairingEvent
+import nl.stijnvdpol.klinedash.transport.PairingFailure
 import nl.stijnvdpol.klinedash.transport.ScanBlockedException
 import nl.stijnvdpol.klinedash.transport.bondedDevices as queryBondedDevices
+import nl.stijnvdpol.klinedash.transport.btDeviceInfo
 import nl.stijnvdpol.klinedash.transport.classicSearchNotice
 import nl.stijnvdpol.klinedash.transport.mergeClassicResult
 import nl.stijnvdpol.klinedash.transport.mergeScanResult
 import nl.stijnvdpol.klinedash.transport.next
+import nl.stijnvdpol.klinedash.transport.nextAttempt
 import nl.stijnvdpol.klinedash.transport.pairClassic
+import nl.stijnvdpol.klinedash.transport.removeClassicBond
 import nl.stijnvdpol.klinedash.transport.scanBle
 import nl.stijnvdpol.klinedash.transport.searchClassic
 
@@ -75,7 +79,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
 
     private val _classicFound = MutableStateFlow<List<BtDeviceInfo>>(emptyList())
 
-    /** Unpaired Bluetooth Classic devices of the last search, likely OBD adapters first. */
+    /** Bluetooth Classic devices of the last search (those already paired are flagged), likely OBD adapters first. */
     val classicFound: StateFlow<List<BtDeviceInfo>> = _classicFound.asStateFlow()
 
     private val _classicSearching = MutableStateFlow(false)
@@ -143,7 +147,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         _classicNotice.value = BleScanNotice.PermissionMissing
     }
 
-    /** Searches for unpaired Bluetooth Classic devices unless a search or a pairing is running. */
+    /** Searches for Bluetooth Classic devices unless a search or a pairing is running. */
     fun startClassicSearch() {
         if (searchJob?.isActive == true || pairing.value is ClassicPairing.Pairing) return
         _classicFound.value = emptyList()
@@ -168,24 +172,42 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     /**
-     * Pairs with [device] from the search list; once it is paired it is the selected adapter. Ignored
-     * while another pairing runs. Ends the search first: bonding fails while discovery runs.
+     * Pairs with [device] from the search list; once it is paired it is the selected adapter. A device
+     * that is already paired is selected without a new bond. Ignored while another pairing runs. Ends
+     * the search first: bonding fails while discovery runs.
      */
-    fun pairWith(device: BtDeviceInfo, attempt: Int = 0) {
+    fun pairWith(device: BtDeviceInfo, attempt: Int = 0) = startPairing(device, attempt) { true }
+
+    /**
+     * Removes the pairing of the selected adapter and pairs again from scratch: for an adapter that was
+     * re-flashed and forgot its link keys while this unit kept its own. Stops the link first, which
+     * would otherwise keep connecting during the pairing.
+     */
+    fun pairAgain(address: String, name: String?) {
+        startPairing(btDeviceInfo(name, address), attempt = 0) {
+            ObdServiceState.link.value?.stop()
+            removeClassicBond(context, address)
+        }
+    }
+
+    /** Tries the failed pairing again; with the next PIN only when the adapter turned the last one down. */
+    fun retryPairing() {
+        val failed = pairing.value as? ClassicPairing.Failed ?: return
+        pairWith(failed.device, failed.nextAttempt())
+    }
+
+    private fun startPairing(device: BtDeviceInfo, attempt: Int, prepare: suspend () -> Boolean) {
         if (pairJob?.isActive == true) return
         searchJob?.cancel()
         _pairing.update { it.next(PairingEvent.Start(device, attempt)) }
         pairJob = viewModelScope.launch {
             val result = try {
-                pairClassic(context, device, attempt)
+                if (prepare()) pairClassic(context, device, attempt) else blocked(PairingFailure.UNPAIR_FAILED)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SecurityException) {
                 Log.w(TAG, "Pairing refused", e)
-                _pairing.value.next(PairingEvent.Refused)
-            } catch (e: ScanBlockedException) {
-                Log.w(TAG, "Pairing blocked: ${e.block}", e)
-                _pairing.value.next(PairingEvent.Refused)
+                blocked(PairingFailure.PERMISSION_MISSING)
             }
             _pairing.value = result
             if (result is ClassicPairing.Paired) {
@@ -196,11 +218,7 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
-    /** Tries the failed pairing again, with the next PIN. */
-    fun retryPairing() {
-        val failed = pairing.value as? ClassicPairing.Failed ?: return
-        pairWith(failed.device, failed.attempt + 1)
-    }
+    private fun blocked(reason: PairingFailure) = _pairing.value.next(PairingEvent.Blocked(reason))
 
     fun selectKind(kind: TransportKind) = updateSettings { it.copy(kind = kind) }
 

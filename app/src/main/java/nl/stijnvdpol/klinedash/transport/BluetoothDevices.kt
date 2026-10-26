@@ -20,12 +20,15 @@ private const val TAG = "KLineDash"
  * @property looksLikeObd name matches a known ELM327/OBD adapter brand (heuristic only)
  * @property knownAppLocked name matches a dongle that only works with its own app (BlueDriver,
  *   ThinkDiag, ...). A warning for the list, never a reason to refuse: a device that answers is used.
+ * @property isPaired Android already holds a pairing with the device (only set by the Classic search,
+ *   which lists such devices too, marked "Already paired")
  */
 data class BtDeviceInfo(
     val name: String,
     val address: String,
     val looksLikeObd: Boolean,
     val knownAppLocked: Boolean = false,
+    val isPaired: Boolean = false,
 )
 
 internal const val UNNAMED_DEVICE = "(unnamed)"
@@ -105,16 +108,38 @@ internal const val DEFAULT_ADAPTER_NAME = "OBD-adapter"
 
 internal fun invalidAddressMessage(address: String) = "Invalid Bluetooth address: $address"
 
+/** The advice added to a connect failure of a paired adapter that looks like a stale pairing; the app offers "Pair again" for it. */
+internal const val PAIR_AGAIN_HINT = "If it still does not connect, pair it again: the old pairing may no longer match."
+
 /**
  * Shown when every Bluetooth Classic connect strategy failed. The pairing hint only appears for an
  * adapter that is not paired yet; buttons are common on dual-mode adapters that sleep or hide
- * until pressed (Konnwei KW905, vLinker MC+, OBDLink).
+ * until pressed (Konnwei KW905, vLinker MC+, OBDLink). Every paired adapter gets [PAIR_AGAIN_HINT]
+ * (so the screen offers "Pair again"): re-flashing an ESP32 bridge erases its link keys while the
+ * head unit keeps its own, and Android usually reports that only as "read failed", which
+ * [isAuthFailure] cannot recognise; [isAuthFailure] only puts the hint first.
  */
-internal fun classicConnectFailedMessage(isBonded: Boolean): String = buildString {
+internal fun classicConnectFailedMessage(isBonded: Boolean, isAuthFailure: Boolean = false): String = buildString {
     append("Cannot connect to the adapter over Bluetooth. Check that it is plugged into the OBD port and the ignition is on. ")
     if (!isBonded) append("Pair the adapter first (PIN 1234, 0000 or 6789). ")
+    if (isBonded && isAuthFailure) append("$PAIR_AGAIN_HINT ")
     append("Press the adapter's button if it has one.")
+    if (isBonded && !isAuthFailure) append(" $PAIR_AGAIN_HINT")
 }
+
+private val AUTH_ERROR_HINTS = listOf("authenticat", "key missing", "pin or key", "bond")
+
+/** Whether [error] or one of its causes reads like a failed authentication (a stale or missing link key). */
+internal fun isAuthenticationFailure(error: Throwable?): Boolean =
+    generateSequence(error) { it.cause }.take(MAX_CAUSE_DEPTH).any { cause ->
+        val message = cause.message?.lowercase().orEmpty()
+        AUTH_ERROR_HINTS.any { message.contains(it) }
+    }
+
+private const val MAX_CAUSE_DEPTH = 5
+
+/** Whether a connection failure [reason] carries [PAIR_AGAIN_HINT], so the screen should offer to pair again. */
+internal fun suggestsPairingAgain(reason: String?): Boolean = reason?.contains(PAIR_AGAIN_HINT) == true
 
 /**
  * The device's advertised name, or null. The permission can be revoked at any moment; the name is
@@ -147,11 +172,12 @@ internal fun BluetoothDevice.bondStateOrNone(): BondState = try {
 }
 
 /** The list entry for a device with its advertised [rawName] (null or blank: shown as unnamed). */
-internal fun btDeviceInfo(rawName: String?, address: String) = BtDeviceInfo(
+internal fun btDeviceInfo(rawName: String?, address: String, isPaired: Boolean = false) = BtDeviceInfo(
     name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
     address = address,
     looksLikeObd = nameLooksLikeObd(rawName),
     knownAppLocked = isKnownAppLocked(rawName),
+    isPaired = isPaired,
 )
 
 /**

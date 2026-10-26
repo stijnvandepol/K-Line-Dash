@@ -92,6 +92,7 @@ class BtClassicTransport(
         )
 
         var lastError: Exception? = null
+        var isAuthFailure = false
         for ((label, factory) in strategies) {
             val candidate = try {
                 factory()
@@ -110,12 +111,14 @@ class BtClassicTransport(
             } catch (e: IOException) {
                 Log.w(TAG, "BT connect failed ($label)", e)
                 lastError = e
+                isAuthFailure = isAuthFailure || isAuthenticationFailure(e)
                 closeQuietly(candidate)
                 // Clones need a moment to drop the half-open link before accepting a new attempt.
                 delay(RETRY_DELAY_MS)
             }
         }
-        throw TransportException(classicConnectFailedMessage(isBonded = device.bondState == BluetoothDevice.BOND_BONDED), lastError)
+        val isBonded = device.bondState == BluetoothDevice.BOND_BONDED
+        throw TransportException(classicConnectFailedMessage(isBonded, isAuthFailure = isAuthFailure), lastError)
     }
 
     /**

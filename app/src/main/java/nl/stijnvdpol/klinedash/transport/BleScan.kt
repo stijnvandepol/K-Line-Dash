@@ -182,7 +182,8 @@ private class ScanSession(
 /**
  * Classic discovery (an inquiry of about 12 s) with its broadcast receiver: [onFound] gets every device
  * the system reports, with its name if known, also again when a name arrives later. [onFinished] runs
- * when the stack ends the inquiry by itself. Used by the LE scan, which lets discovery run beside it,
+ * when the stack ends the inquiry by itself (a finish seen before our own start is a late one of an
+ * earlier discovery and is ignored). Used by the LE scan, which lets discovery run beside it,
  * and by the Bluetooth Classic search. Delivered on the main thread. [stop] undoes whatever [start] did,
  * also when [start] failed halfway.
  */
@@ -195,13 +196,19 @@ internal class DiscoverySession(
 ) {
     private var isReceiverRegistered = false
     private var isStarted = false
+    private val progress = DiscoveryProgress()
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == BluetoothAdapter.ACTION_DISCOVERY_FINISHED) {
-                onFinished()
-                return
+            when (intent.action) {
+                BluetoothAdapter.ACTION_DISCOVERY_STARTED -> progress.onStarted()
+                // A FINISHED before our STARTED is the late end of a discovery we cancelled earlier.
+                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> if (progress.isOurFinish()) onFinished()
+                else -> reportDevice(intent)
             }
+        }
+
+        private fun reportDevice(intent: Intent) {
             val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
             onFound(device, intent.getStringExtra(BluetoothDevice.EXTRA_NAME) ?: device.nameOrNull())
         }
@@ -212,6 +219,7 @@ internal class DiscoverySession(
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_FOUND)
             addAction(BluetoothDevice.ACTION_NAME_CHANGED)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         }
         // RECEIVER_EXPORTED: these are protected system broadcasts, so only the system can send them.

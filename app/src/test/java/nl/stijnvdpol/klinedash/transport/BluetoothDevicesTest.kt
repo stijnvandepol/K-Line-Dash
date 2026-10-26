@@ -22,6 +22,26 @@ class BluetoothDevicesTest {
     }
 
     @Test
+    fun `a paired adapter is offered to pair again, an unpaired one is not`() {
+        val message = classicConnectFailedMessage(isBonded = true, isAuthFailure = true)
+        assertTrue(message.contains(PAIR_AGAIN_HINT))
+        assertTrue(suggestsPairingAgain(message))
+        // Android usually reports a stale key only as "read failed", so every paired adapter is offered it.
+        assertTrue(suggestsPairingAgain(classicConnectFailedMessage(isBonded = true)))
+        assertFalse(suggestsPairingAgain(classicConnectFailedMessage(isBonded = false, isAuthFailure = true)))
+        assertFalse(suggestsPairingAgain(null))
+    }
+
+    @Test
+    fun `authentication failures are recognised in the error or its causes`() {
+        assertTrue(isAuthenticationFailure(java.io.IOException("Authentication failed")))
+        assertTrue(isAuthenticationFailure(java.io.IOException("connect failed", java.io.IOException("PIN or Key Missing"))))
+        assertFalse(isAuthenticationFailure(java.io.IOException("read failed, socket might closed or timeout, read ret: -1")))
+        assertFalse(isAuthenticationFailure(java.io.IOException()))
+        assertFalse(isAuthenticationFailure(null))
+    }
+
+    @Test
     fun `app locked dongles are recognised by name`() {
         for (name in listOf("BlueDriver", "TOPDON_1A2B3C", "ThinkDiag-12345", "Golo-X431", "ANCEL BD200", "MaxiAP200")) {
             assertTrue(name, isKnownAppLocked(name))
