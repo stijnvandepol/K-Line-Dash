@@ -1,0 +1,82 @@
+# K-Line Dash: Nissan/Infiniti manufacturer-specific trouble code meanings
+# Format: CODE<TAB>description<TAB>note
+#   - description: our own short wording of the Nissan/Infiniti meaning of a P1xxx code.
+#   - note: a short first check, only where sources widely agree; empty otherwise.
+# Curated selection, not an import. A code is listed only if at least two independent publications agree
+# on its meaning and none disagrees; codes where sources disagreed were left out.
+# Per-code sources: docs/research/dtc-sources-more-makes.md
+# Sources (separate publications; all trace back to Nissan's engine-control diagnostic lists):
+#   NM  Nissan EC section manuals of a 2003 Murano, 2005 Titan and 2008 Sentra (counted once)
+#   ET  EcuTek GT-R and 370Z DTC lists (counted once)
+#   TC  troublecodes.net, entries labelled Nissan/Infiniti: https://www.troublecodes.net/p1codes/
+#   OC  obd-codes.com Nissan list (the Carvitas Nissan list is a copy, counted once)
+#   TA  tat.net.au fault code database, Infiniti entries
+#   AC  aboutthecars.com Infiniti code list
+# Meanings can differ by engine generation (P1126 is a thermostat code on older cars and a throttle motor
+# relay code on newer ones); such codes were left out.
+P1031	Air-fuel ratio sensor 1 heater, bank 1: control circuit low	
+P1032	Air-fuel ratio sensor 1 heater, bank 1: control circuit high	
+P1051	Air-fuel ratio sensor 1 heater, bank 2: control circuit low	
+P1052	Air-fuel ratio sensor 1 heater, bank 2: control circuit high	
+P1065	ECM power supply (back-up memory) circuit fault	
+P1105	MAP/barometric pressure switching solenoid valve fault	
+P1111	Intake valve timing control solenoid valve, bank 1: circuit fault	
+P1120	Throttle position sensor 2 (secondary) fault	
+P1121	Electronic throttle control actuator fault	
+P1122	Electronic throttle control: performance problem	
+P1124	Throttle control motor relay circuit: short	
+P1128	Throttle control motor circuit: short	
+P1130	Swirl control valve solenoid fault	
+P1136	Intake valve timing control solenoid valve, bank 2: circuit fault	
+P1143	Front O2 sensor, bank 1: lean shift monitoring	
+P1144	Front O2 sensor, bank 1: rich shift monitoring	
+P1146	Rear O2 sensor (sensor 2), bank 1: minimum voltage monitoring	
+P1147	Rear O2 sensor (sensor 2), bank 1: maximum voltage monitoring	
+P1148	Closed-loop fuel control, bank 1: function fault	
+P1163	Front O2 sensor, bank 2: lean shift monitoring	
+P1164	Front O2 sensor, bank 2: rich shift monitoring	
+P1165	Swirl control valve vacuum switch fault	
+P1166	Rear O2 sensor (sensor 2), bank 2: minimum voltage monitoring	
+P1167	Rear O2 sensor (sensor 2), bank 2: maximum voltage monitoring	
+P1168	Closed-loop fuel control, bank 2: function fault	
+P1211	ABS/traction control unit: fault reported to the ECM	
+P1212	ABS/traction control unit: communication line fault	
+P1217	Engine overheating (over temperature)	Check the coolant level and that the cooling fans run.
+P1220	Fuel pump control module (FPCM) fault	
+P1223	Throttle position sensor 2: circuit low input	
+P1224	Throttle position sensor 2: circuit high input	
+P1225	Closed throttle position learning: performance problem	
+P1226	Closed throttle position learning: performance problem	
+P1227	Accelerator pedal position sensor 2: circuit low input	
+P1228	Accelerator pedal position sensor 2: circuit high input	
+P1229	Sensor power supply circuit fault	
+P1233	Electronic throttle control, bank 2: performance problem	
+P1236	Throttle control motor circuit, bank 2: short	
+P1238	Electronic throttle control actuator, bank 2 fault	
+P1239	Throttle position sensor, bank 2: range/performance problem	
+P1290	Throttle control motor relay circuit, bank 2: open	
+P1320	Ignition signal fault	
+P1335	Crankshaft position sensor (REF) fault	
+P1336	Crankshaft position sensor (CKPS) fault	
+P1401	EGR temperature sensor fault	
+P1421	Cold start emission reduction strategy: monitoring fault	
+P1440	EVAP control system: small leak	
+P1444	EVAP canister purge volume control solenoid valve fault	
+P1445	EVAP canister purge volume control valve fault	
+P1446	EVAP canister vent control valve: stuck closed	
+P1447	EVAP control system: purge flow monitoring fault	
+P1448	EVAP canister vent control valve: stuck open	
+P1464	Fuel level sensor circuit fault	
+P1490	Vacuum cut valve bypass valve: circuit fault	
+P1491	Vacuum cut valve bypass valve fault	
+P1551	Battery current sensor: circuit low	
+P1552	Battery current sensor: circuit high	
+P1564	Cruise control (ASCD) steering switch fault	
+P1572	Cruise control (ASCD) brake switch fault	
+P1574	Cruise control (ASCD) vehicle speed sensor fault	
+P1611	Immobilizer (NATS): ID mismatch between immobilizer unit and ECM	
+P1706	Park/neutral position switch fault	
+P1715	Transmission input (primary) speed sensor fault	
+P1777	CVT step motor: circuit fault	
+P1778	CVT step motor: function fault	
+P1805	Brake (stop lamp) switch fault	Check the brake light switch and that the brake lights work.

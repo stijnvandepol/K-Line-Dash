@@ -15,6 +15,7 @@ import nl.stijnvdpol.klinedash.data.Track
 import nl.stijnvdpol.klinedash.data.TrackDao
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripDao
+import nl.stijnvdpol.klinedash.data.isLapSession
 
 /** Poller that only keeps the readings it is given and remembers who demanded what. */
 class FakePoller : ObdPoller {
@@ -74,6 +75,9 @@ class FakeTripDao : TripDao {
     override suspend fun getNewest(limit: Int): List<Trip> = rows.value.sortedByDescending { it.startMs }.take(limit)
 
     override suspend fun get(id: Long): Trip? = rows.value.firstOrNull { it.id == id }
+
+    override suspend fun getBeyondRetention(keep: Int, limit: Int): List<Trip> =
+        rows.value.filter { it.endMs != null && !it.isLapSession }.sortedByDescending { it.startMs }.drop(keep).take(limit)
 
     override suspend fun getUnfinished(): List<Trip> = rows.value.filter { it.endMs == null }
 

@@ -97,6 +97,9 @@ sealed interface StartResult {
  * When the location source changes during a trip (simulated circuit on or off), the GPS distance
  * starts a new segment, so the jump between the two sources is not driven distance.
  *
+ * Retention: when a trip is finished and once after [recoverUnfinished], [pruneTrips] gets the
+ * [TripSettings.keepTrips] limit and removes the oldest finished trips beyond it (see [TripLibrary.prune]).
+ *
  * Demand on the poller, owner "trip": while recording [SUMMARY_SIGNAL_IDS] (rpm, speed, coolant, air
  * flow and throttle, so the summary, the fuel estimate and the full-throttle time mean something);
  * otherwise only rpm when auto-record is on (to notice the engine starting). Everything else in the
@@ -117,6 +120,7 @@ class TripRecorder internal constructor(
     private val activeTrack: Flow<Track?> = flowOf(null),
     private val refreshSummary: suspend (tripId: Long) -> Unit = {},
     private val releaseTrack: suspend (trackId: Long) -> Unit = {},
+    private val pruneTrips: suspend (keep: Int) -> Unit = {},
 ) : LiveLaps {
     constructor(
         tripsDir: File,
@@ -127,10 +131,11 @@ class TripRecorder internal constructor(
         activeTrack: Flow<Track?>,
         refreshSummary: suspend (tripId: Long) -> Unit,
         releaseTrack: suspend (trackId: Long) -> Unit,
+        pruneTrips: suspend (keep: Int) -> Unit,
     ) : this(
         tripsDir, tripDao, settings, poller, System::currentTimeMillis, SystemClock::elapsedRealtime, ZoneId.systemDefault(),
         Dispatchers.IO,
-        location, activeTrack, refreshSummary, releaseTrack,
+        location, activeTrack, refreshSummary, releaseTrack, pruneTrips,
     )
 
     private class Active(val tripId: Long, val session: TripSession, val startMs: Long, val origin: RecordingOrigin)
@@ -185,8 +190,15 @@ class TripRecorder internal constructor(
 
     override suspend fun currentLapFixes(): List<GeoFix> = lock.withLock { active?.session?.currentLapFixes().orEmpty() }
 
-    /** See [TripRecovery]. Safe to call while recording: the active trip is left alone. */
-    suspend fun recoverUnfinished() = lock.withLock { recovery.recover(active?.tripId) }
+    /**
+     * See [TripRecovery]; then the trips beyond the retention limit are removed (once per app start,
+     * outside the lock: a first run after an update may have many files to delete, and starting a trip
+     * must not wait for that). Safe to call while recording: the active trip is left alone.
+     */
+    suspend fun recoverUnfinished() {
+        lock.withLock { recovery.recover(active?.tripId) }
+        removeTripsBeyondLimit()
+    }
 
     /**
      * The sampling loop; never returns. On cancellation (service stopped) the running trip is
@@ -372,7 +384,13 @@ class TripRecorder internal constructor(
                 _lastError.value = "The end of the trip could not be saved. Check the free storage of the head unit."
             }
             finished.session.trackId?.let { releaseFinishedTrack(it) }
+            removeTripsBeyondLimit()
         }
+    }
+
+    /** Retention: the trips beyond [TripSettings.keepTrips] go; a failure costs a tidy-up, never the recording. */
+    private suspend fun removeTripsBeyondLimit() {
+        survivingErrors(TAG, "Removing the trips beyond the limit") { pruneTrips(settings.first().keepTrips) }
     }
 
     private suspend fun storeFinished(finished: Active) {

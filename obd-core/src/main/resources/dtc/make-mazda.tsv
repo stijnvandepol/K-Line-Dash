@@ -1,0 +1,39 @@
+# K-Line Dash: Mazda manufacturer-specific trouble code meanings
+# Format: CODE<TAB>description<TAB>note
+#   - description: our own short wording of the Mazda meaning of a P1xxx code.
+#   - note: a short first check, only where sources widely agree; empty otherwise.
+# Curated selection, not an import. A code is listed only if at least two separate publications agree on
+# its meaning and none disagrees. Per-code sources: docs/research/dtc-sources-more-makes.md
+# Sources:
+#   MA  Mazda code list of obd-codes.com (copied by mellens.net, icarsoft and engine-light-help.com; counted once)
+#   MB  Mazda factory DTC definitions on blog.myairbags.com (differently worded rewrite of the Mazda list)
+#   TC  troublecodes.net, entries labelled Mazda: https://www.troublecodes.net/p1codes/
+#   KI  Kia lists of obd-codes.com and engine-light-help.com (Kia Sephia/Spectra engines use Mazda ECU codes)
+# Mazda's older engines (323/Protege/MX-5/626 era) share many codes with Ford. Only codes that Mazda-specific
+# publications confirm were taken; codes whose only evidence is a Ford list were left out.
+P1196	Ignition switch start signal circuit fault	
+P1250	Fuel pressure regulator control solenoid valve: circuit fault	
+P1252	Fuel pressure regulator control solenoid valve 2: circuit fault	
+P1260	Theft detected: engine disabled by the immobilizer	
+P1270	Engine speed or vehicle speed limit reached	
+P1345	Camshaft position sensor (SGC): signal fault	
+P1402	EGR valve position sensor: circuit fault	
+P1455	Fuel tank level sensor: circuit fault	
+P1487	EGR boost sensor solenoid valve: circuit fault	
+P1496	EGR valve motor coil 1: open or short circuit	
+P1497	EGR valve motor coil 2: open or short circuit	
+P1498	EGR valve motor coil 3: open or short circuit	
+P1499	EGR valve motor coil 4: open or short circuit	
+P1521	Variable intake (VRIS) solenoid 1: circuit fault	
+P1522	Variable intake (VRIS) solenoid 2: circuit fault	
+P1523	Variable intake (VICS) solenoid: circuit fault	
+P1524	Charge air cooler bypass solenoid valve: circuit fault	
+P1562	ECM back-up battery supply (+BB): voltage low	
+P1569	Variable intake (VTCS) control circuit: low input	
+P1570	Variable intake (VTCS) control circuit: high input	
+P1631	Generator: no output voltage signal	
+P1632	Generator regulator: battery voltage monitor circuit fault	
+P1633	Generator: battery overcharge	
+P1634	Generator terminal B: open circuit	
+P1650	Power steering pressure switch: out of range	
+P1651	Power steering pressure switch: circuit fault	

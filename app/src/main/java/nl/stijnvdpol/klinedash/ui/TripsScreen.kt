@@ -139,10 +139,29 @@ private fun SessionColumn(vm: TripsViewModel, session: SessionViewModel, setting
                 Modifier.height(Spacing.touchMin), enabled = settings?.autoRecord == true,
             )
             HorizontalRule()
+            KeepTripsSection(settings, vm)
             ExportSection(vm, export, copy)
         }
         if (pinnedActions) SessionActions(session, isPinned = true)
     }
+}
+
+/** How many trips are kept; the older ones are deleted when a trip ends. Lap sessions are never counted. */
+@Composable
+private fun KeepTripsSection(settings: TripSettings?, vm: TripsViewModel) {
+    // Not shown with a made-up value while the settings are being read.
+    val keepTrips = settings?.keepTrips ?: return
+    SectionTitle(stringResource(R.string.trips_section_keep))
+    HintText(stringResource(R.string.trips_keep_hint))
+    StepperRow(
+        label = stringResource(R.string.trips_keep_label),
+        value = keepTrips.toString(),
+        unit = null,
+        words = StepWords.LOWER_RAISE,
+        onStep = vm::stepKeepTrips,
+        canStep = { canStepKeepTrips(keepTrips, it) },
+    )
+    HorizontalRule()
 }
 
 @Composable

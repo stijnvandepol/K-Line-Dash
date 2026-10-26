@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.AppGraph
+import nl.stijnvdpol.klinedash.data.KEEP_TRIPS_CHOICES
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripSettings
 import nl.stijnvdpol.klinedash.data.TripSettingsRepository
@@ -27,6 +28,16 @@ import nl.stijnvdpol.klinedash.service.TripLibrary
 
 private const val TAG = "TripsViewModel"
 private const val STOP_TIMEOUT_MS = 5_000L
+
+/** The next [KEEP_TRIPS_CHOICES] value ([direction] 1 keeps more, -1 fewer); the ends of the list stay put. */
+internal fun steppedKeepTrips(keepTrips: Int, direction: Int): Int {
+    val index = KEEP_TRIPS_CHOICES.indexOf(keepTrips)
+    if (index < 0) return keepTrips
+    return KEEP_TRIPS_CHOICES[(index + direction).coerceIn(KEEP_TRIPS_CHOICES.indices)]
+}
+
+/** Whether a step in [direction] still changes the limit; false at either end. */
+internal fun canStepKeepTrips(keepTrips: Int, direction: Int): Boolean = steppedKeepTrips(keepTrips, direction) != keepTrips
 
 /**
  * The TRIPS page apart from the session panel (see SessionViewModel): the trip list, the automatic
@@ -73,6 +84,14 @@ class TripsViewModel(
 
     fun setAutoStartWhenMoving(isOn: Boolean) {
         viewModelScope.launch { tripSettings.update { it.copy(autoStartWhenMoving = isOn) } }
+    }
+
+    /**
+     * Changes the retention limit. Nothing is deleted here: holding the step button would otherwise
+     * delete trips down the list without a question. The next finished trip applies the limit.
+     */
+    fun stepKeepTrips(direction: Int) {
+        viewModelScope.launch { tripSettings.update { it.copy(keepTrips = steppedKeepTrips(it.keepTrips, direction)) } }
     }
 
     fun delete(tripId: Long) {

@@ -41,7 +41,7 @@ class TripRecorderTest {
     /** How far the unit's wall clock has been stepped (no clock chip: GPS or NTP time arrives late); the monotonic clock is unaffected. */
     private var wallStepMs = 0L
 
-    private fun TestScope.newRecorder(tripDao: TripDao = dao) = TripRecorder(
+    private fun TestScope.newRecorder(tripDao: TripDao = dao, pruneTrips: suspend (Int) -> Unit = {}) = TripRecorder(
         tripsDir = File(folder.root, "trips"),
         tripDao = tripDao,
         settings = settings,
@@ -50,6 +50,7 @@ class TripRecorderTest {
         elapsed = { currentTime },
         zone = ZoneOffset.UTC,
         ioDispatcher = StandardTestDispatcher(testScheduler),
+        pruneTrips = pruneTrips,
     )
 
     private fun TestScope.engineRunning() {
@@ -122,6 +123,44 @@ class TripRecorderTest {
         assertEquals("the engine is still running but the user stopped the trip", RecordingState.Idle, recorder.state.value)
         assertEquals(1, dao.rows.value.size)
         assertTrue(dao.rows.value.single().endMs != null)
+    }
+
+    @Test
+    fun aFinishedTripAppliesTheRetentionLimitOfTheSettings() = runTest {
+        settings.value = TripSettings(autoRecord = true, keepTrips = 100)
+        val limits = ArrayList<Int>()
+        val recorder = newRecorder(pruneTrips = { limits += it })
+        backgroundScope.launch { recorder.run() }
+        assertEquals(StartResult.Started, recorder.start())
+        engineRunning()
+        advanceTimeBy(3_000)
+        assertTrue("nothing is removed while the trip runs", limits.isEmpty())
+
+        recorder.stop()
+
+        assertEquals(listOf(100), limits)
+        assertTrue("the trip is finished before the limit is applied, so it counts", dao.rows.value.single().endMs != null)
+    }
+
+    @Test
+    fun theRetentionLimitIsAppliedAfterRecoveryAndAFailingTidyUpDoesNotLoseTheTrip() = runTest {
+        var calls = 0
+        val recorder = newRecorder(pruneTrips = {
+            calls++
+            error("bug in the tidy-up")
+        })
+        recorder.recoverUnfinished()
+        assertEquals(1, calls)
+
+        backgroundScope.launch { recorder.run() }
+        assertEquals(StartResult.Started, recorder.start())
+        engineRunning()
+        advanceTimeBy(3_000)
+        recorder.stop()
+
+        assertEquals(2, calls)
+        assertEquals(RecordingState.Idle, recorder.state.value)
+        assertTrue("the trip is finished although the tidy-up failed", dao.rows.value.single().endMs != null)
     }
 
     @Test

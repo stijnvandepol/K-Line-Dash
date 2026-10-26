@@ -45,6 +45,13 @@ data class Trip(
     val lapTimingAfterMs: Long? = null,
 )
 
+/**
+ * A lap session: timed on a track, with laps or with the lap count not known yet. Retention never
+ * removes these (see [TripDao.getBeyondRetention]); a track with 0 laps is a plain trip, and so is a
+ * trip whose track was deleted ([TripDao.clearTrack] clears the lap count with it).
+ */
+val Trip.isLapSession: Boolean get() = trackId != null && lapCount != 0
+
 /** The cached part of a [Trip] row, see [TripDao.updateSummary]. */
 data class TripSummaryCache(
     val hasGps: Boolean,
@@ -87,6 +94,17 @@ interface TripDao {
 
     @Query("SELECT * FROM trips WHERE id = :id")
     suspend fun get(id: Long): Trip?
+
+    /**
+     * The trips retention removes: finished ones that are not a [lap session][isLapSession], newest
+     * first, without the newest [keep], at most [limit]. A trip without an end time is recording or
+     * waits for recovery, and is never returned. Keep the WHERE clause in step with [isLapSession].
+     */
+    @Query(
+        "SELECT * FROM trips WHERE endMs IS NOT NULL AND (trackId IS NULL OR lapCount = 0) " +
+            "ORDER BY startMs DESC LIMIT :limit OFFSET :keep",
+    )
+    suspend fun getBeyondRetention(keep: Int, limit: Int): List<Trip>
 
     /** Trips that never got an end time: recording right now, or cut off by a power loss. */
     @Query("SELECT * FROM trips WHERE endMs IS NULL")

@@ -1,6 +1,7 @@
 package nl.stijnvdpol.klinedash.service
 
 import android.content.ContentResolver
+import android.database.SQLException
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
@@ -15,11 +16,21 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import nl.stijnvdpol.klinedash.data.MAX_KEEP_TRIPS
 import nl.stijnvdpol.klinedash.data.Trip
 import nl.stijnvdpol.klinedash.data.TripDao
+import nl.stijnvdpol.klinedash.data.isLapSession
 
 private const val TAG = "TripLibrary"
-private const val MAX_LISTED_TRIPS = 500
+
+/**
+ * The longest the list gets: as many plain trips as the limit allows ([MAX_KEEP_TRIPS]) plus room
+ * for as many lap sessions, which retention never removes.
+ */
+private const val MAX_LISTED_TRIPS = 2 * MAX_KEEP_TRIPS
+
+/** Trips removed per database round trip by [TripLibrary.prune]; the first run after an update may have thousands to do. */
+private const val PRUNE_BATCH_SIZE = 100
 private const val CSV_MIME_TYPE = "text/csv"
 private const val GPX_MIME_TYPE = "application/gpx+xml"
 
@@ -155,9 +166,10 @@ internal class SafDestination(private val resolver: ContentResolver, treeUri: Ur
 }
 
 /**
- * Trip management for the UI: the list ([trips], newest first, at most 500), [delete] (with the
- * generated PC files of the trip) and [copyToTree] (to a USB stick or SD card chosen with the
- * system folder picker; the picker grants the app write access, no permission needed).
+ * Trip management for the UI: the list ([trips], newest first, at most [MAX_LISTED_TRIPS]),
+ * [delete] (with the generated PC files of the trip), [prune] (the retention limit) and
+ * [copyToTree] (to a USB stick or SD card chosen with the system folder picker; the picker grants
+ * the app write access, no permission needed).
  */
 class TripLibrary internal constructor(
     private val tripDao: TripDao,
@@ -178,15 +190,46 @@ class TripLibrary internal constructor(
     /** Removes the row and the file; refused for the trip being recorded. */
     suspend fun delete(tripId: Long): DeleteResult {
         val trip = tripDao.get(tripId) ?: return DeleteResult.NotFound
+        return remove(trip)
+    }
+
+    /**
+     * Retention: removes the finished trips beyond the newest [keep], oldest first, each with its
+     * generated files. Lap sessions are not counted and not removed (see [isLapSession]), and neither
+     * is a trip without an end time (recording, or not recovered yet). A trip whose file cannot be
+     * removed stays, so no file is orphaned, and is tried again by the next run. Returns how many
+     * trips were removed. A database error is logged and ends the run; it never reaches the caller.
+     */
+    suspend fun prune(keep: Int): Int {
+        require(keep >= 0) { "keep must not be negative" }
+        var removed = 0
+        try {
+            do {
+                val batch = tripDao.getBeyondRetention(keep, PRUNE_BATCH_SIZE)
+                val removedInBatch = batch.count { remove(it) == DeleteResult.Deleted }
+                removed += removedInBatch
+            } while (batch.size == PRUNE_BATCH_SIZE && removedInBatch > 0)
+        } catch (e: SQLException) {
+            Log.e(TAG, "Removing old trips failed after $removed", e)
+        }
+        if (removed > 0) Log.i(TAG, "Removed $removed trips beyond the newest $keep")
+        return removed
+    }
+
+    private suspend fun remove(trip: Trip): DeleteResult {
         if (isRecording(trip)) return DeleteResult.IsRecording
         val file = resolveTripFile(tripsDir, trip.fileName)
         // Existing but undeletable means the row must stay: otherwise the file would be orphaned.
         // The generated exports (vbo, gpx, ...) go with it.
         val removed = file == null || withContext(ioDispatcher) {
-            (derivedFiles(tripsDir, trip.fileName) + file).all { !it.exists() || it.delete() }
+            val files = derivedFiles(tripsDir, trip.fileName) + leftoverPartialFiles(tripsDir, trip.fileName) + file
+            files.all { !it.exists() || it.delete() }
         }
-        if (!removed) return DeleteResult.Failed("Could not delete the trip file. Try again.")
-        tripDao.deleteById(tripId)
+        if (!removed) {
+            Log.w(TAG, "Could not delete the files of trip ${trip.id} (${trip.fileName}), keeping its row")
+            return DeleteResult.Failed("Could not delete the trip file. Try again.")
+        }
+        tripDao.deleteById(trip.id)
         return DeleteResult.Deleted
     }
 

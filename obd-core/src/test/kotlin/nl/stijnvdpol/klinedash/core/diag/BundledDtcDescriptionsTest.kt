@@ -23,6 +23,9 @@ class BundledDtcDescriptionsTest {
     private val toyota2zz = BundledDtcDescriptions.load(CarMake.TOYOTA_LEXUS, EngineNotes.TOYOTA_2ZZ_GE)
     private val vag = BundledDtcDescriptions.load(CarMake.VW_GROUP, null)
     private val honda = BundledDtcDescriptions.load(CarMake.HONDA_ACURA, null)
+    private val nissan = BundledDtcDescriptions.load(CarMake.NISSAN_INFINITI, null)
+    private val mazda = BundledDtcDescriptions.load(CarMake.MAZDA, null)
+    private val ford = BundledDtcDescriptions.load(CarMake.FORD, null)
 
     private fun lines(fileName: String): List<String> = BundledDtcDescriptions.readResource(fileName)
 
@@ -104,6 +107,9 @@ class BundledDtcDescriptionsTest {
             CarMake.TOYOTA_LEXUS to "make-toyota.tsv",
             CarMake.VW_GROUP to "make-vag.tsv",
             CarMake.HONDA_ACURA to "make-honda.tsv",
+            CarMake.NISSAN_INFINITI to "make-nissan.tsv",
+            CarMake.MAZDA to "make-mazda.tsv",
+            CarMake.FORD to "make-ford.tsv",
         )) {
             val db = BundledDtcDescriptions.load(make, null)
             for (code in parseTable(fileName).keys) {
@@ -118,6 +124,9 @@ class BundledDtcDescriptionsTest {
     fun `the VAG and Honda tables are a selection of the intended size`() {
         assertTrue(parseTable("make-vag.tsv").size in 80..150)
         assertTrue(parseTable("make-honda.tsv").size in 30..60)
+        assertTrue(parseTable("make-nissan.tsv").size in 30..90)
+        assertTrue(parseTable("make-mazda.tsv").size in 15..60)
+        assertTrue(parseTable("make-ford.tsv").size in 30..90)
     }
 
     @Test
@@ -131,7 +140,7 @@ class BundledDtcDescriptionsTest {
 
     @Test
     fun `well-known generic codes have the standard wording for every make`() {
-        for (db in listOf(generic, toyota, toyota2zz, vag, honda)) {
+        for (db in listOf(generic, toyota, toyota2zz, vag, honda, nissan, mazda, ford)) {
             assertEquals("Catalyst System Efficiency Below Threshold (Bank 1)", db.describe(Dtc("P0420"))!!.description)
             assertEquals("Lost Communication With ECM/PCM \"A\"", db.describe(Dtc("U0100"))!!.description)
             assertEquals("Cylinder 4 Misfire Detected", db.describe(Dtc("P0304"))!!.description)
@@ -157,6 +166,9 @@ class BundledDtcDescriptionsTest {
         assertEquals(toyotaMeaning.description, toyota2zz.describe(Dtc("P1349"))!!.description)
         assertEquals("Ignition coil output stage 2: open circuit", vag.describe(Dtc("P1349"))!!.description)
         assertEquals(manufacturerSpecificDescription(CarMake.HONDA_ACURA), honda.describe(Dtc("P1349"))!!.description)
+        assertEquals(manufacturerSpecificDescription(CarMake.NISSAN_INFINITI), nissan.describe(Dtc("P1349"))!!.description)
+        assertEquals(manufacturerSpecificDescription(CarMake.MAZDA), mazda.describe(Dtc("P1349"))!!.description)
+        assertEquals(manufacturerSpecificDescription(CarMake.FORD), ford.describe(Dtc("P1349"))!!.description)
         assertEquals(MANUFACTURER_SPECIFIC_DESCRIPTION, generic.describe(Dtc("P1349"))!!.description)
         val bmw = BundledDtcDescriptions.load(CarMake.BMW_MINI, null)
         assertEquals(manufacturerSpecificDescription(CarMake.BMW_MINI), bmw.describe(Dtc("P1349"))!!.description)
@@ -170,6 +182,25 @@ class BundledDtcDescriptionsTest {
         assertEquals("Cylinder 1 injector (N30): short to positive", vag.describe(Dtc("P1213"))!!.description)
         assertNotNull(vag.describe(Dtc("P1128"))!!.vehicleNote)
         assertNull(honda.describe(Dtc("P1259"))!!.vehicleNote)
+    }
+
+    @Test
+    fun `Nissan Mazda and Ford tables give their own meanings`() {
+        assertEquals("Engine overheating (over temperature)", nissan.describe(Dtc("P1217"))!!.description)
+        assertEquals("Closed-loop fuel control, bank 1: function fault", nissan.describe(Dtc("P1148"))!!.description)
+        assertNotNull(nissan.describe(Dtc("P1217"))!!.vehicleNote)
+        assertNull(nissan.describe(Dtc("P1148"))!!.vehicleNote)
+        assertEquals("Generator terminal B: open circuit", mazda.describe(Dtc("P1634"))!!.description)
+        assertEquals("Ignition coil A: primary circuit fault", ford.describe(Dtc("P1352"))!!.description)
+    }
+
+    @Test
+    fun `P1260 differs per make`() {
+        assertEquals("Theft detected: engine disabled by the anti-theft system", ford.describe(Dtc("P1260"))!!.description)
+        assertEquals("Theft detected: engine disabled by the immobilizer", mazda.describe(Dtc("P1260"))!!.description)
+        assertEquals("Pump injector valve, cylinder 1 (N240): implausible signal", vag.describe(Dtc("P1260"))!!.description)
+        assertEquals(manufacturerSpecificDescription(CarMake.NISSAN_INFINITI), nissan.describe(Dtc("P1260"))!!.description)
+        assertEquals(manufacturerSpecificDescription(CarMake.HONDA_ACURA), honda.describe(Dtc("P1260"))!!.description)
     }
 
     // ---- layers: make and engine notes ----
@@ -419,7 +450,14 @@ class BundledDtcDescriptionsTest {
 
     private companion object {
         /** Bundled make tables and the least number of codes each must have. */
-        val MAKE_TABLES = mapOf("make-toyota.tsv" to 10, "make-vag.tsv" to 80, "make-honda.tsv" to 30)
+        val MAKE_TABLES = mapOf(
+            "make-toyota.tsv" to 10,
+            "make-vag.tsv" to 80,
+            "make-honda.tsv" to 30,
+            "make-nissan.tsv" to 30,
+            "make-mazda.tsv" to 15,
+            "make-ford.tsv" to 30,
+        )
         const val MAX_TEXT_LENGTH = 110
         const val MAX_NOTE_LENGTH = 220
         const val THREADS = 8

@@ -7,8 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Keep trips** (TRIPS, under the automatic recording switches): how many of the newest trips to
+  keep, 50, 100, 250 or 500 (default 500, what the list showed until now). When a trip ends, and
+  once when the app starts, older trips beyond the limit are deleted with their CSV file and the
+  generated PC files. Lap sessions are always kept and do not count towards the limit; a trip being
+  recorded is never touched. Changing the limit deletes nothing until the next trip ends.
+- **Manufacturer code meanings** for Nissan / Infiniti (66 codes), Mazda (26) and Ford petrol (76),
+  own wording, each code confirmed by at least two sources (`docs/research/dtc-sources-more-makes.md`).
+  Hyundai / Kia, Subaru and Mitsubishi stay on the make-aware hint: their public lists contradict
+  each other or have no second source.
+- **Help:** two new troubleshooting answers, about trouble codes marked "manufacturer-specific" and
+  about a rev counter scale that does not match the car, both with a button to SETUP > Car. The lap
+  timing steps say that the pass at which the line is set starts lap 1, and "Values update slowly"
+  explains the RPM priority and the link speed on SENSORS.
+
 ### Fixed
 
+- Old trips no longer pile up for ever: the list showed at most 500 trips, but older ones stayed on
+  the head unit with their files. The list now shows every kept trip, and a trip's half-written PC
+  files left by an interrupted export are removed with it.
 - Stopping the Wi-Fi export now waits until its port is released, so starting it again right away
   no longer fails with the port still in use; the stop no longer blocks the screen.
 

@@ -24,12 +24,21 @@ class HelpContentTest {
     }
 
     @Test
-    fun `troubleshooting answers the seven questions drivers ask, each collapsible`() {
+    fun `troubleshooting answers the nine questions drivers ask, each collapsible`() {
         val topic = HelpTopic.TROUBLESHOOTING
         assertTrue(topic.isCollapsible)
-        assertEquals(7, topic.items.size)
+        assertEquals(9, topic.items.size)
         assertTrue(topic.items.all { it.heading != null })
         assertEquals(1, HelpTopic.entries.count { it.isCollapsible })
+    }
+
+    @Test
+    fun `the make and red line questions link to the Car page, where both are set`() {
+        val car = HelpTopic.TROUBLESHOOTING.items.filter {
+            it.body == nl.stijnvdpol.klinedash.R.string.help_tr_make_b || it.body == nl.stijnvdpol.klinedash.R.string.help_tr_redline_b
+        }
+        assertEquals(2, car.size)
+        assertTrue(car.all { it.link == SetupSection.Car })
     }
 
     @Test

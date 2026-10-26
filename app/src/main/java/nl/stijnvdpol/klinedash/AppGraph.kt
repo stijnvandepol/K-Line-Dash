@@ -167,6 +167,7 @@ class AppGraph(val appContext: Context) {
         TripRecorder(
             tripsDir, database.tripDao(), tripSettingsRepository.settings, ObdServiceState.poller,
             location, trackRepository.activeTrack, tripAnalysis::refreshSummary, trackRepository::release,
+            { keep -> tripLibrary.prune(keep) },
         )
     }
 

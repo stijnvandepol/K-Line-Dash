@@ -74,6 +74,15 @@ fun exportFileName(tripFileName: String, format: ExportFormat): String = tripBas
 fun derivedFiles(tripsDir: File, tripFileName: String): List<File> =
     ExportFormat.entries.mapNotNull { resolveExistingTripFile(tripsDir, exportFileName(tripFileName, it)) }
 
+/**
+ * Half-written generated files of [tripFileName] that an export killed with the process left behind
+ * (see [PARTIAL_FILE_SUFFIX]); they go away with the trip, they are never offered or copied.
+ */
+fun leftoverPartialFiles(tripsDir: File, tripFileName: String): List<File> =
+    ExportFormat.entries.mapNotNull {
+        resolveExistingTripFile(tripsDir, exportFileName(tripFileName, it) + PARTIAL_FILE_SUFFIX)
+    }
+
 /** Starts the CSV files: Excel on Windows misreads UTF-8 without it (the headers hold a degree sign). */
 internal const val BYTE_ORDER_MARK = "\uFEFF"
 

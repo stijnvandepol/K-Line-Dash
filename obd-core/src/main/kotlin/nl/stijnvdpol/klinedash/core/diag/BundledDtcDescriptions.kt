@@ -60,6 +60,9 @@ class BundledDtcDescriptions internal constructor(
             CarMake.TOYOTA_LEXUS to "make-toyota.tsv",
             CarMake.VW_GROUP to "make-vag.tsv",
             CarMake.HONDA_ACURA to "make-honda.tsv",
+            CarMake.NISSAN_INFINITI to "make-nissan.tsv",
+            CarMake.MAZDA to "make-mazda.tsv",
+            CarMake.FORD to "make-ford.tsv",
         )
 
         private val ENGINE_TABLES = mapOf(

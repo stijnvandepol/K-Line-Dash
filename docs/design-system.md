@@ -348,7 +348,11 @@ Two columns, like before, but the left column is now the **session**:
 
 - **Not recording:** "Start trip" (white fill, 72 dp) and "Start lap session" (outline) with the
   track to use (last used track, or "Choose a track"); the auto-record switch rows ("When the
-  engine runs", "When the car moves (no OBD needed)").
+  engine runs", "When the car moves (no OBD needed)"). Under them **Keep trips**: a `title`, a
+  `caption` hint ("How many of the newest trips to keep. When a trip ends, older ones are deleted with
+  their PC files. Lap sessions are always kept and not counted.") and a 72 dp stepper (the Warnings
+  stepper) through 50, 100, 250, 500 (default 500). Stepping deletes nothing by itself; the limit is
+  applied when a trip ends and once at app start, oldest first, never the trip being recorded.
 - **Recording a trip:** live statistics as a 2 x 3 grid of fields like the dashboard field row:
   TIME, DISTANCE, AVG KM/H, MAX KM/H, MAX RPM, FUEL (estimate, `caption` "est."). Below, side by
   side as 72 dp outline cells: "Stop" and "Start lap timing". The second turns the trip that is

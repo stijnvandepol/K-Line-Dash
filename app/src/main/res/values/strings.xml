@@ -185,6 +185,9 @@
     <string name="trips_section_auto">Record automatically</string>
     <string name="trips_auto_record">When the engine runs</string>
     <string name="trips_auto_moving">When the car moves (no OBD needed)</string>
+    <string name="trips_section_keep">Keep trips</string>
+    <string name="trips_keep_label">Trips</string>
+    <string name="trips_keep_hint">How many of the newest trips to keep. When a trip ends, older ones are deleted with their PC files. Lap sessions are always kept and not counted.</string>
     <string name="trips_section_export">Export</string>
     <string name="trips_copy">Copy to USB or SD card</string>
     <string name="trips_wifi_start">Start Wi-Fi export</string>
@@ -576,11 +579,15 @@
     <string name="help_tr_unsupported_h">\"Adapter not supported\"</string>
     <string name="help_tr_unsupported_b">Some adapters only work with their own app, for example BlueDriver, ThinkDiag, Golo, TopScan, ANCEL and Autel. K-Line Dash cannot use them. See Supported adapters for adapters that work.</string>
     <string name="help_tr_slow_h">Values update slowly on an older car</string>
-    <string name="help_tr_slow_b">That is normal. Cars with a K-line connection (mostly cars built before 2008) answer about two requests per second in total, so every extra value slows the others. Newer cars with CAN are much faster. Dash only asks for what is on screen: a page with fewer fields updates faster.</string>
+    <string name="help_tr_slow_b">That is normal. Cars with a K-line connection (mostly cars built before 2008) answer about two requests per second in total, so every extra value slows the others. RPM gets the most turns (about once a second), then speed; temperatures and the other values come every few seconds. The top of Sensors shows how fast your link is. Newer cars with CAN are much faster. Dash only asks for what is on screen: a page with fewer fields updates faster.</string>
     <string name="help_tr_headunit_h">The head unit closes the app after the ignition goes off</string>
     <string name="help_tr_headunit_b">Many head units stop apps shortly after the ignition is switched off. Add K-Line Dash to the sleep whitelist of the unit and allow background running. Setup, Startup explains how for FYT / UIS and Microntek units. Open the app once by hand afterwards.</string>
     <string name="help_tr_gps_h">No GPS fix</string>
     <string name="help_tr_gps_b">GPS needs the location permission (Setup, GPS &amp; Tracks, Allow location), the location switch of Android on, and a clear view of the sky. The first fix can take a few minutes. Some head units have no GPS antenna connected; trips then record from the adapter only, without a route or laps.</string>
+    <string name="help_tr_make_h">A trouble code says \"manufacturer-specific\"</string>
+    <string name="help_tr_make_b">Codes such as P1xxx mean something different on every make. Set the make under Setup, Car. Automatic reads it from the VIN, but older cars often do not report one. For several makes K-Line Dash knows these meanings; for the others it says which workshop tool reads them.</string>
+    <string name="help_tr_redline_h">The rev counter scale does not match my car</string>
+    <string name="help_tr_redline_b">Set the red line under Setup, Car to where your own rev counter turns red. The scale and the colours of every tachometer follow it.</string>
     <string name="help_tr_trip_h">A trip did not record</string>
     <string name="help_tr_trip_b">Automatic recording starts when the engine runs and the adapter is connected, and ends two minutes after the engine stops. Without an adapter, switch on \"When the car moves\" on the Trips page: it starts above 10 km/h (6 mph) with a GPS fix. Check that the switch is on and that the unit has free storage.</string>
 
@@ -595,7 +602,7 @@
     <string name="help_lap_start_h">2. Start a lap session</string>
     <string name="help_lap_start_b">Tap Start lap session, or Start lap timing during a trip that already runs.</string>
     <string name="help_lap_line_h">3. Set the start/finish line</string>
-    <string name="help_lap_line_b">Drive across the line at a steady speed, faster than walking pace, and tap Set start/finish here as you pass it. The GPS must be accurate to 15 m or better.</string>
+    <string name="help_lap_line_b">Drive across the line at a steady speed, faster than walking pace, and tap Set start/finish here as you pass it. That pass is the start of lap 1. The GPS must be accurate to 15 m or better.</string>
     <string name="help_lap_sector_h">4. Add sectors (optional)</string>
     <string name="help_lap_sector_b">Tap Add sector here at each point where you want a split time. A sector line does not restart the lap clock.</string>
     <string name="help_lap_drive_h">5. Drive</string>

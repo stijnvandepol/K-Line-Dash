@@ -193,7 +193,7 @@ internal fun RedlineHint(modifier: Modifier = Modifier) = HintText(stringResourc
 
 /** A line of `caption` under a row, in the row's padding. */
 @Composable
-private fun HintText(text: String, modifier: Modifier = Modifier) {
+internal fun HintText(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = KLineType.caption,

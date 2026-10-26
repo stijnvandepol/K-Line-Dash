@@ -1,0 +1,89 @@
+# K-Line Dash: Ford (petrol PCM) manufacturer-specific trouble code meanings
+# Format: CODE<TAB>description<TAB>note
+#   - description: our own short wording of the Ford meaning of a P1xxx code.
+#   - note: a short first check, only where sources widely agree; empty otherwise.
+# Curated selection, not an import. A code is listed only if at least two separate publications agree on
+# its meaning and none disagrees; codes where sources disagreed were left out. Diesel-specific codes,
+# transmission codes and the US fuel pump driver module family were not taken.
+# Per-code sources: docs/research/dtc-sources-more-makes.md
+# Sources (separate sites; all reproduce Ford's OBD-II diagnostic code chart, so they share one origin):
+#   EL  https://www.engine-light-help.com/ford-check-engine-light.html
+#   OC  https://www.obd-codes.com/trouble_codes/ford/ (the carcarehacks.com Ford list is a copy, counted once)
+#   TC  troublecodes.net, entries labelled Ford/Lincoln/Mercury: https://www.troublecodes.net/p1codes/
+# Ford's European petrol PCMs share the EEC-V lineage of this list; EU diesel (TDCi) ECUs do not.
+P1000	OBD readiness (monitor) test not completed	
+P1001	Key-on engine-running (KOER) self-test could not be completed	
+P1039	Vehicle speed signal missing or implausible	
+P1051	Brake switch signal missing or implausible	
+P1100	Mass air flow sensor: intermittent signal	
+P1101	Mass air flow sensor: out of self-test range	
+P1112	Intake air temperature sensor: intermittent signal	
+P1116	Engine coolant temperature sensor: out of self-test range	
+P1117	Engine coolant temperature sensor: intermittent signal	
+P1120	Throttle position sensor: out of range	
+P1121	Throttle position sensor: signal does not match the mass air flow	
+P1124	Throttle position sensor: out of self-test range	
+P1125	Throttle position sensor: intermittent signal	
+P1130	Upstream O2 sensor, bank 1: not switching, fuel adaptation at its limit	
+P1131	Upstream O2 sensor, bank 1: not switching, mixture indicated lean	
+P1132	Upstream O2 sensor, bank 1: not switching, mixture indicated rich	
+P1137	Downstream O2 sensor, bank 1: not switching, mixture indicated lean	
+P1138	Downstream O2 sensor, bank 1: not switching, mixture indicated rich	
+P1150	Upstream O2 sensor, bank 2: not switching, fuel adaptation at its limit	
+P1151	Upstream O2 sensor, bank 2: not switching, mixture indicated lean	
+P1152	Upstream O2 sensor, bank 2: not switching, mixture indicated rich	
+P1157	Downstream O2 sensor, bank 2: not switching, mixture indicated lean	
+P1220	Series throttle control fault	
+P1224	Throttle position sensor B: out of self-test range	
+P1250	Fuel pressure regulator control solenoid: no power	
+P1260	Theft detected: engine disabled by the anti-theft system	
+P1270	Engine speed or vehicle speed limiter reached	
+P1288	Cylinder head temperature sensor: out of self-test range	
+P1289	Cylinder head temperature sensor: signal above the self-test range	
+P1290	Cylinder head temperature sensor: signal below the self-test range	
+P1299	Cylinder head temperature: engine overheating detected	
+P1309	Misfire detection monitor not enabled	
+P1351	Ignition diagnostic monitor: circuit input fault	
+P1352	Ignition coil A: primary circuit fault	
+P1353	Ignition coil B: primary circuit fault	
+P1354	Ignition coil C: primary circuit fault	
+P1355	Ignition coil D: primary circuit fault	
+P1356	Ignition diagnostic module input to the PCM lost	
+P1358	Ignition diagnostic monitor: signal out of self-test range	
+P1359	Spark output circuit fault	
+P1364	Ignition coil: primary circuit fault	
+P1380	Variable cam timing solenoid valve: short or open circuit	
+P1381	Variable cam timing: advance excessive	
+P1390	Octane adjust: out of self-test range	
+P1401	DPFE (EGR pressure) sensor: circuit high	
+P1406	DPFE (EGR pressure) sensor: downstream hose fault	
+P1408	EGR flow: out of self-test range	
+P1409	EGR vacuum regulator: circuit fault	
+P1413	Secondary air injection monitor: circuit low voltage	
+P1414	Secondary air injection monitor: circuit high voltage	
+P1443	EVAP purge control solenoid or valve fault	
+P1444	EVAP purge flow sensor: circuit input low	
+P1445	EVAP purge flow sensor: circuit input high	
+P1450	EVAP system cannot bleed the fuel tank vacuum	
+P1460	Wide-open-throttle A/C cutoff circuit fault	
+P1463	A/C pressure sensor: insufficient pressure change	
+P1469	A/C cycling period too low	
+P1473	Cooling fan secondary circuit: high with fans off	
+P1474	Cooling fan control primary circuit: low	
+P1479	Cooling fan control primary circuit: high	
+P1480	Cooling fan secondary circuit: low with low-speed fans on	
+P1481	Cooling fan secondary circuit: low with high-speed fans on	
+P1483	Cooling fan power draw exceeded normal	
+P1504	Intake air control circuit fault	
+P1505	Idle air control system at its adaptive limit	
+P1506	Idle air control: engine speed too high	
+P1507	Idle air control: engine speed too low	
+P1518	Intake manifold runner control: stuck open	
+P1520	Intake manifold runner control: circuit fault	
+P1530	A/C compressor clutch circuit: open or short	
+P1539	A/C compressor clutch circuit: current draw exceeded normal	
+P1605	PCM keep-alive memory test error	
+P1625	Vehicle load control module fan circuit: voltage not detected	
+P1626	Vehicle load control module circuit: voltage not detected	
+P1650	Power steering pressure switch: out of self-test range	
+P1651	Power steering pressure switch: input fault	

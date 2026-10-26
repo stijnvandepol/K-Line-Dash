@@ -42,6 +42,8 @@ internal enum class HelpTopic(
             HelpItem(R.string.help_tr_slow_h, R.string.help_tr_slow_b),
             HelpItem(R.string.help_tr_headunit_h, R.string.help_tr_headunit_b, SetupSection.Startup),
             HelpItem(R.string.help_tr_gps_h, R.string.help_tr_gps_b, SetupSection.GpsTracks),
+            HelpItem(R.string.help_tr_make_h, R.string.help_tr_make_b, SetupSection.Car),
+            HelpItem(R.string.help_tr_redline_h, R.string.help_tr_redline_b, SetupSection.Car),
             HelpItem(R.string.help_tr_trip_h, R.string.help_tr_trip_b),
         ),
         isCollapsible = true,
