@@ -29,6 +29,7 @@ private const val DRAIN_TIMEOUT_MS = 300
 private const val DRAIN_CHUNK_BYTES = 4096
 private const val MAX_DRAIN_BYTES = 64 * 1024
 private const val IDLE_CHECK_INTERVAL_MS = 5_000L
+private const val ACCEPT_THREAD_JOIN_MS = 2_000L
 
 /** A response that sends nothing for this long is given up: the client stopped reading. */
 internal const val WRITE_STALL_TIMEOUT_MS = 30_000L
@@ -56,6 +57,7 @@ class HttpTripExportServer(
         val scheduler: ScheduledExecutorService,
         val handler: ExportRequestHandler,
         val activity: ExportActivity,
+        val acceptThread: Thread,
     )
 
     private val lifecycleLock = Any()
@@ -77,12 +79,13 @@ class HttpTripExportServer(
         val scheduler = Executors.newSingleThreadScheduledExecutor(daemonThreads("trip-export-idle"))
         val activity = ExportActivity(clock)
         val handler = ExportRequestHandler(ExportAuth(config.pin, config.maxPinAttempts), files, activity)
-        running = Running(serverSocket, workers, scheduler, handler, activity)
+        val acceptThread = daemonThreads("trip-export-accept").newThread { acceptLoop(serverSocket, workers, handler) }
+        running = Running(serverSocket, workers, scheduler, handler, activity, acceptThread)
         scheduler.scheduleWithFixedDelay(::checkIdle, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS)
         scheduler.scheduleWithFixedDelay(
             ::closeStalledResponses, IDLE_CHECK_INTERVAL_MS, IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS,
         )
-        daemonThreads("trip-export-accept").newThread { acceptLoop(serverSocket, workers, handler) }.start()
+        acceptThread.start()
         serverSocket.localPort
     }
 
@@ -97,6 +100,22 @@ class HttpTripExportServer(
         openSockets.clear()
         current.workers.shutdownNow()
         current.scheduler.shutdownNow()
+        awaitAcceptThread(current.acceptThread)
+    }
+
+    /**
+     * Waits until the accept loop has let go of the listening socket. A thread blocked in accept()
+     * keeps the socket alive (Linux holds it until the call returns) after close(), so without this
+     * a start right after a stop could find the port still in use. Bounded, and skipped when the
+     * accept thread itself stops the server.
+     */
+    private fun awaitAcceptThread(acceptThread: Thread) {
+        if (Thread.currentThread() === acceptThread) return
+        try {
+            acceptThread.join(ACCEPT_THREAD_JOIN_MS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     /**

@@ -110,7 +110,8 @@ class ExportController internal constructor(
     fun stop() {
         val run = synchronized(lock) { current.also { current = null } } ?: return
         run.job.cancel()
-        run.server?.stop()
+        // Off the caller's thread (the UI): stopping waits until the listening socket is released.
+        scope.launch { run.server?.stop() }
         _state.value = ExportState.Off
     }
 

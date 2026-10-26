@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Stopping the Wi-Fi export now waits until its port is released, so starting it again right away
+  no longer fails with the port still in use; the stop no longer blocks the screen.
+
 ## [1.2.1] - 2026-10-25
 
 An optimisation round after a full audit: faster live data on K-line cars, a lighter dashboard, a
