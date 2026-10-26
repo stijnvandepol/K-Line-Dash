@@ -13,8 +13,8 @@ More robust Bluetooth Classic pairing on head units with their own Bluetooth app
 
 ### Fixed
 
-- **Pairing a Bluetooth Classic adapter in the app is more reliable on head units** (tested
-  against an ESP32 bridge with a PIN on Android 8.1):
+- **Pairing a Bluetooth Classic adapter in the app is more reliable on head units** (written for
+  an ESP32 bridge with a PIN on Android 8.1; not yet tried on that hardware):
   - The PIN request is answered ahead of a vendor app and then no longer passed on, so no second
     answer or dialog follows.
   - A retry only tries the next PIN when the adapter turned the last one down; when the adapter was
