@@ -24,10 +24,17 @@ import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.service.TransportFactory
 import nl.stijnvdpol.klinedash.transport.BleScanNotice
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
+import nl.stijnvdpol.klinedash.transport.ClassicPairing
+import nl.stijnvdpol.klinedash.transport.PairingEvent
 import nl.stijnvdpol.klinedash.transport.ScanBlockedException
 import nl.stijnvdpol.klinedash.transport.bondedDevices as queryBondedDevices
+import nl.stijnvdpol.klinedash.transport.classicSearchNotice
+import nl.stijnvdpol.klinedash.transport.mergeClassicResult
 import nl.stijnvdpol.klinedash.transport.mergeScanResult
+import nl.stijnvdpol.klinedash.transport.next
+import nl.stijnvdpol.klinedash.transport.pairClassic
 import nl.stijnvdpol.klinedash.transport.scanBle
+import nl.stijnvdpol.klinedash.transport.searchClassic
 
 private val ValidPorts = 1..65535
 private const val MAX_PORT_DIGITS = 5
@@ -66,12 +73,32 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     /** Why the last scan did not run, or what to check when it found nothing; null while there is nothing to say. */
     internal val scanNotice: StateFlow<BleScanNotice?> = _scanNotice.asStateFlow()
 
+    private val _classicFound = MutableStateFlow<List<BtDeviceInfo>>(emptyList())
+
+    /** Unpaired Bluetooth Classic devices of the last search, likely OBD adapters first. */
+    val classicFound: StateFlow<List<BtDeviceInfo>> = _classicFound.asStateFlow()
+
+    private val _classicSearching = MutableStateFlow(false)
+    val classicSearching: StateFlow<Boolean> = _classicSearching.asStateFlow()
+
+    private val _classicNotice = MutableStateFlow<BleScanNotice?>(null)
+
+    /** Why the last Bluetooth Classic search did not run, or what to check when it found nothing. */
+    internal val classicNotice: StateFlow<BleScanNotice?> = _classicNotice.asStateFlow()
+
+    private val _pairing = MutableStateFlow<ClassicPairing>(ClassicPairing.Idle)
+
+    /** Where the pairing of the tapped adapter stands; after [ClassicPairing.Paired] it is also the selected adapter. */
+    internal val pairing: StateFlow<ClassicPairing> = _pairing.asStateFlow()
+
     private val message = TimedMessage(viewModelScope, NOTICE_MS)
 
     /** The answer to the last tap (a failed scan, a forgotten protocol), for a few seconds. */
     val notice: StateFlow<String?> = message.text
 
     private var scanJob: Job? = null
+    private var searchJob: Job? = null
+    private var pairJob: Job? = null
     private var wifiJob: Job? = null
 
     fun refreshBonded() {
@@ -109,6 +136,70 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
                 _scanning.value = false
             }
         }
+    }
+
+    /** Says the search cannot start until the Bluetooth permission is granted. */
+    internal fun showClassicPermissionMissing() {
+        _classicNotice.value = BleScanNotice.PermissionMissing
+    }
+
+    /** Searches for unpaired Bluetooth Classic devices unless a search or a pairing is running. */
+    fun startClassicSearch() {
+        if (searchJob?.isActive == true || pairing.value is ClassicPairing.Pairing) return
+        _classicFound.value = emptyList()
+        _classicNotice.value = null
+        _pairing.update { it.next(PairingEvent.Dismiss) }
+        searchJob = viewModelScope.launch {
+            _classicSearching.value = true
+            try {
+                val isStarted = searchClassic(context) { device -> _classicFound.update { list -> mergeClassicResult(list, device) } }
+                _classicNotice.value = classicSearchNotice(isStarted, _classicFound.value.isNotEmpty())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ScanBlockedException) {
+                _classicNotice.value = BleScanNotice.Blocked(e.block)
+            } catch (e: Exception) {
+                // SecurityException (permission) or IllegalStateException (Bluetooth went off), English message.
+                message.show(context.getString(R.string.bt_search_failed, e.message ?: e.javaClass.simpleName))
+            } finally {
+                _classicSearching.value = false
+            }
+        }
+    }
+
+    /**
+     * Pairs with [device] from the search list; once it is paired it is the selected adapter. Ignored
+     * while another pairing runs. Ends the search first: bonding fails while discovery runs.
+     */
+    fun pairWith(device: BtDeviceInfo, attempt: Int = 0) {
+        if (pairJob?.isActive == true) return
+        searchJob?.cancel()
+        _pairing.update { it.next(PairingEvent.Start(device, attempt)) }
+        pairJob = viewModelScope.launch {
+            val result = try {
+                pairClassic(context, device, attempt)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Pairing refused", e)
+                _pairing.value.next(PairingEvent.Refused)
+            } catch (e: ScanBlockedException) {
+                Log.w(TAG, "Pairing blocked: ${e.block}", e)
+                _pairing.value.next(PairingEvent.Refused)
+            }
+            _pairing.value = result
+            if (result is ClassicPairing.Paired) {
+                selectBtDevice(result.device)
+                _classicFound.update { list -> list.filter { it.address != result.device.address } }
+                refreshBonded()
+            }
+        }
+    }
+
+    /** Tries the failed pairing again, with the next PIN. */
+    fun retryPairing() {
+        val failed = pairing.value as? ClassicPairing.Failed ?: return
+        pairWith(failed.device, failed.attempt + 1)
     }
 
     fun selectKind(kind: TransportKind) = updateSettings { it.copy(kind = kind) }

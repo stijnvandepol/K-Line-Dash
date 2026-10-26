@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-26
+
+Pair a Bluetooth Classic adapter from inside the app, for head units whose own Bluetooth screen
+only lists phones.
+
+### Added
+
+- **Search and pair Bluetooth Classic adapters in the app** (SETUP > Connection and the setup
+  wizard): Search finds unpaired Classic and dual-mode devices (all device classes, OBD-looking names
+  first), tapping one pairs it, answering a PIN request with 1234 by itself (a retry tries 0000, then
+  6789). When it is paired it becomes the selected adapter. Needed on head units whose own Bluetooth
+  screen only lists phones. Says why when Bluetooth is off, a permission is missing, Location is off
+  (Android 11 and older) or nothing was found.
+
 ## [1.3.0] - 2026-10-26
 
 More makes with trouble code meanings, old trips cleaned up, and a Bluetooth LE scan that says
@@ -210,7 +224,8 @@ The first public release.
 - Position values are kept out of error messages and crash reports.
 - See `docs/SECURITY.md` for the threat model and known limitations.
 
-[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/stijnvandepol/K-Line-Dash/compare/v1.1.0...v1.2.0

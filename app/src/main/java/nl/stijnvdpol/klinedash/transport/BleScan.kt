@@ -117,16 +117,20 @@ internal suspend fun scanBle(
  */
 @SuppressLint("MissingPermission")
 private class ScanSession(
-    private val context: Context,
+    context: Context,
     private val adapter: BluetoothAdapter,
     private val scanner: BluetoothLeScanner,
     private val onDevice: (BtDeviceInfo) -> Unit,
 ) {
     private val tally = ScanTally()
     private var failureCode: Int? = null
-    private var isReceiverRegistered = false
     private var isDiscoveryStarted = false
     private var isLeScanStarted = false
+    private val discovery = DiscoverySession(context, adapter) { device, rawName ->
+        if (tally.onDiscoverySighting(device.address, !rawName.isNullOrBlank(), device.typeOrUnknown())) {
+            onDevice(btDeviceInfo(rawName, device.address))
+        }
+    }
 
     /** Completed early when the LE scan failed and discovery is not running either: nothing is left to wait for. */
     val isOver = CompletableDeferred<Unit>()
@@ -145,22 +149,8 @@ private class ScanSession(
         }
     }
 
-    private val discoveryReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
-            val rawName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME) ?: device.nameOrNull()
-            if (tally.onDiscoverySighting(device.address, !rawName.isNullOrBlank(), device.typeOrUnknown())) {
-                onDevice(btDeviceInfo(rawName, device.address))
-            }
-        }
-    }
-
     fun start() {
-        // RECEIVER_EXPORTED: ACTION_FOUND is a protected system broadcast, so only the system can send it.
-        // RECEIVER_NOT_EXPORTED would add a signature permission that the Bluetooth process does not hold.
-        ContextCompat.registerReceiver(context, discoveryReceiver, IntentFilter(BluetoothDevice.ACTION_FOUND), ContextCompat.RECEIVER_EXPORTED)
-        isReceiverRegistered = true
-        isDiscoveryStarted = startDiscovery()
+        isDiscoveryStarted = discovery.start()
         // Not MATCH_MODE_AGGRESSIVE, MAX_ADVERTISEMENT or setLegacy(false): the first two only act on scans
         // with filters, and a legacy (Bluetooth 4.x) adapter is what we look for; extended advertising
         // support varies per controller and can make the scan fail on older stacks.
@@ -169,7 +159,6 @@ private class ScanSession(
     }
 
     fun stop() {
-        if (isReceiverRegistered) context.unregisterReceiver(discoveryReceiver)
         if (isLeScanStarted) {
             try {
                 scanner.stopScan(leCallback)
@@ -178,29 +167,75 @@ private class ScanSession(
                 Log.w(TAG, "stopScan failed", e)
             }
         }
+        discovery.stop()
+    }
+
+    fun report(): ScanReport = tally.report(isDiscoveryStarted, failureCode)
+
+    private fun handle(result: ScanResult) {
+        val device = result.device ?: return
+        val rawName = result.scanRecord?.deviceName ?: device.nameOrNull()
+        if (tally.onLeSighting(device.address, !rawName.isNullOrBlank())) onDevice(btDeviceInfo(rawName, device.address))
+    }
+}
+
+/**
+ * Classic discovery (an inquiry of about 12 s) with its broadcast receiver: [onFound] gets every device
+ * the system reports, with its name if known, also again when a name arrives later. [onFinished] runs
+ * when the stack ends the inquiry by itself. Used by the LE scan, which lets discovery run beside it,
+ * and by the Bluetooth Classic search. Delivered on the main thread. [stop] undoes whatever [start] did,
+ * also when [start] failed halfway.
+ */
+@SuppressLint("MissingPermission")
+internal class DiscoverySession(
+    private val context: Context,
+    private val adapter: BluetoothAdapter,
+    private val onFinished: () -> Unit = {},
+    private val onFound: (device: BluetoothDevice, rawName: String?) -> Unit,
+) {
+    private var isReceiverRegistered = false
+    private var isStarted = false
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == BluetoothAdapter.ACTION_DISCOVERY_FINISHED) {
+                onFinished()
+                return
+            }
+            val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+            onFound(device, intent.getStringExtra(BluetoothDevice.EXTRA_NAME) ?: device.nameOrNull())
+        }
+    }
+
+    /** False when the stack refuses discovery (Bluetooth just went off, or another discovery runs). */
+    fun start(): Boolean {
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_NAME_CHANGED)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        }
+        // RECEIVER_EXPORTED: these are protected system broadcasts, so only the system can send them.
+        // RECEIVER_NOT_EXPORTED would add a signature permission that the Bluetooth process does not hold.
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        isReceiverRegistered = true
+        isStarted = try {
+            adapter.startDiscovery()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "startDiscovery refused", e)
+            false
+        }
+        return isStarted
+    }
+
+    fun stop() {
+        if (isReceiverRegistered) context.unregisterReceiver(receiver)
         // Only a discovery we started: one that was already running belongs to someone else.
-        if (isDiscoveryStarted) {
+        if (isStarted) {
             try {
                 adapter.cancelDiscovery()
             } catch (e: RuntimeException) {
                 Log.w(TAG, "cancelDiscovery failed", e)
             }
         }
-    }
-
-    fun report(): ScanReport = tally.report(isDiscoveryStarted, failureCode)
-
-    /** False when the stack refuses discovery (Bluetooth just went off, or another discovery runs); the LE scan goes on. */
-    private fun startDiscovery(): Boolean = try {
-        adapter.startDiscovery()
-    } catch (e: SecurityException) {
-        Log.w(TAG, "startDiscovery refused", e)
-        false
-    }
-
-    private fun handle(result: ScanResult) {
-        val device = result.device ?: return
-        val rawName = result.scanRecord?.deviceName ?: device.nameOrNull()
-        if (tally.onLeSighting(device.address, !rawName.isNullOrBlank())) onDevice(btDeviceInfo(rawName, device.address))
     }
 }

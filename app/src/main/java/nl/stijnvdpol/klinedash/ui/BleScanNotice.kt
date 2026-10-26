@@ -24,10 +24,10 @@ import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
 import nl.stijnvdpol.klinedash.ui.theme.Spacing
 
-private const val CHECK_BULLET = "– "
+internal const val CHECK_BULLET = "– "
 
 /**
- * What the device list says besides the devices after a scan that did not run or found nothing: the
+ * What the device list says besides the devices after a scan or search that did not run or found nothing: the
  * reason and, for Location, the button that opens the setting; or the checklist for an empty result.
  * Shared by SETUP > Connection and the setup wizard. Draws nothing without a [notice].
  */
@@ -37,8 +37,16 @@ internal fun BleScanNoticeBlock(notice: BleScanNotice?) {
         null -> Unit
         is BleScanNotice.Blocked -> BlockedNotice(notice.block)
         is BleScanNotice.NothingFound -> NothingFoundNotice(notice.failureCode)
+        BleScanNotice.NothingFoundClassic -> ClassicNothingFoundNotice()
+        BleScanNotice.DiscoveryRefused -> NoticeLine(stringResource(R.string.bt_search_refused), KLineTheme.colors.caution)
+        BleScanNotice.PermissionMissing -> NoticeLine(permissionMissingText(), KLineTheme.colors.caution)
     }
 }
+
+@Composable
+private fun permissionMissingText(): String = stringResource(
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) R.string.bt_search_permission_nearby else R.string.bt_search_permission_location,
+)
 
 @Composable
 private fun BlockedNotice(block: ScanBlock) {

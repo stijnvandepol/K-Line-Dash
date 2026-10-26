@@ -28,7 +28,7 @@ data class BtDeviceInfo(
     val knownAppLocked: Boolean = false,
 )
 
-private const val UNNAMED_DEVICE = "(unnamed)"
+internal const val UNNAMED_DEVICE = "(unnamed)"
 
 private val OBD_NAME_HINTS = listOf(
     "OBD", "ELM", "V-LINK", "VLINK", "VGATE", "ICAR", "KONNWEI", "KW905", "VIECAR",
@@ -136,6 +136,14 @@ internal fun BluetoothDevice.typeOrUnknown(): Int = try {
     type
 } catch (e: SecurityException) {
     BluetoothDevice.DEVICE_TYPE_UNKNOWN
+}
+
+/** The bond state, or NONE when the permission is gone; like [nameOrNull], it only decides what is listed. */
+@SuppressLint("MissingPermission")
+internal fun BluetoothDevice.bondStateOrNone(): BondState = try {
+    bondStateOf(bondState)
+} catch (e: SecurityException) {
+    BondState.NONE
 }
 
 /** The list entry for a device with its advertised [rawName] (null or blank: shown as unnamed). */

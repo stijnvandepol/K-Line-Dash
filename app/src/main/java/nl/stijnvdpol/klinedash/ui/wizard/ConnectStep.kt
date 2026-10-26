@@ -23,6 +23,8 @@ import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.ui.BleScanNoticeBlock
 import nl.stijnvdpol.klinedash.ui.ButtonRow
+import nl.stijnvdpol.klinedash.ui.ClassicSearchButton
+import nl.stijnvdpol.klinedash.ui.ClassicSearchResults
 import nl.stijnvdpol.klinedash.ui.ConnectionViewModel
 import nl.stijnvdpol.klinedash.ui.DeviceList
 import nl.stijnvdpol.klinedash.ui.HorizontalRule
@@ -72,7 +74,7 @@ internal fun ConnectStep(connection: ConnectionViewModel, permissions: Permissio
             StepTitle(stringResource(s.kind.connectTitleRes()))
             NumberedStep(1, stringResource(R.string.wiz_step_plug_in))
             when (s.kind) {
-                TransportKind.BT_CLASSIC -> BluetoothInstructions(hasPermission, permissions, connection::refreshBonded) { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }
+                TransportKind.BT_CLASSIC -> BluetoothInstructions(hasPermission, permissions, connection) { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }
                 TransportKind.BLE -> BleInstructions(hasPermission, scanning, permissions, connection)
                 TransportKind.WIFI -> WifiInstructions { openSettings(Settings.ACTION_WIFI_SETTINGS) }
                 TransportKind.SIMULATOR -> Unit
@@ -82,6 +84,8 @@ internal fun ConnectStep(connection: ConnectionViewModel, permissions: Permissio
         right = {
             when (s.kind) {
                 TransportKind.BT_CLASSIC -> {
+                    SectionTitle(stringResource(R.string.section_devices_nearby))
+                    ClassicSearchResults(connection, hasPermission, onConnect = null)
                     SectionTitle(stringResource(R.string.section_devices_paired))
                     DeviceList(bonded, s.btAddress, stringResource(R.string.bt_no_devices), connection::selectBtDevice)
                 }
@@ -114,13 +118,14 @@ private fun TransportKind.connectTitleRes(): Int = when (this) {
 private fun BluetoothInstructions(
     hasPermission: Boolean,
     permissions: PermissionRequests,
-    onRefresh: () -> Unit,
+    connection: ConnectionViewModel,
     onOpenSettings: () -> Unit,
 ) {
     NumberedStep(2, stringResource(R.string.wiz_bt_step_pair))
+    ClassicSearchButton(connection) { if (permissions.isReadyToScan()) connection.startClassicSearch() }
     ButtonRow {
         SecondaryButton(stringResource(R.string.btn_open_bt_settings), onOpenSettings, Modifier.weight(1f))
-        SecondaryButton(stringResource(R.string.btn_refresh), onRefresh, Modifier.weight(1f))
+        SecondaryButton(stringResource(R.string.btn_refresh), connection::refreshBonded, Modifier.weight(1f))
     }
     NumberedStep(3, stringResource(R.string.wiz_bt_step_choose))
     if (!hasPermission) PermissionNotice(permissions)

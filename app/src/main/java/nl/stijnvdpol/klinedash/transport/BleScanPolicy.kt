@@ -64,12 +64,17 @@ internal data class ScanEnvironment(
 /**
  * The reason not to start a scan, or null when it may start. Location is only blocking when the
  * system says it is off: a device with no location service gets the scan, as it would be refused by
- * the Bluetooth stack itself rather than by this check.
+ * the Bluetooth stack itself rather than by this check. Classic discovery has no LE scanner to need
+ * ([needsLeScanner] false) and no scan budget (it passes 0 as [throttleWaitMs]).
  */
-internal fun decideScanBlock(environment: ScanEnvironment, throttleWaitMs: Long): ScanBlock? = when {
+internal fun decideScanBlock(
+    environment: ScanEnvironment,
+    throttleWaitMs: Long,
+    needsLeScanner: Boolean = true,
+): ScanBlock? = when {
     !environment.hasAdapter -> ScanBlock.NoAdapter
     !environment.isBluetoothOn -> ScanBlock.BluetoothOff
-    !environment.hasLeScanner -> ScanBlock.NoLeScanner
+    needsLeScanner && !environment.hasLeScanner -> ScanBlock.NoLeScanner
     needsLocationForScan(environment.sdkInt) && environment.isLocationOn == false -> ScanBlock.LocationOff
     throttleWaitMs > 0 -> ScanBlock.Throttled(secondsToWait(throttleWaitMs))
     else -> null
@@ -184,6 +189,15 @@ internal sealed interface BleScanNotice {
 
     /** The scan ran to its end without a device; [failureCode] is the stack's error, if it gave one. */
     data class NothingFound(val failureCode: Int?) : BleScanNotice
+
+    /** A Bluetooth Classic search ran to its end without an unpaired device. */
+    data object NothingFoundClassic : BleScanNotice
+
+    /** Android would not start the Bluetooth Classic search. */
+    data object DiscoveryRefused : BleScanNotice
+
+    /** The Bluetooth permission (Nearby devices, or Location on Android 11 and older) is not granted. */
+    data object PermissionMissing : BleScanNotice
 }
 
 /** One line of the checklist shown when a scan found nothing. */

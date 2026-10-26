@@ -43,6 +43,7 @@ import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.service.detail
 import nl.stijnvdpol.klinedash.service.headline
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
+import nl.stijnvdpol.klinedash.transport.hasRequiredPermissions
 import nl.stijnvdpol.klinedash.transport.needsBluetoothPermissions
 import nl.stijnvdpol.klinedash.ui.theme.KLineTheme
 import nl.stijnvdpol.klinedash.ui.theme.KLineType
@@ -74,6 +75,9 @@ fun ConnectionScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val s = settings ?: return
+    val context = LocalContext.current
+    val isPermissionGranted = remember(permissionRevision) { hasRequiredPermissions(context) }
+    val connect = { onConnect(s.kind.needsBluetoothPermissions()) }
 
     LaunchedEffect(s.kind, permissionRevision) {
         if (s.kind == TransportKind.BT_CLASSIC) vm.refreshBonded()
@@ -97,12 +101,12 @@ fun ConnectionScreen(
                     Actions(
                         vm = vm,
                         state = state,
-                        onConnect = { onConnect(s.kind.needsBluetoothPermissions()) },
+                        onConnect = connect,
                         modifier = Modifier.fillMaxWidth().height(Spacing.touchMin),
                     )
                     HorizontalRule()
                 }
-                TransportDetails(vm, s, onScanRequested, Modifier.weight(1f).fillMaxWidth())
+                TransportDetails(vm, s, onScanRequested, isPermissionGranted, connect, Modifier.weight(1f).fillMaxWidth())
             }
         }
     }
@@ -205,12 +209,14 @@ private fun Actions(vm: ConnectionViewModel, state: ConnectionState, onConnect: 
     }
 }
 
-/** What the selected transport needs: device list, BLE scan or Wi-Fi address. */
+/** What the selected transport needs: device lists, BLE scan or Wi-Fi address. */
 @Composable
 private fun TransportDetails(
     vm: ConnectionViewModel,
     s: ConnectionSettings,
     onScanRequested: () -> Boolean,
+    isPermissionGranted: Boolean,
+    onConnect: () -> Unit,
     modifier: Modifier,
 ) {
     val bonded by vm.bondedDevices.collectAsStateWithLifecycle()
@@ -229,8 +235,13 @@ private fun TransportDetails(
             }
 
             TransportKind.BT_CLASSIC -> {
-                SectionTitle(stringResource(R.string.section_devices_paired))
+                SectionTitle(stringResource(R.string.section_find_adapter))
                 Hint(stringResource(R.string.bt_hint))
+                ClassicSearchButton(vm) {
+                    if (onScanRequested()) vm.startClassicSearch() else vm.showClassicPermissionMissing()
+                }
+                ClassicSearchResults(vm, isPermissionGranted, onConnect)
+                SectionTitle(stringResource(R.string.section_devices_paired))
                 BluetoothSettingsRow(onRefresh = vm::refreshBonded)
                 DeviceList(
                     devices = bonded,

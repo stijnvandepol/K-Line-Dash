@@ -67,7 +67,7 @@ class HelpContentTest {
     fun `help texts that name a button use the words the button has`() {
         val references = mapOf(
             "help_tr_nodata_b" to listOf("btn_forget_protocol"),
-            "help_tr_missing_b" to listOf("btn_refresh", "ble_scan"),
+            "help_tr_missing_b" to listOf("btn_refresh", "ble_scan", "bt_search"),
             "help_tr_gps_b" to listOf("gps_allow"),
             "help_connect_go_b" to listOf("btn_connect"),
             "help_lap_start_b" to listOf("session_start_laps", "session_start_timing"),
@@ -78,6 +78,8 @@ class HelpContentTest {
             "fail_permission_body" to listOf("fix_allow_bluetooth"),
             "fail_not_found_ble_body" to listOf("ble_scan"),
             "wiz_ble_step_scan" to listOf("ble_scan"),
+            "wiz_bt_step_pair" to listOf("bt_search"),
+            "help_connect_bt_b" to listOf("bt_search"),
         )
         references.forEach { (helpName, labels) ->
             labels.forEach { label ->

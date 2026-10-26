@@ -40,4 +40,9 @@ class BluetoothDevicesTest {
     fun `newly listed adapter names look like obd`() {
         for (name in listOf("LELink2", "Kiwi 3", "V-checker", "OBDBLE")) assertTrue(name, nameLooksLikeObd(name))
     }
+
+    @Test
+    fun `the esp32 bridge looks like an obd adapter`() {
+        assertTrue(nameLooksLikeObd("OBDII-Bridge"))
+    }
 }
