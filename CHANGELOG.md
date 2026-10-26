@@ -25,6 +25,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Bluetooth LE scan finding nothing on a head unit** (SETUP > Connection > Bluetooth LE, and the
+  setup wizard), where a phone finds the adapter. The scan no longer fails silently:
+  - On Android 11 and older it checks the Location switch first and, when it is off, says so with
+    a button to Android's location settings (Android drops every scan result while it is off).
+  - It keeps inside Android's limit of 5 scans per 30 seconds (beyond it Android silently returns
+    nothing) and tells you how many seconds to wait; tapping Scan or opening the wizard step while
+    a scan runs no longer restarts it.
+  - It also runs classic Bluetooth discovery next to the LE scan, which on some head-unit stacks
+    finds LE adapters the LE scan misses, and scans 12 seconds instead of 10. Discovery is stopped
+    when the scan ends.
+  - Bluetooth off, no Bluetooth adapter, and a unit whose Bluetooth cannot scan for LE adapters
+    each get their own message instead of an empty list.
+  - A scan that finds nothing shows a checklist (Location, adapter power, no other connection,
+    wait 30 seconds, check Android's Bluetooth settings), and the stack's error code if it gave one.
+  - A device first seen without a name is listed again once its name arrives.
+- **SETUP > Debug > Bluetooth:** Android version, LE support, Bluetooth, Location switch and
+  permission, Nearby devices permission, and the result of the last scan, for one-screenshot reports.
 - Old trips no longer pile up for ever: the list showed at most 500 trips, but older ones stayed on
   the head unit with their files. The list now shows every kept trip, and a trip's half-written PC
   files left by an interrupted export are removed with it.

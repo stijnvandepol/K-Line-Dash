@@ -223,6 +223,8 @@ Two columns separated by a rule:
   and actions read as one block and never move. Below them the controls for the chosen type:
   section title, hint, then the switch, the device list (72 dp rows), scan/settings buttons
   (1 dp white outline) or the host/port fields.
+  A BLE scan that does not start or finds nothing says why under the Scan button (`caution` for
+  a block, with a "Location settings" button for Location; a short checklist for an empty result).
 
 Switch rows are a `body` label and the square toggle, 72 dp, no second line: the toggle shows
 the state. Buttons are rectangular, at least 72 dp high, text in `fieldLabel` style.
@@ -241,7 +243,11 @@ Two columns, grouped by what they act on:
   unsupported commands (label `inkMuted`, value `ink`, "--" while not connected so nothing below
   moves). The battery voltage is not repeated here; it is live on the dashboard.
   Then "Command": the input field with Send, and the quick commands as a grid of 72 dp cells.
-  A reply appears under the grid. Everything fits in 720 dp without scrolling.
+  A reply appears under the grid. Below that, "Bluetooth": Android version and API level, whether
+  Bluetooth LE is declared, Bluetooth on/off, the Location switch and permission, the Nearby
+  devices permission (Android 12+) and what the last scan found (LE scan, classic discovery,
+  error code, throttled), so one screenshot says why a scan finds nothing. The right column
+  scrolls to reach it.
 
 ## Phase 5
 

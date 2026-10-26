@@ -5,18 +5,10 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 
 private const val TAG = "KLineDash"
@@ -136,6 +128,25 @@ internal fun BluetoothDevice.nameOrNull(): String? = try {
 }
 
 /**
+ * The device type (DEVICE_TYPE_LE, ...), or DEVICE_TYPE_UNKNOWN when the permission is gone; like
+ * [nameOrNull], it only decides what is listed, a connect attempt fails loudly instead.
+ */
+@SuppressLint("MissingPermission")
+internal fun BluetoothDevice.typeOrUnknown(): Int = try {
+    type
+} catch (e: SecurityException) {
+    BluetoothDevice.DEVICE_TYPE_UNKNOWN
+}
+
+/** The list entry for a device with its advertised [rawName] (null or blank: shown as unnamed). */
+internal fun btDeviceInfo(rawName: String?, address: String) = BtDeviceInfo(
+    name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
+    address = address,
+    looksLikeObd = nameLooksLikeObd(rawName),
+    knownAppLocked = isKnownAppLocked(rawName),
+)
+
+/**
  * Devices already paired in Android's Bluetooth settings. Most ELM327 clones must be paired
  * first (PIN usually 1234 or 0000). Returns an empty list when permission or adapter is missing.
  * OBD-looking devices are sorted first.
@@ -146,103 +157,10 @@ fun bondedDevices(context: Context): List<BtDeviceInfo> {
     val adapter = bluetoothAdapter(context) ?: return emptyList()
     return try {
         adapter.bondedDevices.orEmpty()
-            .map { d ->
-                val rawName = d.nameOrNull()
-                BtDeviceInfo(
-                    name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
-                    address = d.address,
-                    looksLikeObd = nameLooksLikeObd(rawName),
-                    knownAppLocked = isKnownAppLocked(rawName),
-                )
-            }
+            .map { d -> btDeviceInfo(d.nameOrNull(), d.address) }
             .sortedWith(compareByDescending<BtDeviceInfo> { it.looksLikeObd }.thenBy { it.name.lowercase() })
     } catch (e: SecurityException) {
         Log.w(TAG, "bondedDevices: permission revoked", e)
         emptyList()
-    }
-}
-
-/**
- * Scans for BLE devices for [durationMs], emitting each address once, then completes.
- * Cancelling the collector stops the scan.
- *
- * The flow throws [SecurityException] when permissions are missing and [IllegalStateException]
- * (English message) when Bluetooth is off/unavailable or the scan fails to start, so collect it
- * inside try/catch or with `.catch {}`.
- *
- * Needs BLUETOOTH_SCAN on API 31+ (declare it with `neverForLocation` in the manifest) and
- * ACCESS_FINE_LOCATION on API 26-30. On 26-30 the system "Location" toggle must also be on, or the
- * scan silently returns nothing; head units often have it off.
- */
-@SuppressLint("MissingPermission")
-fun scanBle(context: Context, durationMs: Long = 8000): Flow<BtDeviceInfo> = callbackFlow<BtDeviceInfo> {
-    if (!hasRequiredPermissions(context)) {
-        close(SecurityException("Permission to scan for Bluetooth devices is missing. Allow it in the Android settings."))
-        awaitClose { }
-        return@callbackFlow
-    }
-    val adapter = bluetoothAdapter(context)
-    val scanner = if (adapter != null && adapter.isEnabled) adapter.bluetoothLeScanner else null
-    if (scanner == null) {
-        close(IllegalStateException(
-            if (adapter == null) ADAPTER_UNAVAILABLE_MESSAGE else BLUETOOTH_OFF_MESSAGE,
-        ))
-        awaitClose { }
-        return@callbackFlow
-    }
-
-    val seen = HashSet<String>()
-
-    fun handle(result: ScanResult) {
-        val device = result.device ?: return
-        if (!seen.add(device.address)) return
-        val rawName = result.scanRecord?.deviceName ?: device.nameOrNull()
-        trySend(
-            BtDeviceInfo(
-                name = rawName?.takeIf { it.isNotBlank() } ?: UNNAMED_DEVICE,
-                address = device.address,
-                looksLikeObd = nameLooksLikeObd(rawName),
-                knownAppLocked = isKnownAppLocked(rawName),
-            ),
-        )
-    }
-
-    val callback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) = handle(result)
-
-        override fun onBatchScanResults(results: MutableList<ScanResult>) {
-            results.forEach { handle(it) }
-        }
-
-        override fun onScanFailed(errorCode: Int) {
-            Log.w(TAG, "BLE scan failed: $errorCode")
-            close(IllegalStateException("BLE scan failed (error code $errorCode)"))
-        }
-    }
-
-    try {
-        scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), callback)
-    } catch (e: SecurityException) {
-        close(e)
-        awaitClose { }
-        return@callbackFlow
-    } catch (e: IllegalStateException) {
-        close(e)
-        awaitClose { }
-        return@callbackFlow
-    }
-
-    launch {
-        delay(durationMs)
-        channel.close()
-    }
-
-    awaitClose {
-        try {
-            scanner.stopScan(callback)
-        } catch (e: Exception) {
-            // Bluetooth may have been switched off meanwhile; nothing left to stop.
-            Log.w(TAG, "stopScan failed", e)
-        }
     }
 }

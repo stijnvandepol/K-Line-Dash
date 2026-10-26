@@ -216,6 +216,7 @@ private fun TransportDetails(
     val bonded by vm.bondedDevices.collectAsStateWithLifecycle()
     val bleResults by vm.bleResults.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
+    val scanNotice by vm.scanNotice.collectAsStateWithLifecycle()
     val engineRunning by vm.engineRunning.collectAsStateWithLifecycle()
     Column(modifier.verticalScroll(rememberScrollState())) {
         when (s.kind) {
@@ -250,10 +251,12 @@ private fun TransportDetails(
                         enabled = !scanning,
                     )
                 }
+                BleScanNoticeBlock(scanNotice)
                 DeviceList(
                     devices = bleResults,
                     selectedAddress = s.bleAddress,
-                    emptyText = stringResource(R.string.ble_no_results),
+                    // The notice already says why the list is empty.
+                    emptyText = if (scanNotice == null) stringResource(R.string.ble_no_results) else null,
                     onSelect = vm::selectBleDevice,
                     // A previously chosen device is shown even before the first scan.
                     pinnedName = s.bleName,
@@ -318,7 +321,7 @@ private fun BluetoothSettingsRow(onRefresh: () -> Unit) {
 internal fun DeviceList(
     devices: List<BtDeviceInfo>,
     selectedAddress: String?,
-    emptyText: String,
+    emptyText: String?,
     onSelect: (BtDeviceInfo) -> Unit,
     pinnedName: String? = null,
 ) {
@@ -327,7 +330,7 @@ internal fun DeviceList(
         if (selectedAddress != null && pinnedName != null) {
             DeviceRow(BtDeviceInfo(pinnedName, selectedAddress, looksLikeObd = false), selected = true, onClick = {})
         }
-        Hint(emptyText, Modifier.padding(top = Spacing.fieldPaddingVertical))
+        if (emptyText != null) Hint(emptyText, Modifier.padding(top = Spacing.fieldPaddingVertical))
         return
     }
     devices.forEach { device ->

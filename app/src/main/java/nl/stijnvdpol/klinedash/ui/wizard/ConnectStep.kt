@@ -21,6 +21,7 @@ import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.ui.TwoPane
 import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
+import nl.stijnvdpol.klinedash.ui.BleScanNoticeBlock
 import nl.stijnvdpol.klinedash.ui.ButtonRow
 import nl.stijnvdpol.klinedash.ui.ConnectionViewModel
 import nl.stijnvdpol.klinedash.ui.DeviceList
@@ -44,6 +45,7 @@ internal fun ConnectStep(connection: ConnectionViewModel, permissions: Permissio
     val bonded by connection.bondedDevices.collectAsStateWithLifecycle()
     val bleResults by connection.bleResults.collectAsStateWithLifecycle()
     val scanning by connection.scanning.collectAsStateWithLifecycle()
+    val scanNotice by connection.scanNotice.collectAsStateWithLifecycle()
     var resumes by remember { mutableIntStateOf(0) }
     var isSettingsMissing by remember { mutableStateOf(false) }
     val s = settings ?: return
@@ -57,8 +59,9 @@ internal fun ConnectStep(connection: ConnectionViewModel, permissions: Permissio
     LaunchedEffect(s.kind, permissions.revision, resumes) {
         if (s.kind == TransportKind.BT_CLASSIC) connection.refreshBonded()
     }
-    // Looking for the adapter starts by itself once Android allows it.
-    LaunchedEffect(s.kind, permissions.revision) {
+    // Looking for the adapter starts by itself once Android allows it, and again when the user comes
+    // back from Android's settings (Location, Bluetooth). A scan that is already running is left alone.
+    LaunchedEffect(s.kind, permissions.revision, resumes) {
         if (s.kind == TransportKind.BLE && permissions.hasBluetooth() && bleResults.isEmpty()) connection.startScan()
     }
 
@@ -84,7 +87,11 @@ internal fun ConnectStep(connection: ConnectionViewModel, permissions: Permissio
                 }
                 TransportKind.BLE -> {
                     SectionTitle(stringResource(R.string.section_devices_nearby))
-                    DeviceList(bleResults, s.bleAddress, stringResource(R.string.ble_no_results), connection::selectBleDevice, pinnedName = s.bleName)
+                    BleScanNoticeBlock(scanNotice)
+                    DeviceList(
+                        bleResults, s.bleAddress, if (scanNotice == null) stringResource(R.string.ble_no_results) else null,
+                        connection::selectBleDevice, pinnedName = s.bleName,
+                    )
                 }
                 TransportKind.WIFI -> {
                     SectionTitle(stringResource(R.string.section_network))

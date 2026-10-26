@@ -22,8 +22,11 @@ import nl.stijnvdpol.klinedash.core.transport.TransportKind
 import nl.stijnvdpol.klinedash.data.ConnectionSettings
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import nl.stijnvdpol.klinedash.service.TransportFactory
+import nl.stijnvdpol.klinedash.transport.BleScanNotice
 import nl.stijnvdpol.klinedash.transport.BtDeviceInfo
+import nl.stijnvdpol.klinedash.transport.ScanBlockedException
 import nl.stijnvdpol.klinedash.transport.bondedDevices as queryBondedDevices
+import nl.stijnvdpol.klinedash.transport.mergeScanResult
 import nl.stijnvdpol.klinedash.transport.scanBle
 
 private val ValidPorts = 1..65535
@@ -58,6 +61,11 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
 
+    private val _scanNotice = MutableStateFlow<BleScanNotice?>(null)
+
+    /** Why the last scan did not run, or what to check when it found nothing; null while there is nothing to say. */
+    internal val scanNotice: StateFlow<BleScanNotice?> = _scanNotice.asStateFlow()
+
     private val message = TimedMessage(viewModelScope, NOTICE_MS)
 
     /** The answer to the last tap (a failed scan, a forgotten protocol), for a few seconds. */
@@ -77,22 +85,25 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
         }
     }
 
+    /**
+     * Starts a scan unless one is running: the wizard and the Scan button can ask at nearly the same
+     * moment, and restarting would burn through Android's budget of scans per 30 seconds.
+     */
     fun startScan() {
-        scanJob?.cancel()
+        if (scanJob?.isActive == true) return
         _bleResults.value = emptyList()
+        _scanNotice.value = null
         scanJob = viewModelScope.launch {
             _scanning.value = true
             try {
-                scanBle(context, SCAN_DURATION_MS).collect { device ->
-                    _bleResults.update { list ->
-                        if (list.any { it.address == device.address }) list
-                        else (list + device).sortedByDescending { it.looksLikeObd }
-                    }
-                }
+                val report = scanBle(context) { device -> _bleResults.update { list -> mergeScanResult(list, device) } }
+                if (_bleResults.value.isEmpty()) _scanNotice.value = BleScanNotice.NothingFound(report.failureCode)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ScanBlockedException) {
+                _scanNotice.value = BleScanNotice.Blocked(e.block)
             } catch (e: Exception) {
-                // SecurityException (permission) or IllegalStateException (Bluetooth off), English message.
+                // SecurityException (permission) or IllegalStateException (Bluetooth went off), English message.
                 message.show(context.getString(R.string.ble_scan_failed, e.message ?: e.javaClass.simpleName))
             } finally {
                 _scanning.value = false
@@ -157,7 +168,6 @@ class ConnectionViewModel(private val graph: AppGraph) : ViewModel() {
 
     private companion object {
         const val TAG = "ConnectionViewModel"
-        const val SCAN_DURATION_MS = 10_000L
         const val WIFI_DEBOUNCE_MS = 700L
         const val NOTICE_MS = 5_000L
     }

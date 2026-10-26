@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -27,6 +28,8 @@ import nl.stijnvdpol.klinedash.core.elm.ElmLink
 import nl.stijnvdpol.klinedash.core.elm.ElmResult
 import nl.stijnvdpol.klinedash.core.log.LogEntry
 import nl.stijnvdpol.klinedash.core.log.LogKind
+import nl.stijnvdpol.klinedash.transport.BleScanLog
+import nl.stijnvdpol.klinedash.transport.scanEnvironment
 import nl.stijnvdpol.klinedash.service.ObdServiceState
 import java.text.SimpleDateFormat
 import java.util.Collections
@@ -74,6 +77,20 @@ class DebugViewModel(graph: AppGraph) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), emptyList())
 
     val link: StateFlow<ElmLink?> = ObdServiceState.link
+
+    private val bluetoothReads = MutableStateFlow(0)
+
+    /** The Bluetooth block on Debug: the device as it is at the last [refreshBluetooth], and the last scan. */
+    internal val bluetooth: StateFlow<BluetoothDiagnostics> = combine(bluetoothReads, BleScanLog.last) { _, lastScan ->
+        BluetoothDiagnostics(scanEnvironment(context), lastScan)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(1_000),
+        BluetoothDiagnostics(scanEnvironment(context), BleScanLog.last.value),
+    )
+
+    /** Reads Bluetooth, Location and the permissions again, e.g. when the user comes back from Android's settings. */
+    fun refreshBluetooth() = bluetoothReads.update { it + 1 }
 
     val connectionState: StateFlow<ConnectionState> = ObdServiceState.connectionState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(1_000), ConnectionState.Idle)

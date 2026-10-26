@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import nl.stijnvdpol.klinedash.R
 import nl.stijnvdpol.klinedash.core.elm.AdapterInfo
@@ -70,6 +71,11 @@ fun DebugScreen() {
     val notice by vm.notice.collectAsStateWithLifecycle()
     val link by vm.link.collectAsStateWithLifecycle()
     val connection by vm.connectionState.collectAsStateWithLifecycle()
+    val bluetooth by vm.bluetooth.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        vm.refreshBluetooth()
+        onPauseOrDispose { }
+    }
 
     // Storage Access Framework: no storage permission needed.
     val exportLauncher = rememberLauncherForActivityResult(
@@ -110,6 +116,7 @@ fun DebugScreen() {
         ) {
             AdapterSection((connection as? ConnectionState.Connected)?.info)
             CommandSection(sending = sending, reply = reply, onSend = vm::send)
+            BluetoothSection(bluetooth)
         }
     }
 }

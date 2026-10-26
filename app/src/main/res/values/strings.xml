@@ -232,6 +232,19 @@
     <string name="ble_scanning">Scanning…</string>
     <string name="ble_no_results">No devices found yet. Tap Scan.</string>
     <string name="ble_scan_failed">Scan failed: %1$s. Check that Bluetooth is on and try again.</string>
+    <string name="scan_blocked_location_off">Location is off. Android needs it to find Bluetooth LE adapters. Turn Location on, then scan again.</string>
+    <string name="scan_open_location_settings">Location settings</string>
+    <string name="scan_blocked_throttled">Android limits how often an app may scan. Wait %1$s seconds, then scan again.</string>
+    <string name="scan_blocked_no_ble">This head unit\'s Bluetooth cannot scan for Bluetooth LE adapters. Use a Bluetooth Classic or Wi-Fi adapter.</string>
+    <string name="scan_blocked_no_adapter">Bluetooth is not available to apps on this head unit. Use a Wi-Fi adapter instead.</string>
+    <string name="scan_blocked_bluetooth_off">Bluetooth is off. Turn Bluetooth on, then scan again.</string>
+    <string name="scan_failed_code">The scan failed (code %1$s). Turn Bluetooth off and on, then scan again.</string>
+    <string name="scan_nothing_found">No adapter found. Check that:</string>
+    <string name="scan_check_location">Location is on (Android 11 and older need it).</string>
+    <string name="scan_check_power">The adapter has power: plugged in, ignition on.</string>
+    <string name="scan_check_free">No phone or other app is connected to the adapter.</string>
+    <string name="scan_check_wait">You wait 30 seconds between scans.</string>
+    <string name="scan_check_settings">The adapter shows in Android\'s own Bluetooth settings, not in the phone app of the head unit.</string>
     <string name="wifi_hint">Join the Wi-Fi network of the adapter first. It is usually 192.168.0.10, port 35000.</string>
     <string name="wifi_host">IP address or host name</string>
     <string name="wifi_port">Port</string>
@@ -242,6 +255,7 @@
     <!-- Debug screen -->
     <string name="debug_section_adapter">Adapter</string>
     <string name="debug_section_command">Command</string>
+    <string name="debug_section_bluetooth">Bluetooth</string>
     <string name="debug_auto_scroll">Auto-scroll</string>
     <string name="debug_pause">Pause log</string>
     <string name="debug_resume">Resume log</string>
@@ -256,6 +270,24 @@
     <string name="debug_export_failed">Export failed. Try again.</string>
     <string name="debug_export_saved_to">Log saved to %1$s</string>
     <string name="debug_export_no_picker">No file picker available. Log saved to %1$s</string>
+    <string name="label_bt_android">Android</string>
+    <string name="label_bt_le_supported">BLE supported</string>
+    <string name="label_bt_state">Bluetooth</string>
+    <string name="label_bt_location_switch">Location switch</string>
+    <string name="label_bt_location_permission">Location permission</string>
+    <string name="label_bt_nearby_permission">Nearby permission</string>
+    <string name="label_bt_scan_le">Last scan, LE</string>
+    <string name="label_bt_scan_discovery">Last scan, discovery</string>
+    <string name="label_bt_scan_failure">Last scan, error code</string>
+    <string name="label_bt_scan_throttled">Last scan, throttled</string>
+    <string name="value_bt_android">%1$s (API %2$s)</string>
+    <string name="value_bt_unavailable">No adapter</string>
+    <string name="value_bt_on_no_scanner">On, no LE scanner</string>
+    <string name="value_granted">Granted</string>
+    <string name="value_denied">Denied</string>
+    <string name="value_bt_devices">%1$s</string>
+    <string name="value_bt_discovery">%1$s (+%2$s Classic)</string>
+    <string name="value_bt_scan_blocked">Not started</string>
     <string name="label_chip">Chip</string>
     <string name="label_firmware">Firmware</string>
     <string name="label_can">CAN</string>
@@ -573,7 +605,7 @@
     <string name="help_connect_sim_b">Choose Simulator in Setup, Connection to try the app with a virtual car.</string>
 
     <string name="help_tr_missing_h">The adapter is not in the list</string>
-    <string name="help_tr_missing_b">A Bluetooth Classic adapter must be paired in the Bluetooth settings of Android first. Pair it, come back and tap Refresh. For Bluetooth LE, press the button on the adapter if it has one, then tap Scan; the light must be on. Some adapters sleep when the ignition is off: switch the ignition on and plug the adapter in again.</string>
+    <string name="help_tr_missing_b">A Bluetooth Classic adapter must be paired in the Bluetooth settings of Android first. Pair it, come back and tap Refresh. For Bluetooth LE, press the button on the adapter if it has one, then tap Scan; the light must be on. On Android 11 and older, Location must be on too; the scan tells you when it is off. If it still finds nothing, SETUP > Debug shows what the unit reports about Bluetooth. Some adapters sleep when the ignition is off: switch the ignition on and plug the adapter in again.</string>
     <string name="help_tr_nodata_h">Connected, but no data</string>
     <string name="help_tr_nodata_b">Switch the ignition on; the engine may stay off. Push the adapter all the way into the OBD port. If values stay empty, tap Forget protocol in Setup, Connection and connect again. Setup, Debug shows what the adapter and the car say, which helps when you ask for help.</string>
     <string name="help_tr_unsupported_h">\"Adapter not supported\"</string>
